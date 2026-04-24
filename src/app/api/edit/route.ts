@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { editImage } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
+const OPENAI_MAX_INPUT_IMAGES = 16;
+
 function isFile(value: FormDataEntryValue | null): value is File {
   return value instanceof File && value.size > 0;
 }
@@ -61,6 +63,13 @@ export async function POST(request: Request) {
         prompt,
         provider: 'god-tibo',
       });
+    }
+
+    if (images.length > OPENAI_MAX_INPUT_IMAGES) {
+      return NextResponse.json(
+        { error: `OpenAI supports up to ${OPENAI_MAX_INPUT_IMAGES} total input images for edits` },
+        { status: 400 },
+      );
     }
 
     if (images.length === 0 || !isFile(maskImage)) {

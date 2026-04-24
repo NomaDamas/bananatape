@@ -16,7 +16,7 @@ export interface GenerateImageOptions {
 
 export interface EditImageOptions {
   images: File[];
-  maskImage: File;
+  maskImage?: File;
   prompt: string;
 }
 
@@ -43,7 +43,7 @@ export async function editImage(options: EditImageOptions): Promise<string> {
 
   const response = await openai.images.edit({
     image: options.images,
-    mask: options.maskImage,
+    ...(options.maskImage ? { mask: options.maskImage } : {}),
     prompt: options.prompt,
     model: 'gpt-image-2',
     n: 1,

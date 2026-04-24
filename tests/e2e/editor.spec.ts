@@ -43,6 +43,28 @@ function extractMultipartFilePart(body: Buffer, fieldName: string): Buffer {
   return extractMultipartFileParts(body, fieldName)[0];
 }
 
+
+function extractMultipartTextPart(body: Buffer, fieldName: string): string {
+  const marker = Buffer.from(`name="${fieldName}"`, 'utf8');
+  const markerIndex = body.indexOf(marker);
+  if (markerIndex === -1) {
+    throw new Error(`Multipart text field ${fieldName} not found`);
+  }
+
+  const headerEnd = body.indexOf(Buffer.from('\r\n\r\n'), markerIndex);
+  if (headerEnd === -1) {
+    throw new Error(`Multipart text field ${fieldName} header terminator not found`);
+  }
+
+  const partStart = headerEnd + 4;
+  const partEnd = body.indexOf(Buffer.from('\r\n--'), partStart);
+  if (partEnd === -1) {
+    throw new Error(`Multipart text field ${fieldName} boundary not found`);
+  }
+
+  return body.subarray(partStart, partEnd).toString('utf8');
+}
+
 test.describe('CodexDesign Editor', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('/api/generate', async (route) => {
@@ -83,6 +105,7 @@ test.describe('CodexDesign Editor', () => {
     await expect(page.locator('button[title="Box (3)"]')).toBeVisible();
     await expect(page.locator('button[title="Arrow (4)"]')).toBeVisible();
     await expect(page.locator('button[title="Sticky memo (5)"]')).toBeVisible();
+    await expect(page.locator('button[title="Add reference image"]')).toBeVisible();
   });
 
   test('pan is the default active tool', async ({ page }) => {
@@ -142,6 +165,104 @@ test.describe('CodexDesign Editor', () => {
 
     await page.keyboard.press('Escape');
     await expect(selectBtn).toHaveClass(/bg-/);
+  });
+
+  test('attaches reference images to generate prompt payload', async ({ page }) => {
+    await page.unroute('/api/generate');
+
+    let uploadedReferences: Buffer[] = [];
+    let uploadedPrompt = '';
+
+    await page.route('/api/generate', async (route) => {
+      const body = route.request().postDataBuffer();
+      if (!body) throw new Error('Expected multipart generate body');
+      uploadedReferences = extractMultipartFileParts(body, 'referenceImages');
+      uploadedPrompt = extractMultipartTextPart(body, 'prompt');
+
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: FAKE_IMAGE_DATA_URL,
+          prompt: uploadedPrompt,
+          provider: 'openai',
+        }),
+      });
+    });
+
+    await page.locator('[data-testid="reference-image-input"]').setInputFiles({
+      name: 'style-reference.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(RED_IMAGE_DATA_URL.split(',')[1], 'base64'),
+    });
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+
+    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    await promptInput.fill('generate with this style reference');
+    await page.locator('button:has-text("Generate")').click();
+
+    await expect.poll(() => uploadedReferences.length).toBe(1);
+    expect(uploadedPrompt).toBe('generate with this style reference');
+    expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
+    await expect(promptInput).toHaveValue('');
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
+  });
+
+  test('adds pasted clipboard images as prompt references', async ({ page }) => {
+    await page.unroute('/api/generate');
+
+    let uploadedReferences: Buffer[] = [];
+
+    await page.route('/api/generate', async (route) => {
+      const body = route.request().postDataBuffer();
+      if (!body) throw new Error('Expected multipart generate body');
+      uploadedReferences = extractMultipartFileParts(body, 'referenceImages');
+
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: FAKE_IMAGE_DATA_URL,
+          prompt: 'pasted reference',
+          provider: 'openai',
+        }),
+      });
+    });
+
+    await expect(page.locator('button[title="Add reference image"]')).toBeVisible();
+
+    await page.evaluate((dataUrl) => {
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      const file = new File([bytes], 'pasted-reference.png', { type: 'image/png' });
+      const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+          files: [file],
+        },
+      });
+      document.dispatchEvent(pasteEvent);
+    }, RED_IMAGE_DATA_URL);
+
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+    await expect(page.locator('text=Pasted image added as a reference')).toBeVisible();
+
+    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    await promptInput.fill('generate from pasted reference');
+    await page.locator('button:has-text("Generate")').click();
+
+    await expect.poll(() => uploadedReferences.length).toBe(1);
+    expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
+    await expect(promptInput).toHaveValue('');
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
   });
 
   test('zoom buttons change viewport zoom', async ({ page }) => {
@@ -298,11 +419,13 @@ test.describe('CodexDesign Editor', () => {
     await page.unroute('/api/edit');
 
     let uploadedImages: Buffer[] = [];
+    let uploadedPrompt = '';
 
     await page.route('/api/edit', async (route) => {
       const body = route.request().postDataBuffer();
       if (!body) throw new Error('Expected multipart edit body');
       uploadedImages = extractMultipartFileParts(body, 'images');
+      uploadedPrompt = extractMultipartTextPart(body, 'prompt');
 
       route.fulfill({
         status: 200,
@@ -340,6 +463,8 @@ test.describe('CodexDesign Editor', () => {
     const memo = page.locator('[data-testid="sticky-memo"]').first();
     const memoTextarea = memo.locator('textarea').first();
     await expect(memoTextarea).toBeVisible();
+    await expect(memoTextarea).toHaveAttribute('spellcheck', 'false');
+    await expect(memoTextarea).toHaveAttribute('data-gramm', 'false');
     const initialMemoBox = await memo.boundingBox();
     if (!initialMemoBox) throw new Error('Sticky memo not found');
 
@@ -354,12 +479,23 @@ test.describe('CodexDesign Editor', () => {
     await page.mouse.move(bounds.x + 180, bounds.y + 130, { steps: 8 });
     await page.mouse.up();
 
+    await page.locator('[data-testid="reference-image-input"]').setInputFiles({
+      name: 'edit-reference.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(BLUE_IMAGE_DATA_URL.split(',')[1], 'base64'),
+    });
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+
     await promptInput.fill('apply annotated memo and arrow');
     await page.locator('button:has-text("Edit")').click();
 
-    await expect.poll(() => uploadedImages.length).toBe(2);
+    await expect.poll(() => uploadedImages.length).toBe(3);
+    expect(uploadedPrompt).toBe('apply annotated memo and arrow');
     expect(uploadedImages[0].toString('base64')).toBe(dataUrlToBase64Payload(FAKE_IMAGE_DATA_URL));
     expect(uploadedImages[1].toString('base64')).not.toBe(dataUrlToBase64Payload(FAKE_IMAGE_DATA_URL));
+    expect(uploadedImages[2].toString('base64')).toBe(dataUrlToBase64Payload(BLUE_IMAGE_DATA_URL));
+    await expect(promptInput).toHaveValue('');
+    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
   });
 
   test('draws pen stroke after zooming', async ({ page }) => {

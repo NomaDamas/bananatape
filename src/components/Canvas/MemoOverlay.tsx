@@ -56,6 +56,12 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
               <textarea
                 autoFocus={isActive}
                 value={memo.text}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
                 className="w-full bg-transparent text-xs leading-relaxed text-neutral-950 placeholder-yellow-700 resize-none outline-none p-2.5"
                 rows={memoSize.rows}
                 style={{ minHeight: memoSize.height }}
