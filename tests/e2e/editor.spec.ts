@@ -65,7 +65,7 @@ function extractMultipartTextPart(body: Buffer, fieldName: string): string {
   return body.subarray(partStart, partEnd).toString('utf8');
 }
 
-test.describe('CodexDesign Editor', () => {
+test.describe('BananaTape Editor', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('/api/generate', async (route) => {
       route.fulfill({
@@ -97,7 +97,7 @@ test.describe('CodexDesign Editor', () => {
   });
 
   test('renders editor layout with all sections', async ({ page }) => {
-    await expect(page.locator('text=CodexDesign')).toBeVisible();
+    await expect(page.locator('text=BananaTape')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
     await expect(page.locator('text=No image loaded')).toBeVisible();
     await expect(page.locator('button[title="Pan (1)"]')).toBeVisible();

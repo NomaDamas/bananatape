@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CodexDesign",
-  description: "AI-powered visual design tool",
+  title: "BananaTape",
+  description: "Natural-language Photoshop for AI image models — annotate, reference, and vibe-edit images with banana-and-duct-tape energy.",
 };
 
 export default function RootLayout({

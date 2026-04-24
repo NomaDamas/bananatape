@@ -19,10 +19,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Wand2, Pencil, Loader2, Image as ImageIcon, Download, ImagePlus, X } from 'lucide-react';
+import { Wand2, Pencil, Loader2, Download, ImagePlus, X } from 'lucide-react';
 import { ToolPalette } from './ToolPalette';
 import { useDownload } from '@/hooks/useDownload';
 import { useToast } from '@/hooks/useToast';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface ReferenceImage {
   id: string;
@@ -267,12 +268,7 @@ export function TopToolbar() {
   return (
     <TooltipProvider>
       <div className="h-14 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-3 px-4 bg-white dark:bg-neutral-950 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
-          <ImageIcon className="w-5 h-5 text-neutral-700 dark:text-neutral-300" />
-          <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-            CodexDesign
-          </span>
-        </div>
+        <BrandLogo className="shrink-0" />
 
         <div className="w-px h-6 bg-neutral-200 dark:bg-neutral-800 mx-1" />
 

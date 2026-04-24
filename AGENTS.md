@@ -10,9 +10,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ### Core Identity
 
-**CodexDesign is a "vibe design tool" — an AI-powered image editor built for people who know nothing about design.**
+**BananaTape is a "vibe design tool" — natural-language Photoshop for AI image models.**
 
-Traditional design tools (Figma, Photoshop, Canva) assume the user understands composition, color theory, layers, and design workflows. CodexDesign removes that barrier entirely. If you can describe what you want in plain language and scribble a rough note on an image, you can create.
+Traditional design tools (Figma, Photoshop, Canva) assume the user understands composition, color theory, layers, masks, and design workflows. BananaTape removes that barrier entirely. If you can describe the vibe, paste a reference, and scribble a rough note on an image, you can create.
+
+The brand metaphor is intentionally scrappy: banana-on-the-wall art meets duct-tape utility. It should feel playful, useful, and slightly hackerish — a tool that lets non-designers patch images into shape without learning professional design software.
 
 ### Target User
 
@@ -23,10 +25,10 @@ Traditional design tools (Figma, Photoshop, Canva) assume the user understands c
 
 ### Why It Works
 
-| Traditional Tool | CodexDesign |
+| Traditional Tool | BananaTape |
 |---|---|
 | Learn layers, masks, blending modes | Just type what you want |
-| Master pen tools and bezier curves | Draw a rough box or stroke |
+| Master pen tools and bezier curves | Draw a rough box, arrow, or sticky note |
 | Understand color palettes and typography | AI handles the visual execution |
 | Navigate complex interfaces | Hand tool + zoom + generate |
 
@@ -62,11 +64,11 @@ The goal is to make the user feel like they have a **design-savvy assistant** bu
 
 ### Competitive Position
 
-| Tool | Position | CodexDesign Difference |
+| Tool | Position | BananaTape Difference |
 |---|---|---|
 | Leonardo.ai | Pro creator tool | We target people who can't use Leonardo |
 | Krea | Real-time AI canvas | We focus on annotation, not speed |
 | Canva | Template-based design | We have no templates — just your words |
 | Figma | Professional UI design | We have zero UI design assumptions |
 
-**CodexDesign is the tool you open when you need a design but have no idea how to make one.**
+**BananaTape is the tool you open when you need a design but would rather explain it, mark it, and let the model do the Photoshop work.**

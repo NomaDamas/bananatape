@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BananaTape
+
+**BananaTape is natural-language Photoshop for AI image models** — a vibe design canvas where you describe what you want, mark up the image with sticky notes, arrows, boxes, and references, then let the model patch it into shape.
+
+The name is the product thesis: part banana-on-the-wall art joke, part duct-tape utility. It is for people who do not want to learn layers, masks, bezier curves, or design systems before they can fix an image.
+
+## What it does
+
+- Generate a new image from a prompt.
+- Edit an existing image by annotating directly on the canvas.
+- Add sticky memo notes that become part of the annotated screenshot sent to the model.
+- Draw arrows and bounding boxes to point at exactly what should change.
+- Attach reference images from the file picker or by copy/paste.
+- Keep generation history so you can jump back to the version that worked.
+
+## Why BananaTape
+
+Traditional design tools assume you know how to design. BananaTape assumes you know how to point, scribble, and explain the vibe in plain language.
+
+| Traditional tools | BananaTape |
+| --- | --- |
+| Layers, masks, tools, panels | Prompt, annotate, generate |
+| Pixel-perfect selections | Sticky notes, arrows, boxes |
+| Design vocabulary required | Natural language is enough |
+| File/version management | History sidebar |
+
+## Providers
+
+BananaTape currently supports:
+
+- OpenAI image generation/editing
+- `god-tibo-imagen` via the private Codex backend path used by this project
+
+The provider layer is intentionally kept separate so future image models can be added without changing the canvas workflow.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint      # ESLint
+npm run build     # Production build
+npx tsc --noEmit  # TypeScript check
+npx vitest run    # Unit tests
+npx playwright test tests/e2e/editor.spec.ts # Editor e2e tests
+```
 
-## Learn More
+## Product positioning
 
-To learn more about Next.js, take a look at the following resources:
+> Photoshop, but with words, annotations, references, and duct tape.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+BananaTape is built for non-designers, founders, PMs, and developers who need visuals but think in words and rough marks instead of layers and masks.

@@ -11,7 +11,7 @@ export function useDownload() {
 
     const link = document.createElement('a');
     link.href = baseImage;
-    link.download = `codexdesign-${Date.now()}.png`;
+    link.download = `bananatape-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
