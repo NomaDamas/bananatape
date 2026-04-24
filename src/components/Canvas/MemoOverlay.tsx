@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { estimateStickyMemoSize } from '@/lib/canvas/annotation-rendering';
 
 interface MemoOverlayProps {
   imageSize: { width: number; height: number };
@@ -32,10 +33,12 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
         const x = memo.x * imageSize.width;
         const y = memo.y * imageSize.height;
         const isActive = memo.id === activeMemoId;
+        const memoSize = estimateStickyMemoSize(memo.text);
 
         return (
           <div
             key={memo.id}
+            data-testid="sticky-memo"
             className="absolute pointer-events-auto"
             style={{
               left: x,
@@ -44,15 +47,19 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
             }}
           >
             <div
-              className="min-w-[120px] max-w-[240px] rounded-md border border-yellow-400 shadow-sm"
-              style={{ backgroundColor: memo.color }}
+              className="rounded-lg border border-yellow-500/60 shadow-lg transition-[width,height] duration-100"
+              style={{
+                backgroundColor: memo.color,
+                width: memoSize.width,
+              }}
             >
               <textarea
                 autoFocus={isActive}
-                defaultValue={memo.text}
-                className="w-full bg-transparent text-xs text-black placeholder-yellow-700 resize-none outline-none p-2"
-                rows={Math.min(4, memo.text.split('\n').length + 1)}
-                placeholder="Type memo..."
+                value={memo.text}
+                className="w-full bg-transparent text-xs leading-relaxed text-neutral-950 placeholder-yellow-700 resize-none outline-none p-2.5"
+                rows={memoSize.rows}
+                style={{ minHeight: memoSize.height }}
+                placeholder="Write edit note..."
                 onChange={(e) => updateMemo(memo.id, e.target.value)}
                 onBlur={(e) => handleBlur(memo.id, e.target.value)}
                 onKeyDown={(e) => {

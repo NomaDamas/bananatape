@@ -18,9 +18,8 @@ export async function POST(request: Request) {
 
     const prompt = formData.get('prompt');
     const provider = formData.get('provider');
-    const originalImage = formData.get('originalImage');
+    const images = formData.getAll('images').filter(isFile);
     const maskImage = formData.get('maskImage');
-    const annotatedImage = formData.get('annotatedImage');
 
     if (typeof prompt !== 'string' || !prompt.trim()) {
       return NextResponse.json(
@@ -39,24 +38,21 @@ export async function POST(request: Request) {
     let imageDataUrl: string;
 
     if (provider === 'god-tibo') {
-      if (!isFile(originalImage) || !isFile(annotatedImage)) {
+      if (images.length === 0) {
         return NextResponse.json(
           {
             error:
-              'originalImage and annotatedImage are required and must be valid files for god-tibo',
+              'at least one image is required and must be a valid file for god-tibo',
           },
           { status: 400 },
         );
       }
 
-      const [originalDataUrl, annotatedDataUrl] = await Promise.all([
-        fileToDataUrl(originalImage),
-        fileToDataUrl(annotatedImage),
-      ]);
+      const imageDataUrls = await Promise.all(images.map(fileToDataUrl));
 
       imageDataUrl = await godTiboGenerate({
         prompt,
-        images: [originalDataUrl, annotatedDataUrl],
+        images: imageDataUrls,
       });
 
       return NextResponse.json({
@@ -67,19 +63,18 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!isFile(originalImage) || !isFile(maskImage)) {
+    if (images.length === 0 || !isFile(maskImage)) {
       return NextResponse.json(
         {
           error:
-            'originalImage and maskImage are required and must be valid files',
+            'at least one image and maskImage are required and must be valid files',
         },
         { status: 400 },
       );
     }
 
     imageDataUrl = await editImage({
-      originalImage,
-      annotatedImage: isFile(annotatedImage) ? annotatedImage : undefined,
+      images,
       maskImage,
       prompt,
     });

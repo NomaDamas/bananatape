@@ -26,6 +26,8 @@ export function useCanvasDrawing({ containerRef, imageSize }: UseCanvasDrawingOp
   const addPathPoint = useEditorStore((s) => s.addPathPoint);
   const commitPath = useEditorStore((s) => s.commitPath);
   const addBox = useEditorStore((s) => s.addBox);
+  const addMemo = useEditorStore((s) => s.addMemo);
+  const setActiveMemoId = useEditorStore((s) => s.setActiveMemoId);
   const zoom = useEditorStore((s) => s.zoom);
   const panX = useEditorStore((s) => s.panX);
   const panY = useEditorStore((s) => s.panY);
@@ -46,22 +48,33 @@ export function useCanvasDrawing({ containerRef, imageSize }: UseCanvasDrawingOp
     (e: React.PointerEvent) => {
       if (activeTool === 'select' || activeTool === 'pan') return;
       e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
 
       const point = getNormalizedPoint(e.clientX, e.clientY);
       if (!point) return;
 
+      if (activeTool === 'memo') {
+        const id = addMemo({
+          x: point.x,
+          y: point.y,
+          text: '',
+          color: '#fef08a',
+        });
+        setActiveMemoId(id);
+        return;
+      }
+
+      e.currentTarget.setPointerCapture(e.pointerId);
       setIsDrawing(true);
 
-      if (activeTool === 'pen') {
-        startPath(point, 'pen');
+      if (activeTool === 'pen' || activeTool === 'arrow') {
+        startPath(point, activeTool);
       } else if (activeTool === 'box') {
         const box = { start: point, current: point };
         setActiveBox(box);
         activeBoxRef.current = box;
       }
     },
-    [activeTool, getNormalizedPoint, startPath]
+    [activeTool, getNormalizedPoint, addMemo, setActiveMemoId, startPath]
   );
 
   const onPointerMove = useCallback(
@@ -72,7 +85,7 @@ export function useCanvasDrawing({ containerRef, imageSize }: UseCanvasDrawingOp
       const point = getNormalizedPoint(e.clientX, e.clientY);
       if (!point) return;
 
-      if (activeTool === 'pen') {
+      if (activeTool === 'pen' || activeTool === 'arrow') {
         addPathPoint(point);
       } else if (activeTool === 'box') {
         const box = { start: activeBoxRef.current?.start ?? point, current: point };
@@ -89,7 +102,7 @@ export function useCanvasDrawing({ containerRef, imageSize }: UseCanvasDrawingOp
       e.preventDefault();
       e.currentTarget.releasePointerCapture(e.pointerId);
 
-      if (activeTool === 'pen') {
+      if (activeTool === 'pen' || activeTool === 'arrow') {
         commitPath();
       } else if (activeTool === 'box' && activeBoxRef.current) {
         const { start, current } = activeBoxRef.current;

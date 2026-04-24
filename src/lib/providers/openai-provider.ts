@@ -15,8 +15,7 @@ export interface GenerateImageOptions {
 }
 
 export interface EditImageOptions {
-  originalImage: File;
-  annotatedImage?: File;
+  images: File[];
   maskImage: File;
   prompt: string;
 }
@@ -42,13 +41,8 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
 export async function editImage(options: EditImageOptions): Promise<string> {
   const openai = getOpenAI();
 
-  const images: File[] = [options.originalImage];
-  if (options.annotatedImage) {
-    images.push(options.annotatedImage);
-  }
-
   const response = await openai.images.edit({
-    image: images,
+    image: options.images,
     mask: options.maskImage,
     prompt: options.prompt,
     model: 'gpt-image-2',

@@ -55,6 +55,18 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (e.key === '4') {
+        e.preventDefault();
+        state.setActiveTool('arrow');
+        return;
+      }
+
+      if (e.key === '5') {
+        e.preventDefault();
+        state.setActiveTool('memo');
+        return;
+      }
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.activeTool === 'select') {
         e.preventDefault();
         state.clearAnnotations();

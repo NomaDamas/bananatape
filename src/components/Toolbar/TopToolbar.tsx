@@ -6,7 +6,6 @@ import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useCanvasExport } from '@/hooks/useCanvasExport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -100,8 +99,8 @@ export function TopToolbar() {
         originalBlob = await resizeToSquare1024(originalBlob);
       }
 
-      formData.append('originalImage', originalBlob, 'original.png');
-      formData.append('annotatedImage', annotatedBlob, 'annotated.png');
+      formData.append('images', originalBlob, 'original.png');
+      formData.append('images', annotatedBlob, 'annotated.png');
       formData.append('maskImage', maskBlob, 'mask.png');
 
       const res = await fetch('/api/edit', {
@@ -120,6 +119,7 @@ export function TopToolbar() {
           provider,
           type: 'edit',
         });
+        setBaseImage(data.imageDataUrl, { width: 0, height: 0 });
         clearAnnotations();
         addToast('Image edited successfully', 'success');
       }
@@ -165,7 +165,11 @@ export function TopToolbar() {
             className="h-8 text-sm"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.metaKey) {
-                mode === 'edit' ? handleEdit() : handleGenerate();
+                if (mode === 'edit') {
+                  handleEdit();
+                } else {
+                  handleGenerate();
+                }
               }
             }}
           />

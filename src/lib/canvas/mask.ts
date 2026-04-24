@@ -1,4 +1,8 @@
 import type { DrawingPath, BoundingBox, ImageSize } from '@/types';
+import {
+  createCanvasMapper,
+  drawAnnotationPath,
+} from './annotation-rendering';
 
 interface GenerateMaskOptions {
   paths: DrawingPath[];
@@ -17,35 +21,21 @@ export function generateMask(options: GenerateMaskOptions): HTMLCanvasElement {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, naturalSize.width, naturalSize.height);
 
-  const toCanvas = (nx: number, ny: number) => ({
-    x: nx * naturalSize.width,
-    y: ny * naturalSize.height,
-  });
+  const toCanvas = createCanvasMapper(naturalSize);
 
   ctx.globalCompositeOperation = 'destination-out';
 
   paths.forEach((path) => {
-    if (path.points.length < 2) return;
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
-    ctx.lineWidth = path.strokeWidth * 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const start = toCanvas(path.points[0].x, path.points[0].y);
-    ctx.moveTo(start.x, start.y);
-    for (let i = 1; i < path.points.length; i++) {
-      const p = toCanvas(path.points[i].x, path.points[i].y);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
+    drawAnnotationPath(ctx, path, toCanvas, 'rgba(0,0,0,1)', path.strokeWidth * 2);
   });
 
   boxes.forEach((box) => {
-    const pos = toCanvas(box.x, box.y);
-    const w = box.width * naturalSize.width;
-    const h = box.height * naturalSize.height;
+    const x = box.x * naturalSize.width;
+    const y = box.y * naturalSize.height;
+    const width = box.width * naturalSize.width;
+    const height = box.height * naturalSize.height;
     ctx.fillStyle = 'rgba(0,0,0,1)';
-    ctx.fillRect(pos.x, pos.y, w, h);
+    ctx.fillRect(x, y, width, height);
   });
 
   ctx.globalCompositeOperation = 'source-over';

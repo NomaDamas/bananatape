@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useEditorStore } from '@/stores/useEditorStore';
-import { clientToNormalized } from '@/lib/canvas/coordinates';
+import { screenToNormalized } from '@/lib/canvas/coordinates';
 
 interface UseMemoKeyboardOptions {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -14,6 +14,9 @@ export function useMemoKeyboard({ containerRef, imageSize, enabled }: UseMemoKey
   const mousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const addMemo = useEditorStore((s) => s.addMemo);
   const setActiveMemoId = useEditorStore((s) => s.setActiveMemoId);
+  const zoom = useEditorStore((s) => s.zoom);
+  const panX = useEditorStore((s) => s.panX);
+  const panY = useEditorStore((s) => s.panY);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     mousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -44,10 +47,14 @@ export function useMemoKeyboard({ containerRef, imageSize, enabled }: UseMemoKey
         return;
       }
 
-      const point = clientToNormalized(x, y, rect);
+      const point = screenToNormalized(
+        x - rect.left,
+        y - rect.top,
+        imageSize,
+        { zoom, panX, panY },
+      );
 
-      const memoId = crypto.randomUUID();
-      addMemo({
+      const memoId = addMemo({
         x: point.x,
         y: point.y,
         text: '',
@@ -57,7 +64,7 @@ export function useMemoKeyboard({ containerRef, imageSize, enabled }: UseMemoKey
 
       e.preventDefault();
     },
-    [enabled, containerRef, imageSize, addMemo, setActiveMemoId]
+    [enabled, containerRef, imageSize, zoom, panX, panY, addMemo, setActiveMemoId]
   );
 
   useEffect(() => {

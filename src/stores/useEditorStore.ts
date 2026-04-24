@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { temporal } from 'zundo';
 import { devtools } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import type { EditorState, DrawingPath, BoundingBox, TextMemo, Tool, Provider, Mode, NormalizedPoint, ImageSize, StreamChunk } from './types';
+import type { EditorState, BoundingBox, TextMemo, Tool, Provider, Mode, NormalizedPoint, ImageSize, StreamChunk } from './types';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
@@ -14,7 +14,7 @@ interface EditorActions {
   addPathPoint: (point: NormalizedPoint) => void;
   commitPath: () => void;
   addBox: (box: Omit<BoundingBox, 'id'>) => void;
-  addMemo: (memo: Omit<TextMemo, 'id'>) => void;
+  addMemo: (memo: Omit<TextMemo, 'id'>) => string;
   updateMemo: (id: string, text: string) => void;
   deleteMemo: (id: string) => void;
   setActiveTool: (tool: Tool) => void;
@@ -83,9 +83,13 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       addBox: (box) => set((state) => ({
         boxes: [...state.boxes, { ...box, id: nanoid() }],
       })),
-      addMemo: (memo) => set((state) => ({
-        memos: [...state.memos, { ...memo, id: nanoid() }],
-      })),
+      addMemo: (memo) => {
+        const id = nanoid();
+        set((state) => ({
+          memos: [...state.memos, { ...memo, id }],
+        }));
+        return id;
+      },
       updateMemo: (id, text) => set((state) => ({
         memos: state.memos.map((m) => (m.id === id ? { ...m, text } : m)),
       })),

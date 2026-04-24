@@ -1,4 +1,4 @@
-export type Tool = 'pan' | 'pen' | 'box' | 'select';
+export type Tool = 'pan' | 'pen' | 'box' | 'arrow' | 'memo' | 'select';
 export type Provider = 'openai' | 'god-tibo';
 export type Mode = 'generate' | 'edit';
 export type AnnotationStatus = 'pending' | 'review' | 'accepted';
@@ -52,8 +52,7 @@ export interface GenerateOptions {
 }
 
 export interface EditOptions {
-  originalImage: Blob;
-  annotatedImage: Blob;
+  images: Blob[];
   maskImage: Blob;
   prompt: string;
 }
