@@ -65,6 +65,31 @@ function extractMultipartTextPart(body: Buffer, fieldName: string): string {
   return body.subarray(partStart, partEnd).toString('utf8');
 }
 
+function getPromptInput(page: import('@playwright/test').Page) {
+  return page
+    .locator([
+      'textarea[placeholder*="generate" i]',
+      'textarea[placeholder*="describe" i]',
+      'input[placeholder*="generate" i]',
+      'input[placeholder*="describe" i]',
+    ].join(', '))
+    .first();
+}
+
+function getGenerateButton(page: import('@playwright/test').Page) {
+  return page.getByRole('button', { name: /generate|new image/i }).first();
+}
+
+function getEditButton(page: import('@playwright/test').Page) {
+  return page.getByRole('button', { name: /apply edit|edit/i }).first();
+}
+
+async function chooseProvider(page: import('@playwright/test').Page, providerLabel: string) {
+  await page.getByText(/OpenAI|god-tibo-imagen/).first().click();
+  await page.locator('[data-slot="select-item"]').filter({ hasText: providerLabel }).click();
+}
+
+
 test.describe('BananaTape Editor', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('/api/generate', async (route) => {
@@ -96,16 +121,59 @@ test.describe('BananaTape Editor', () => {
     await page.goto('/');
   });
 
-  test('renders editor layout with all sections', async ({ page }) => {
-    await expect(page.locator('text=BananaTape')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
-    await expect(page.locator('text=No image loaded')).toBeVisible();
+  test('renders standalone shell landmarks and preserved controls', async ({ page }) => {
+    await expect(page.getByText('BananaTape')).toBeVisible();
+    await expect(page.getByRole('button', { name: /export/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /context/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /styles/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /history/i })).toBeVisible();
+    await expect(page.locator('[data-testid="canvas-container"]')).toBeVisible();
+    await expect(page.getByText(/No image loaded|Start by describing/i)).toBeVisible();
+
     await expect(page.locator('button[title="Pan (1)"]')).toBeVisible();
     await expect(page.locator('button[title="Pen (2)"]')).toBeVisible();
     await expect(page.locator('button[title="Box (3)"]')).toBeVisible();
     await expect(page.locator('button[title="Arrow (4)"]')).toBeVisible();
     await expect(page.locator('button[title="Sticky memo (5)"]')).toBeVisible();
-    await expect(page.locator('button[title="Add reference image"]')).toBeVisible();
+
+    await expect(getPromptInput(page)).toBeVisible();
+    await expect(page.getByText(/OpenAI|god-tibo-imagen/).first()).toBeVisible();
+    await expect(page.locator('button[title="Add reference image"], button[aria-label*="reference" i]').first()).toBeVisible();
+    await expect(page.locator('button[title="Zoom in"]')).toBeVisible();
+    await expect(page.locator('button[title="Zoom out"]')).toBeVisible();
+  });
+
+  test('provider choices expose only implemented providers', async ({ page }) => {
+    await page.getByText(/OpenAI|god-tibo-imagen/).first().click();
+
+    const options = await page.locator('[data-slot="select-item"], [role="option"]').allTextContents();
+    expect(options.map((option) => option.trim()).filter(Boolean).sort()).toEqual([
+      'OpenAI',
+      'god-tibo-imagen',
+    ].sort());
+  });
+
+  test('export modal is honest about current-image PNG download support', async ({ page }) => {
+    const exportButton = page.getByRole('button', { name: /export/i });
+    await expect(exportButton).toBeDisabled();
+
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('export modal test');
+    await getGenerateButton(page).click();
+    await expect(page.getByAltText('Canvas base')).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
+
+    await expect(exportButton).toBeEnabled();
+    await exportButton.click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/PNG|current image/i)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /download/i })).toBeEnabled();
+
+    const unsupportedEnabledActions = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
+    for (let i = 0; i < await unsupportedEnabledActions.count(); i += 1) {
+      await expect(unsupportedEnabledActions.nth(i)).toBeDisabled();
+    }
   });
 
   test('pan is the default active tool', async ({ page }) => {
@@ -114,7 +182,7 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('prompt input accepts typing and backspace', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"], textarea[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await expect(promptInput).toBeVisible();
 
     await promptInput.click();
@@ -198,9 +266,9 @@ test.describe('BananaTape Editor', () => {
     });
     await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
 
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('generate with this style reference');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
 
     await expect.poll(() => uploadedReferences.length).toBe(1);
     expect(uploadedPrompt).toBe('generate with this style reference');
@@ -255,9 +323,9 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
     await expect(page.locator('text=Pasted image added as a reference')).toBeVisible();
 
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('generate from pasted reference');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
 
     await expect.poll(() => uploadedReferences.length).toBe(1);
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
@@ -266,9 +334,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('zoom buttons change viewport zoom', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('zoom test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=zoom test').first()).toBeVisible();
 
     const wrapper = page.locator('[data-testid="transform-wrapper"]');
@@ -283,9 +351,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('mouse wheel zooms canvas', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('wheel zoom test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=wheel zoom test').first()).toBeVisible();
 
     const wrapper = page.locator('[data-testid="transform-wrapper"]');
@@ -301,9 +369,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('pan tool drags viewport', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('pan test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=pan test').first()).toBeVisible();
 
     const wrapper = page.locator('[data-testid="transform-wrapper"]');
@@ -337,9 +405,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('spacebar temporarily enables panning', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('space pan test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=space pan test').first()).toBeVisible();
 
     const wrapper = page.locator('[data-testid="transform-wrapper"]');
@@ -374,9 +442,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('draws pen stroke on canvas after generating image', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('canvas test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=canvas test').first()).toBeVisible();
 
     const penBtn = page.locator('button[title="Pen (2)"]');
@@ -395,9 +463,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('draws bounding box on canvas after generating image', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('box test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=box test').first()).toBeVisible();
 
     const boxBtn = page.locator('button[title="Box (3)"]');
@@ -439,12 +507,11 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await page.getByText('OpenAI').click();
-    await page.locator('[data-slot="select-item"]').filter({ hasText: 'god-tibo-imagen' }).click();
+    await chooseProvider(page, 'god-tibo-imagen');
 
-    const promptInput = page.locator('input[placeholder^="Describe"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('memo arrow source');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
 
     const baseImage = page.getByAltText('Canvas base');
     await expect(baseImage).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
@@ -487,7 +554,7 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
 
     await promptInput.fill('apply annotated memo and arrow');
-    await page.locator('button:has-text("Edit")').click();
+    await getEditButton(page).click();
 
     await expect.poll(() => uploadedImages.length).toBe(3);
     expect(uploadedPrompt).toBe('apply annotated memo and arrow');
@@ -499,9 +566,9 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('draws pen stroke after zooming', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('zoomed draw test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=zoomed draw test').first()).toBeVisible();
 
     const canvas = page.locator('[data-testid="canvas-container"]');
@@ -530,19 +597,19 @@ test.describe('BananaTape Editor', () => {
     const clearBtn = page.locator('button[title="Clear annotations"]');
     await expect(clearBtn).toBeDisabled();
 
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('clear test');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
     await expect(page.locator('text=clear test').first()).toBeVisible();
 
     await expect(clearBtn).toBeDisabled();
   });
 
   test('history item click loads image', async ({ page }) => {
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('history test');
 
-    const generateBtn = page.locator('button:has-text("Generate")');
+    const generateBtn = getGenerateButton(page);
     await generateBtn.click();
     await expect(page.locator('text=history test').first()).toBeVisible();
 
@@ -586,18 +653,17 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await page.getByText('OpenAI').click();
-    await page.locator('[data-slot="select-item"]').filter({ hasText: 'god-tibo-imagen' }).click();
+    await chooseProvider(page, 'god-tibo-imagen');
 
-    const promptInput = page.locator('input[placeholder^="Describe"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('initial red');
-    await page.locator('button:has-text("Generate")').click();
+    await getGenerateButton(page).click();
 
     const baseImage = page.getByAltText('Canvas base');
     await expect(baseImage).toHaveAttribute('src', RED_IMAGE_DATA_URL);
 
     await promptInput.fill('first edit');
-    await page.locator('button:has-text("Edit")').click();
+    await getEditButton(page).click();
     await expect(baseImage).toHaveAttribute('src', BLUE_IMAGE_DATA_URL);
     await page.waitForFunction(() => {
       const img = document.querySelector('img[alt="Canvas base"]') as HTMLImageElement | null;
@@ -605,7 +671,7 @@ test.describe('BananaTape Editor', () => {
     });
 
     await promptInput.fill('second edit');
-    await page.locator('button:has-text("Edit")').click();
+    await getEditButton(page).click();
     await expect.poll(() => originalUploads.length).toBe(2);
 
     expect(originalUploads[0]).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
@@ -621,10 +687,10 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    const promptInput = page.locator('input[placeholder*="generate"]').first();
+    const promptInput = getPromptInput(page);
     await promptInput.fill('trigger error');
 
-    const generateBtn = page.locator('button:has-text("Generate")');
+    const generateBtn = getGenerateButton(page);
     await generateBtn.click();
 
     await expect(page.locator('text=Mock API error')).toBeVisible();
