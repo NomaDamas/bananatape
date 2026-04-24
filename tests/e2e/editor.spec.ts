@@ -66,18 +66,11 @@ function extractMultipartTextPart(body: Buffer, fieldName: string): string {
 }
 
 function getPromptInput(page: import('@playwright/test').Page) {
-  return page
-    .locator([
-      'textarea[placeholder*="generate" i]',
-      'textarea[placeholder*="describe" i]',
-      'input[placeholder*="generate" i]',
-      'input[placeholder*="describe" i]',
-    ].join(', '))
-    .first();
+  return page.locator('[data-testid="bottom-prompt-input"]');
 }
 
 function getGenerateButton(page: import('@playwright/test').Page) {
-  return page.getByRole('button', { name: /generate|new image/i }).first();
+  return page.locator('[data-testid="bottom-primary-action"]');
 }
 
 function getEditButton(page: import('@playwright/test').Page) {
@@ -85,7 +78,7 @@ function getEditButton(page: import('@playwright/test').Page) {
 }
 
 async function chooseProvider(page: import('@playwright/test').Page, providerLabel: string) {
-  await page.getByText(/OpenAI|god-tibo-imagen/).first().click();
+  await page.locator('[data-testid="bottom-provider-select"]').click();
   await page.locator('[data-slot="select-item"]').filter({ hasText: providerLabel }).click();
 }
 
@@ -167,7 +160,7 @@ test.describe('BananaTape Editor', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/PNG|current image/i)).toBeVisible();
+    await expect(dialog.getByText('PNG · current image')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /download/i })).toBeEnabled();
 
     const unsupportedEnabledActions = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
@@ -342,11 +335,11 @@ test.describe('BananaTape Editor', () => {
     const wrapper = page.locator('[data-testid="transform-wrapper"]');
     await expect(wrapper).toHaveAttribute('data-zoom', '1');
 
-    await page.locator('button[title="Zoom in"]').click();
+    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom in"]').last().click();
     const zoomAfterIn = await wrapper.getAttribute('data-zoom');
     expect(parseFloat(zoomAfterIn!)).toBeGreaterThan(1);
 
-    await page.locator('button[title="Zoom out"]').click();
+    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom out"]').last().click();
     await expect(wrapper).toHaveAttribute('data-zoom', '1');
   });
 
@@ -594,7 +587,7 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('clear annotations button state changes correctly', async ({ page }) => {
-    const clearBtn = page.locator('button[title="Clear annotations"]');
+    const clearBtn = page.locator('[data-testid="standalone-left-panel"] button[title="Clear canvas annotations"]');
     await expect(clearBtn).toBeDisabled();
 
     const promptInput = getPromptInput(page);
