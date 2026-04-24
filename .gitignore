@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright artifacts
+/playwright-report/
+/test-results/
+
+# local agent/runtime state
+/.omx/
