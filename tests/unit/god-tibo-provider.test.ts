@@ -72,6 +72,41 @@ describe('god-tibo-provider', () => {
     expect(result).toBe('data:image/png;base64,fakebase64');
   });
 
+  it('extracts image from response.completed output when output_item.done is omitted', async () => {
+    const mockReadFile = vi.fn().mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),
+    );
+
+    const sse = makeSseBody([
+      { type: 'response.created', response: { id: 'r1' } },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'r1',
+          output: [
+            { type: 'image_generation_call', id: 'ig1', result: 'completed64' },
+          ],
+        },
+      },
+    ]);
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => sse,
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'text/event-stream' : null),
+      },
+    });
+
+    const result = await generateImage({
+      prompt: 'a cat',
+      readFileImpl: mockReadFile,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+    expect(result).toBe('data:image/png;base64,completed64');
+  });
+
   it('falls back to partial_image event', async () => {
     const mockReadFile = vi.fn().mockResolvedValue(
       JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),
@@ -132,10 +167,59 @@ describe('god-tibo-provider', () => {
 
     const [, init] = mockFetch.mock.calls[0];
     const body = JSON.parse(init.body);
+    expect(body.tool_choice).toBe('auto');
     expect(body.input[0].content).toEqual([
       { type: 'input_text', text: 'make it blue' },
       { type: 'input_image', image_url: 'data:image/png;base64,abc' },
       { type: 'input_image', image_url: 'data:image/png;base64,def' },
     ]);
+  });
+
+  it('retries with required image generation when auto does not return an image', async () => {
+    const mockReadFile = vi.fn().mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),
+    );
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          makeSseBody([
+            {
+              type: 'response.output_item.done',
+              item: { type: 'message', status: 'completed' },
+            },
+            { type: 'response.completed', response: { id: 'r1' } },
+          ]),
+        headers: {
+          get: (key: string) => (key.toLowerCase() === 'content-type' ? 'text/event-stream' : null),
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          makeSseBody([
+            {
+              type: 'response.output_item.done',
+              item: { type: 'image_generation_call', result: 'retry64' },
+            },
+          ]),
+        headers: {
+          get: (key: string) => (key.toLowerCase() === 'content-type' ? 'text/event-stream' : null),
+        },
+      });
+
+    const result = await generateImage({
+      prompt: 'a banana sticker',
+      readFileImpl: mockReadFile,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    expect(result).toBe('data:image/png;base64,retry64');
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).tool_choice).toBe('auto');
+    expect(JSON.parse(mockFetch.mock.calls[1][1].body).tool_choice).toEqual({ type: 'image_generation' });
   });
 });

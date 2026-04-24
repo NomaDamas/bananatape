@@ -93,10 +93,11 @@ function summarizeEvents(events: SseEvent[]): SseSummary {
 
   for (const event of events) {
     const type = (event?.data as Record<string, unknown> | undefined)?.type;
+    const response = (event?.data as Record<string, unknown> | undefined)?.response as Record<string, unknown> | undefined;
+
     if (type === 'response.created') {
       responseId =
-        ((event?.data as Record<string, unknown> | undefined)?.response as Record<string, unknown> | undefined)?.id
-          ?.toString() ?? responseId;
+        response?.id?.toString() ?? responseId;
     }
     if (type === 'response.output_item.done') {
       const item = (event?.data as Record<string, unknown> | undefined)?.item;
@@ -106,8 +107,10 @@ function summarizeEvents(events: SseEvent[]): SseSummary {
     }
     if (type === 'response.completed') {
       responseId =
-        ((event?.data as Record<string, unknown> | undefined)?.response as Record<string, unknown> | undefined)?.id
-          ?.toString() ?? responseId;
+        response?.id?.toString() ?? responseId;
+      if (Array.isArray(response?.output)) {
+        items.push(...response.output);
+      }
     }
   }
 
@@ -121,6 +124,67 @@ interface ImageGenerationResult {
   revisedPrompt: string | null;
   resultBase64: string;
   item: unknown;
+}
+
+type ImageToolChoiceMode = 'auto' | 'required';
+
+function getRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
+}
+
+function describeBackendError(source: SseSummary): string | null {
+  for (const event of [...source.events].reverse()) {
+    const data = getRecord(event.data);
+    const error = getRecord(data?.error)
+      ?? getRecord(getRecord(data?.response)?.error)
+      ?? getRecord(getRecord(data?.item)?.error);
+    const directMessage = data?.message?.toString();
+
+    if (!error && !directMessage) {
+      continue;
+    }
+
+    const message = error?.message?.toString() ?? directMessage;
+    const code = error?.code?.toString();
+    const type = error?.type?.toString();
+    const details = [
+      message,
+      code ? `code=${code}` : null,
+      type ? `type=${type}` : null,
+    ].filter(Boolean).join(' ');
+
+    if (details) {
+      return details;
+    }
+  }
+
+  return null;
+}
+
+function describeHttpFailureBody(body: string): string | null {
+  if (!body.trim()) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(body);
+    const error = getRecord(payload?.error);
+    const message = error?.message?.toString();
+    const code = error?.code?.toString();
+    const type = error?.type?.toString();
+
+    if (message || code || type) {
+      return [
+        message,
+        code ? `code=${code}` : null,
+        type ? `type=${type}` : null,
+      ].filter(Boolean).join(' ');
+    }
+  } catch {
+    // Fall through to a trimmed text snippet.
+  }
+
+  return body.trim().slice(0, 500);
 }
 
 function normalizeSource(source: SseSummary | unknown[]): { items: unknown[]; events: SseEvent[] } {
@@ -174,24 +238,36 @@ function extractImageGeneration(source: SseSummary | unknown[]): ImageGeneration
     };
   }
 
-  throw new Error('The response stream completed without an image_generation_call result.');
+  const summary = Array.isArray(source)
+    ? { events: [], items, responseId: null }
+    : source;
+  const backendError = describeBackendError(summary);
+  const eventTypes = [...new Set(events.map((event) => {
+    const d = event?.data as Record<string, unknown> | undefined;
+    return d?.type?.toString() ?? event.event;
+  }))].join(', ');
+  const outputTypes = [...new Set(items.map((item) => {
+    const it = item as Record<string, unknown> | undefined;
+    return it?.type?.toString() ?? 'unknown';
+  }))].join(', ');
+
+  throw new Error(
+    [
+      'The response stream completed without an image_generation_call result.',
+      backendError ? `Backend error: ${backendError}.` : null,
+      eventTypes ? `Events: ${eventTypes}.` : null,
+      outputTypes ? `Output items: ${outputTypes}.` : null,
+    ].filter(Boolean).join(' '),
+  );
 }
 
-
-
-export async function generateImage(options: GenerateImageOptions): Promise<string> {
-  const { token, accountId } = await loadAuthToken(options.readFileImpl ?? readFile);
-
-  const content: Array<{ type: string; text?: string; image_url?: string }> = [
-    { type: 'input_text', text: options.prompt },
-  ];
-
-  if (options.images && options.images.length > 0) {
-    for (const image of options.images) {
-      content.push({ type: 'input_image', image_url: image });
-    }
-  }
-
+async function requestImageGeneration(
+  options: GenerateImageOptions,
+  auth: { token: string; accountId: string },
+  content: Array<{ type: string; text?: string; image_url?: string }>,
+  toolChoiceMode: ImageToolChoiceMode,
+): Promise<ImageGenerationResult> {
+  const { token, accountId } = auth;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const response = await fetchImpl('https://chatgpt.com/backend-api/codex/responses', {
     method: 'POST',
@@ -214,7 +290,7 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
         },
       ],
       tools: [{ type: 'image_generation', output_format: 'png' }],
-      tool_choice: 'auto',
+      tool_choice: toolChoiceMode === 'required' ? { type: 'image_generation' } : 'auto',
       parallel_tool_calls: false,
       reasoning: null,
       store: false,
@@ -225,7 +301,13 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
 
   if (!response.ok) {
     const failureText = await response.text();
-    const error = new Error(`Private Codex backend request failed with HTTP ${response.status}.`);
+    const failureDetails = describeHttpFailureBody(failureText);
+    const error = new Error(
+      [
+        `Private Codex backend request failed with HTTP ${response.status}.`,
+        failureDetails ? `Backend error: ${failureDetails}.` : null,
+      ].filter(Boolean).join(' '),
+    );
     (error as Error & { status?: number; body?: string }).status = response.status;
     (error as Error & { status?: number; body?: string }).body = failureText;
     throw error;
@@ -251,6 +333,40 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
     };
   }
 
-  const generation = extractImageGeneration(parsed);
-  return `data:image/png;base64,${generation.resultBase64}`;
+  return extractImageGeneration(parsed);
+}
+
+export async function generateImage(options: GenerateImageOptions): Promise<string> {
+  const auth = await loadAuthToken(options.readFileImpl ?? readFile);
+
+  const content: Array<{ type: string; text?: string; image_url?: string }> = [
+    { type: 'input_text', text: options.prompt },
+  ];
+
+  if (options.images && options.images.length > 0) {
+    for (const image of options.images) {
+      content.push({ type: 'input_image', image_url: image });
+    }
+  }
+
+  const attempts: ImageToolChoiceMode[] = ['auto', 'required'];
+  let lastError: unknown;
+
+  for (const mode of attempts) {
+    try {
+      const generation = await requestImageGeneration(options, auth, content, mode);
+      return `data:image/png;base64,${generation.resultBase64}`;
+    } catch (error) {
+      lastError = error;
+      if (
+        mode !== 'auto'
+        || !(error instanceof Error)
+        || !error.message.startsWith('The response stream completed without an image_generation_call result.')
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Image generation failed');
 }
