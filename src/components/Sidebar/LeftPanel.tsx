@@ -165,7 +165,7 @@ export function LeftPanel({
                 className="h-6 w-6 text-[#808080] hover:bg-white/10 hover:text-white"
                 disabled={annotationCount === 0}
                 onClick={clearAnnotations}
-                title="Clear canvas annotations"
+                title="Clear annotations"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>

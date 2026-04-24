@@ -33,12 +33,17 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
         <DialogHeader>
           <DialogTitle className="text-white">Export image</DialogTitle>
           <DialogDescription className="text-[#999]">
-            Download the active BananaTape image using the implemented export path.
+            Download the current BananaTape image using the implemented PNG export path.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="flex w-full items-center gap-3 rounded-xl border border-[#0d99ff]/50 bg-[#0d99ff]/10 p-3 text-left">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl border border-[#0d99ff]/50 bg-[#0d99ff]/10 p-3 text-left"
+            disabled={!canExport}
+            onClick={handleDownload}
+          >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0d99ff] text-white">
               <FileImage className="h-5 w-5" />
             </div>
@@ -47,7 +52,7 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
               <p className="text-xs text-[#999]">Uses the existing download behavior for the active image.</p>
             </div>
             <Download className="h-4 w-4 text-[#b3b3b3]" />
-          </div>
+          </button>
 
           <div className="rounded-xl border border-white/10 bg-[#1e1e1e] p-3">
             <div className="flex items-start gap-2 text-xs text-[#999]">
@@ -65,7 +70,7 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
           </Button>
           <Button type="button" className="bg-[#0d99ff] text-white hover:bg-[#0b85df]" disabled={!canExport} onClick={handleDownload}>
             <Download className="h-4 w-4" />
-            Download
+            Download PNG
           </Button>
         </DialogFooter>
       </DialogContent>
