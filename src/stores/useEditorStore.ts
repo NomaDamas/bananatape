@@ -47,7 +47,7 @@ const initialState: EditorState = {
   activeMemoId: null,
   toolColor: '#ef4444',
   strokeWidth: 3,
-  provider: 'openai',
+  provider: 'god-tibo',
   mode: 'generate',
   isGenerating: false,
   streamProgress: null,

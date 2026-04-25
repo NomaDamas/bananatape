@@ -199,6 +199,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
           type: 'generate',
         });
         setBaseImage(data.imageDataUrl, { width: 0, height: 0 });
+        setMode('edit');
         clearPromptComposer();
         addToast('Image generated successfully', 'success');
       }
@@ -339,7 +340,7 @@ export function usePromptComposer() {
 
 export function getEnabledProviders(): Array<{ value: Provider; label: string }> {
   return [
+    { value: 'god-tibo', label: 'codex' },
     { value: 'openai', label: 'OpenAI' },
-    { value: 'god-tibo', label: 'god-tibo-imagen' },
   ];
 }

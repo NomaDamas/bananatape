@@ -9,7 +9,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import {
   Tooltip,
@@ -23,6 +22,10 @@ import { useDownload } from '@/hooks/useDownload';
 import { BrandLogo } from '@/components/BrandLogo';
 import { getEnabledProviders, usePromptComposer } from '@/components/Composer/PromptComposerProvider';
 import type { Provider } from '@/types';
+
+function formatProviderLabel(provider: Provider) {
+  return provider === 'god-tibo' ? 'codex' : 'OpenAI';
+}
 
 export function TopToolbar() {
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
@@ -66,7 +69,7 @@ export function TopToolbar() {
 
         <Select value={provider} onValueChange={(v) => setProvider(v as Provider)} data-testid="provider-select">
           <SelectTrigger className="w-[160px] h-8 text-xs">
-            <SelectValue />
+            <span className="truncate">{formatProviderLabel(provider)}</span>
           </SelectTrigger>
           <SelectContent>
             {providers.map((item) => (

@@ -3,13 +3,17 @@
 import { useRef } from 'react';
 import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToolPalette } from '@/components/Toolbar/ToolPalette';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { Provider } from '@/types';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
+
+function formatProviderLabel(provider: Provider) {
+  return provider === 'god-tibo' ? 'codex' : 'OpenAI';
+}
 
 interface BottomComposerProps {
   prompt: string;
@@ -156,11 +160,11 @@ export function BottomComposer({
 
             <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
               <SelectTrigger className="h-10 w-[150px] shrink-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6]" data-testid="bottom-provider-select">
-                <SelectValue />
+                <span className="truncate">{formatProviderLabel(provider)}</span>
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="god-tibo">codex</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="god-tibo">god-tibo-imagen</SelectItem>
               </SelectContent>
             </Select>
 

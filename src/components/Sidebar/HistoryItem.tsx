@@ -15,7 +15,7 @@ interface HistoryItemProps {
 }
 
 function formatProvider(provider: HistoryEntry['provider']) {
-  return provider === 'god-tibo' ? 'god-tibo-imagen' : 'OpenAI';
+  return provider === 'god-tibo' ? 'codex' : 'OpenAI';
 }
 
 export function HistoryItem({ entry, index, total, isSelected, onSelect, onDelete }: HistoryItemProps) {

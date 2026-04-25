@@ -29,7 +29,7 @@ Traditional design tools assume you know how to design. BananaTape assumes you k
 BananaTape currently supports:
 
 - OpenAI image generation/editing
-- `god-tibo-imagen` via the private Codex backend path used by this project
+- `codex` via the private Codex backend path used by this project
 
 The provider layer is intentionally kept separate so future image models can be added without changing the canvas workflow.
 

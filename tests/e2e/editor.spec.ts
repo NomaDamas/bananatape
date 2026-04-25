@@ -85,7 +85,7 @@ function getEditButton(page: import('@playwright/test').Page) {
 }
 
 async function chooseProvider(page: import('@playwright/test').Page, providerLabel: string) {
-  await page.getByText(/OpenAI|god-tibo-imagen/).first().click();
+  await page.locator('[data-testid="bottom-provider-select"]').click();
   await page.locator('[data-slot="select-item"]').filter({ hasText: providerLabel }).click();
 }
 
@@ -137,19 +137,19 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('button[title="Sticky memo (5)"]')).toBeVisible();
 
     await expect(getPromptInput(page)).toBeVisible();
-    await expect(page.getByText(/OpenAI|god-tibo-imagen/).first()).toBeVisible();
-    await expect(page.locator('button[title="Add reference image"], button[aria-label*="reference" i]').first()).toBeVisible();
-    await expect(page.locator('button[title="Zoom in"]')).toBeVisible();
-    await expect(page.locator('button[title="Zoom out"]')).toBeVisible();
+    await expect(page.locator('[data-testid="bottom-provider-select"]')).toContainText(/codex|OpenAI/);
+    await expect(page.locator('button[title="Attach reference image"], button[aria-label*="reference" i]').first()).toBeVisible();
+    await expect(page.locator('button[title="Zoom in"]').first()).toBeVisible();
+    await expect(page.locator('button[title="Zoom out"]').first()).toBeVisible();
   });
 
   test('provider choices expose only implemented providers', async ({ page }) => {
-    await page.getByText(/OpenAI|god-tibo-imagen/).first().click();
+    await page.locator('[data-testid="bottom-provider-select"]').click();
 
     const options = await page.locator('[data-slot="select-item"], [role="option"]').allTextContents();
     expect(options.map((option) => option.trim()).filter(Boolean).sort()).toEqual([
       'OpenAI',
-      'god-tibo-imagen',
+      'codex',
     ].sort());
   });
 
@@ -167,8 +167,8 @@ test.describe('BananaTape Editor', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/PNG|current image/i)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /download/i })).toBeEnabled();
+    await expect(dialog.getByText('PNG · current image')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Download PNG/i })).toBeEnabled();
 
     const unsupportedEnabledActions = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
     for (let i = 0; i < await unsupportedEnabledActions.count(); i += 1) {
@@ -259,12 +259,12 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await page.locator('[data-testid="reference-image-input"]').setInputFiles({
+    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
       name: 'style-reference.png',
       mimeType: 'image/png',
       buffer: Buffer.from(RED_IMAGE_DATA_URL.split(',')[1], 'base64'),
     });
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
 
     const promptInput = getPromptInput(page);
     await promptInput.fill('generate with this style reference');
@@ -274,7 +274,7 @@ test.describe('BananaTape Editor', () => {
     expect(uploadedPrompt).toBe('generate with this style reference');
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
   });
 
   test('adds pasted clipboard images as prompt references', async ({ page }) => {
@@ -299,7 +299,7 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await expect(page.locator('button[title="Add reference image"]')).toBeVisible();
+    await expect(page.locator('button[title="Attach reference image"]')).toBeVisible();
 
     await page.evaluate((dataUrl) => {
       const base64 = dataUrl.split(',')[1];
@@ -320,7 +320,7 @@ test.describe('BananaTape Editor', () => {
       document.dispatchEvent(pasteEvent);
     }, RED_IMAGE_DATA_URL);
 
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
     await expect(page.locator('text=Pasted image added as a reference')).toBeVisible();
 
     const promptInput = getPromptInput(page);
@@ -330,7 +330,7 @@ test.describe('BananaTape Editor', () => {
     await expect.poll(() => uploadedReferences.length).toBe(1);
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
   });
 
   test('zoom buttons change viewport zoom', async ({ page }) => {
@@ -507,7 +507,7 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await chooseProvider(page, 'god-tibo-imagen');
+    await chooseProvider(page, 'codex');
 
     const promptInput = getPromptInput(page);
     await promptInput.fill('memo arrow source');
@@ -546,12 +546,12 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.move(bounds.x + 180, bounds.y + 130, { steps: 8 });
     await page.mouse.up();
 
-    await page.locator('[data-testid="reference-image-input"]').setInputFiles({
+    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
       name: 'edit-reference.png',
       mimeType: 'image/png',
       buffer: Buffer.from(BLUE_IMAGE_DATA_URL.split(',')[1], 'base64'),
     });
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeVisible();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
 
     await promptInput.fill('apply annotated memo and arrow');
     await getEditButton(page).click();
@@ -562,7 +562,7 @@ test.describe('BananaTape Editor', () => {
     expect(uploadedImages[1].toString('base64')).not.toBe(dataUrlToBase64Payload(FAKE_IMAGE_DATA_URL));
     expect(uploadedImages[2].toString('base64')).toBe(dataUrlToBase64Payload(BLUE_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
-    await expect(page.locator('[data-testid="reference-image-list"]')).toBeHidden();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
   });
 
   test('draws pen stroke after zooming', async ({ page }) => {
@@ -594,7 +594,7 @@ test.describe('BananaTape Editor', () => {
   });
 
   test('clear annotations button state changes correctly', async ({ page }) => {
-    const clearBtn = page.locator('[data-testid="standalone-left-panel"] button[title="Clear canvas annotations"]');
+    const clearBtn = page.locator('[data-testid="standalone-left-panel"] button[title="Clear annotations"]');
     await expect(clearBtn).toBeDisabled();
 
     const promptInput = getPromptInput(page);
@@ -653,7 +653,7 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
-    await chooseProvider(page, 'god-tibo-imagen');
+    await chooseProvider(page, 'codex');
 
     const promptInput = getPromptInput(page);
     await promptInput.fill('initial red');
