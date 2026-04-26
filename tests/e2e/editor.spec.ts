@@ -202,8 +202,6 @@ test.describe('BananaTape Editor', () => {
     const boxBtn = page.locator('button[title="Box (3)"]');
     const arrowBtn = page.locator('button[title="Arrow (4)"]');
     const memoBtn = page.locator('button[title="Sticky memo (5)"]');
-    const selectBtn = page.locator('button[title="Select"]');
-
     await penBtn.click();
     await expect(penBtn).toHaveClass(/bg-/);
 
@@ -216,8 +214,6 @@ test.describe('BananaTape Editor', () => {
     await memoBtn.click();
     await expect(memoBtn).toHaveClass(/bg-/);
 
-    await selectBtn.click();
-    await expect(selectBtn).toHaveClass(/bg-/);
 
     await page.keyboard.press('1');
     await expect(panBtn).toHaveClass(/bg-/);
@@ -232,7 +228,7 @@ test.describe('BananaTape Editor', () => {
     await expect(memoBtn).toHaveClass(/bg-/);
 
     await page.keyboard.press('Escape');
-    await expect(selectBtn).toHaveClass(/bg-/);
+    await expect(panBtn).toHaveClass(/bg-/);
   });
 
   test('attaches reference images to generate prompt payload', async ({ page }) => {
@@ -259,6 +255,10 @@ test.describe('BananaTape Editor', () => {
       });
     });
 
+    await page
+      .getByPlaceholder('Instructions that are included with every generation/edit prompt.')
+      .fill('Use a consistent banana brand style');
+
     await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
       name: 'style-reference.png',
       mimeType: 'image/png',
@@ -271,9 +271,81 @@ test.describe('BananaTape Editor', () => {
     await getGenerateButton(page).click();
 
     await expect.poll(() => uploadedReferences.length).toBe(1);
-    expect(uploadedPrompt).toBe('generate with this style reference');
+    expect(uploadedPrompt).toMatch(/System prompt:\s+Use a consistent banana brand style/);
+    expect(uploadedPrompt).toMatch(/User prompt:\s+generate with this style reference/);
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
+    await expect(page.getByPlaceholder('Instructions that are included with every generation/edit prompt.')).toHaveValue('Use a consistent banana brand style');
+  });
+
+
+
+  test('converts unsupported reference images to PNG when the browser can decode them', async ({ page }) => {
+    await page.unroute('/api/generate');
+
+    let uploadedReferences: Buffer[] = [];
+
+    await page.route('/api/generate', async (route) => {
+      const body = route.request().postDataBuffer();
+      if (!body) throw new Error('Expected multipart generate body');
+      uploadedReferences = extractMultipartFileParts(body, 'referenceImages');
+
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: FAKE_IMAGE_DATA_URL,
+          prompt: 'converted reference',
+          provider: 'god-tibo',
+        }),
+      });
+    });
+
+    await page.evaluate(() => {
+      window.createImageBitmap = async () => ({
+        width: 2,
+        height: 2,
+        close: () => {},
+      }) as ImageBitmap;
+      (HTMLCanvasElement.prototype as unknown as { getContext: () => CanvasRenderingContext2D }).getContext = () => ({ drawImage: () => {} }) as unknown as CanvasRenderingContext2D;
+      HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string | null) {
+        callback(new Blob(['converted-png'], { type: type ?? 'image/png' }));
+      };
+    });
+
+    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
+      name: 'style-reference.avif',
+      mimeType: 'image/avif',
+      buffer: Buffer.from('fake-avif'),
+    });
+
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
+    await expect(page.locator('text=Converted image to PNG for upload.')).toBeVisible();
+
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('converted reference');
+    await getGenerateButton(page).click();
+
+    await expect.poll(() => uploadedReferences.length).toBe(1);
+    expect(uploadedReferences[0].toString()).toBe('converted-png');
+  });
+
+  test('shows supported-format guidance when unsupported images cannot be converted', async ({ page }) => {
+    await page.evaluate(() => {
+      window.createImageBitmap = async () => {
+        throw new Error('unsupported image');
+      };
+    });
+
+    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
+      name: 'style-reference.heic',
+      mimeType: 'image/heic',
+      buffer: Buffer.from('fake-heic'),
+    });
+
+    await expect(page.locator('text=Some images could not be converted. Please use JPEG, PNG, WebP, or GIF.')).toBeVisible();
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
   });
 
@@ -330,7 +402,7 @@ test.describe('BananaTape Editor', () => {
     await expect.poll(() => uploadedReferences.length).toBe(1);
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
-    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
   });
 
   test('zoom buttons change viewport zoom', async ({ page }) => {
@@ -508,6 +580,9 @@ test.describe('BananaTape Editor', () => {
     });
 
     await chooseProvider(page, 'codex');
+    await page
+      .getByPlaceholder('Instructions that are included with every generation/edit prompt.')
+      .fill('Keep edits photorealistic');
 
     const promptInput = getPromptInput(page);
     await promptInput.fill('memo arrow source');
@@ -557,12 +632,13 @@ test.describe('BananaTape Editor', () => {
     await getEditButton(page).click();
 
     await expect.poll(() => uploadedImages.length).toBe(3);
-    expect(uploadedPrompt).toBe('apply annotated memo and arrow');
+    expect(uploadedPrompt).toMatch(/System prompt:\s+Keep edits photorealistic/);
+    expect(uploadedPrompt).toMatch(/User prompt:\s+apply annotated memo and arrow/);
     expect(uploadedImages[0].toString('base64')).toBe(dataUrlToBase64Payload(FAKE_IMAGE_DATA_URL));
     expect(uploadedImages[1].toString('base64')).not.toBe(dataUrlToBase64Payload(FAKE_IMAGE_DATA_URL));
     expect(uploadedImages[2].toString('base64')).toBe(dataUrlToBase64Payload(BLUE_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
-    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeHidden();
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
   });
 
   test('draws pen stroke after zooming', async ({ page }) => {

@@ -19,7 +19,7 @@ interface BottomComposerProps {
   prompt: string;
   onPromptChange: (value: string) => void;
   references: ReferenceImagePreview[];
-  onAddReferenceFiles: (files: File[]) => void;
+  onAddReferenceFiles: (files: File[]) => void | Promise<void>;
   onRemoveReference: (id: string) => void;
   onGenerate: () => void | Promise<void>;
   onEdit: () => void | Promise<void>;
@@ -122,7 +122,7 @@ export function BottomComposer({
               multiple
               className="hidden"
               onChange={(event) => {
-                onAddReferenceFiles(Array.from(event.target.files ?? []));
+                void onAddReferenceFiles(Array.from(event.target.files ?? []));
                 event.currentTarget.value = '';
               }}
               data-testid="bottom-reference-image-input"

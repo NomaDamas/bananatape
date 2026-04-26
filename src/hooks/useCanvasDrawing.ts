@@ -46,7 +46,7 @@ export function useCanvasDrawing({ containerRef, imageSize }: UseCanvasDrawingOp
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (activeTool === 'select' || activeTool === 'pan') return;
+      if (activeTool === 'pan') return;
       e.preventDefault();
 
       const point = getNormalizedPoint(e.clientX, e.clientY);

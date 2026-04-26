@@ -10,7 +10,7 @@ import type { ReferenceImagePreview } from '@/components/Composer/types';
 
 interface LeftPanelProps {
   references: ReferenceImagePreview[];
-  onAddReferenceFiles: (files: File[]) => void;
+  onAddReferenceFiles: (files: File[]) => void | Promise<void>;
   onRemoveReference: (id: string) => void;
   onClearReferences: () => void;
   systemPrompt: string;
@@ -79,16 +79,16 @@ export function LeftPanel({
             <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#999]">
               <Sparkles className="h-3 w-3" />
               System Prompt
-              <span className="rounded bg-[#3b2f16] px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-[#fbbf24]">not applied</span>
+              <span className="rounded bg-[#14351f] px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-[#86efac]">applied</span>
             </div>
             <Textarea
               value={systemPrompt}
               onChange={(event) => onSystemPromptChange(event.target.value)}
-              placeholder="Visible notes only — not submitted with prompts yet."
+              placeholder="Instructions that are included with every generation/edit prompt."
               className="min-h-20 resize-none border-white/10 bg-[#1e1e1e] text-xs text-[#e6e6e6] placeholder:text-[#666] focus-visible:ring-[#0d99ff]/40"
             />
             <p className="mt-1.5 text-[10px] leading-4 text-[#808080]">
-              Guardrail: these notes are not silently prepended to API prompts.
+              Included with every prompt and kept until you edit or clear it.
             </p>
           </section>
 
@@ -112,7 +112,7 @@ export function LeftPanel({
               multiple
               className="hidden"
               onChange={(event) => {
-                onAddReferenceFiles(Array.from(event.target.files ?? []));
+                void onAddReferenceFiles(Array.from(event.target.files ?? []));
                 event.currentTarget.value = '';
               }}
             />

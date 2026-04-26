@@ -52,7 +52,7 @@ export function TopToolbar() {
   const providers = getEnabledProviders();
 
   const handleReferenceImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    addReferenceFiles(Array.from(event.target.files ?? []));
+    void addReferenceFiles(Array.from(event.target.files ?? []));
     event.target.value = '';
   };
 

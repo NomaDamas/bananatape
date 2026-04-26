@@ -27,12 +27,12 @@ function StandaloneEditorShell() {
   const { toasts, removeToast } = useToast();
   const baseImage = useEditorStore((s) => s.baseImage);
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState('');
-
   const {
     prompt,
     setPrompt,
     referenceImages,
+    systemPrompt,
+    setSystemPrompt,
     addReferenceFiles,
     removeReferenceImage,
     clearReferenceImages,

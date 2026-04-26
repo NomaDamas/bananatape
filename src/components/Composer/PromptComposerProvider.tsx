@@ -11,6 +11,8 @@ import {
   useState,
 } from 'react';
 import { useCanvasExport } from '@/hooks/useCanvasExport';
+import { normalizeReferenceFiles } from '@/lib/images/normalize-reference-files';
+import { SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
@@ -28,7 +30,9 @@ interface PromptComposerContextValue {
   prompt: string;
   setPrompt: (prompt: string) => void;
   referenceImages: ReferenceImage[];
-  addReferenceFiles: (files: File[], source?: ReferenceSource) => void;
+  systemPrompt: string;
+  setSystemPrompt: (prompt: string) => void;
+  addReferenceFiles: (files: File[], source?: ReferenceSource) => Promise<void>;
   removeReferenceImage: (id: string) => void;
   clearReferenceImages: () => void;
   clearPromptComposer: () => void;
@@ -46,6 +50,7 @@ const PromptComposerContext = createContext<PromptComposerContextValue | null>(n
 export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const [prompt, setPrompt] = useState('');
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [systemPrompt, setSystemPrompt] = useState('');
   const referenceImagesRef = useRef<ReferenceImage[]>([]);
 
   const provider = useEditorStore((s) => s.provider);
@@ -73,24 +78,44 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addReferenceFiles = useCallback((files: File[], source: ReferenceSource = 'file-picker') => {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length === 0) return;
+  const addReferenceFiles = useCallback(async (files: File[], source: ReferenceSource = 'file-picker') => {
+    const result = await normalizeReferenceFiles(files);
+
+    if (result.rejectedCount > 0) {
+      addToast(
+        `Some images could not be converted. Please use ${SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL}.`,
+        'error',
+      );
+    } else if (result.ignoredCount > 0 && result.files.length === 0) {
+      addToast(
+        `Please attach an image in ${SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL} format.`,
+        'error',
+      );
+    }
+
+    if (result.files.length === 0) return;
 
     setReferenceImages((current) => [
       ...current,
-      ...imageFiles.map((file) => ({
+      ...result.files.map((file) => ({
         id: crypto.randomUUID(),
         file,
         previewUrl: URL.createObjectURL(file),
       })),
     ]);
 
-    if (source === 'paste') {
+    if (result.convertedCount > 0) {
       addToast(
-        imageFiles.length === 1
+        result.convertedCount === 1
+          ? 'Converted image to PNG for upload.'
+          : `Converted ${result.convertedCount} images to PNG for upload.`,
+        'success',
+      );
+    } else if (source === 'paste') {
+      addToast(
+        result.files.length === 1
           ? 'Pasted image added as a reference'
-          : `${imageFiles.length} pasted images added as references`,
+          : `${result.files.length} pasted images added as references`,
         'success',
       );
     }
@@ -114,7 +139,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       if (files.length === 0) return;
 
       event.preventDefault();
-      addReferenceFiles(files, 'paste');
+      void addReferenceFiles(files, 'paste');
     };
 
     document.addEventListener('paste', handlePaste);
@@ -138,8 +163,21 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const clearPromptComposer = useCallback(() => {
     setPrompt('');
-    clearReferenceImages();
-  }, [clearReferenceImages]);
+  }, []);
+
+  const buildSubmittedPrompt = useCallback(() => {
+    const trimmedPrompt = prompt.trim();
+    const trimmedSystemPrompt = systemPrompt.trim();
+
+    if (!trimmedSystemPrompt) {
+      return trimmedPrompt;
+    }
+
+    return [
+      `System prompt:\n${trimmedSystemPrompt}`,
+      `User prompt:\n${trimmedPrompt}`,
+    ].join('\n\n');
+  }, [prompt, systemPrompt]);
 
   const appendReferenceImages = useCallback((formData: FormData, fieldName: 'images' | 'referenceImages') => {
     referenceImages.forEach((reference, index) => {
@@ -171,7 +209,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       const request = referenceImages.length > 0
         ? (() => {
             const formData = new FormData();
-            formData.append('prompt', prompt);
+            formData.append('prompt', buildSubmittedPrompt());
             formData.append('provider', provider);
             appendReferenceImages(formData, 'referenceImages');
             return fetch('/api/generate', {
@@ -182,7 +220,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         : fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, provider }),
+            body: JSON.stringify({ prompt: buildSubmittedPrompt(), provider }),
           });
 
       const res = await request;
@@ -213,6 +251,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     addEntry,
     addToast,
     appendReferenceImages,
+    buildSubmittedPrompt,
     clearPromptComposer,
     isGenerating,
     prompt,
@@ -238,7 +277,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       ]);
 
       const formData = new FormData();
-      formData.append('prompt', prompt);
+      formData.append('prompt', buildSubmittedPrompt());
       formData.append('provider', provider);
 
       let originalBlob = await fetch(baseImage).then((r) => r.blob());
@@ -284,6 +323,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     addToast,
     appendReferenceImages,
     baseImage,
+    buildSubmittedPrompt,
     clearAnnotations,
     clearPromptComposer,
     exportAnnotatedImage,
@@ -302,6 +342,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     prompt,
     setPrompt,
     referenceImages,
+    systemPrompt,
+    setSystemPrompt,
     addReferenceFiles,
     removeReferenceImage,
     clearReferenceImages,
@@ -320,6 +362,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     hasReferenceImages,
     prompt,
     referenceImages,
+    systemPrompt,
+    setSystemPrompt,
     removeReferenceImage,
   ]);
 

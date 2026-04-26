@@ -1,4 +1,4 @@
-export type Tool = 'pan' | 'pen' | 'box' | 'arrow' | 'memo' | 'select';
+export type Tool = 'pan' | 'pen' | 'box' | 'arrow' | 'memo';
 export type Provider = 'openai' | 'god-tibo';
 export type Mode = 'generate' | 'edit';
 export type AnnotationStatus = 'pending' | 'review' | 'accepted';

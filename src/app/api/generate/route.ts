@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { editImage as openaiEdit, generateImage as openaiGenerate } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
@@ -50,6 +51,13 @@ export async function POST(request: Request) {
     }
 
     let imageDataUrl: string;
+
+    if (referenceImages.some((file) => !isSupportedReferenceImageType(file))) {
+      return NextResponse.json(
+        { error: `Unsupported image format. Please use ${SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL}.` },
+        { status: 400 },
+      );
+    }
 
     if (provider !== 'god-tibo' && referenceImages.length > OPENAI_MAX_INPUT_IMAGES) {
       return NextResponse.json(

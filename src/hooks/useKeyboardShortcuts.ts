@@ -33,7 +33,7 @@ export function useKeyboardShortcuts() {
 
       if (e.key === 'Escape') {
         e.preventDefault();
-        state.setActiveTool('select');
+        state.setActiveTool('pan');
         return;
       }
 
@@ -67,11 +67,6 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && state.activeTool === 'select') {
-        e.preventDefault();
-        state.clearAnnotations();
-        return;
-      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
