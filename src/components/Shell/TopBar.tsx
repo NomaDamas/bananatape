@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Share2, PanelLeft, Sparkles } from 'lucide-react';
+import { Download, PanelLeft, Sparkles } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -36,17 +36,6 @@ export function TopBar({ canExport, onExportClick, className }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="hidden h-7 gap-1.5 rounded-md px-2 text-[#b3b3b3] hover:bg-white/10 hover:text-white sm:inline-flex"
-          disabled
-          title="Share is not implemented yet"
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          Share
-        </Button>
         <Button
           type="button"
           size="sm"

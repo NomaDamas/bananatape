@@ -2,7 +2,11 @@
 
 import { useCallback } from 'react';
 import { useEditorStore } from '@/stores/useEditorStore';
-import { estimateStickyMemoSize } from '@/lib/canvas/annotation-rendering';
+import {
+  estimateStickyMemoSize,
+  STICKY_MEMO_FONT_SIZE,
+  STICKY_MEMO_LINE_HEIGHT,
+} from '@/lib/canvas/annotation-rendering';
 
 interface MemoOverlayProps {
   imageSize: { width: number; height: number };
@@ -62,9 +66,13 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
                 data-gramm="false"
                 data-gramm_editor="false"
                 data-enable-grammarly="false"
-                className="w-full bg-transparent text-xs leading-relaxed text-neutral-950 placeholder-yellow-700 resize-none outline-none p-2.5"
+                className="w-full resize-none bg-transparent p-3 text-neutral-950 placeholder-yellow-700 outline-none"
                 rows={memoSize.rows}
-                style={{ minHeight: memoSize.height }}
+                style={{
+                  minHeight: memoSize.height,
+                  fontSize: STICKY_MEMO_FONT_SIZE,
+                  lineHeight: `${STICKY_MEMO_LINE_HEIGHT}px`,
+                }}
                 placeholder="Write edit note..."
                 onChange={(e) => updateMemo(memo.id, e.target.value)}
                 onBlur={(e) => handleBlur(memo.id, e.target.value)}

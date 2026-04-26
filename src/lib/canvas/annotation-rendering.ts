@@ -3,16 +3,18 @@ import type { BoundingBox, DrawingPath, ImageSize, NormalizedPoint, TextMemo } f
 export const BOX_STROKE_WIDTH = 5;
 export const ACTIVE_BOX_STROKE_WIDTH = 5;
 
-const MEMO_PADDING = 10;
-const MEMO_LINE_HEIGHT = 18;
+export const STICKY_MEMO_FONT_SIZE = 16;
+export const STICKY_MEMO_LINE_HEIGHT = 24;
+export const STICKY_MEMO_PADDING = 12;
+
 const MEMO_RADIUS = 8;
-const MEMO_AVERAGE_CHAR_WIDTH = 7;
-const MEMO_MIN_WIDTH = 140;
-const MEMO_MAX_WIDTH = 280;
+const MEMO_AVERAGE_CHAR_WIDTH = 8;
+const MEMO_MIN_WIDTH = 160;
+const MEMO_MAX_WIDTH = 320;
 const MEMO_MIN_ROWS = 2;
 const MEMO_MAX_ROWS = 12;
-const MEMO_MIN_TEXT_WIDTH = MEMO_MIN_WIDTH - MEMO_PADDING * 2;
-const MEMO_MAX_TEXT_WIDTH = MEMO_MAX_WIDTH - MEMO_PADDING * 2;
+const MEMO_MIN_TEXT_WIDTH = MEMO_MIN_WIDTH - STICKY_MEMO_PADDING * 2;
+const MEMO_MAX_TEXT_WIDTH = MEMO_MAX_WIDTH - STICKY_MEMO_PADDING * 2;
 
 interface CanvasPoint {
   x: number;
@@ -31,13 +33,13 @@ export function estimateStickyMemoSize(text: string): { width: number; height: n
   const paragraphs = normalized.split('\n');
   const longestLineLength = Math.max(...paragraphs.map((line) => Array.from(line).length), 0);
   const width = clamp(
-    longestLineLength * MEMO_AVERAGE_CHAR_WIDTH + MEMO_PADDING * 2,
+    longestLineLength * MEMO_AVERAGE_CHAR_WIDTH + STICKY_MEMO_PADDING * 2,
     MEMO_MIN_WIDTH,
     MEMO_MAX_WIDTH,
   );
   const charsPerLine = Math.max(
     1,
-    Math.floor((width - MEMO_PADDING * 2) / MEMO_AVERAGE_CHAR_WIDTH),
+    Math.floor((width - STICKY_MEMO_PADDING * 2) / MEMO_AVERAGE_CHAR_WIDTH),
   );
   const rows = clamp(
     paragraphs.reduce(
@@ -50,7 +52,7 @@ export function estimateStickyMemoSize(text: string): { width: number; height: n
 
   return {
     width,
-    height: rows * MEMO_LINE_HEIGHT + MEMO_PADDING * 2,
+    height: rows * STICKY_MEMO_LINE_HEIGHT + STICKY_MEMO_PADDING * 2,
     rows,
   };
 }
@@ -150,7 +152,7 @@ export function drawStickyMemo(
   const x = memo.x * naturalSize.width;
   const y = memo.y * naturalSize.height;
 
-  ctx.font = '14px sans-serif';
+  ctx.font = `${STICKY_MEMO_FONT_SIZE}px Pretendard, sans-serif`;
   ctx.textBaseline = 'alphabetic';
   const { lines, boxWidth, boxHeight } = measureStickyMemoLayout(ctx, memo.text);
 
@@ -172,8 +174,8 @@ export function drawStickyMemo(
   lines.forEach((line, index) => {
     ctx.fillText(
       line,
-      x + MEMO_PADDING,
-      y + MEMO_PADDING + (index + 1) * MEMO_LINE_HEIGHT - 4,
+      x + STICKY_MEMO_PADDING,
+      y + STICKY_MEMO_PADDING + (index + 1) * STICKY_MEMO_LINE_HEIGHT - 5,
     );
   });
 }
@@ -195,8 +197,8 @@ function measureStickyMemoLayout(ctx: CanvasRenderingContext2D, text: string) {
 
   return {
     lines,
-    boxWidth: Math.ceil(textWidth + MEMO_PADDING * 2),
-    boxHeight: lines.length * MEMO_LINE_HEIGHT + MEMO_PADDING * 2,
+    boxWidth: Math.ceil(textWidth + STICKY_MEMO_PADDING * 2),
+    boxHeight: lines.length * STICKY_MEMO_LINE_HEIGHT + STICKY_MEMO_PADDING * 2,
   };
 }
 

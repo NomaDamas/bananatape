@@ -51,15 +51,16 @@ export function BottomComposer({
   const zoomOut = useEditorStore((s) => s.zoomOut);
   const resetViewport = useEditorStore((s) => s.resetViewport);
 
-  const annotationCount = paths.length + boxes.length + memos.length;
+  const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length;
   const canEdit = !!baseImage;
   const shouldEdit = canEdit && (mode === 'edit' || annotationCount > 0);
+  const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || annotationCount > 0);
   const primaryLabel = shouldEdit
     ? annotationCount > 0
       ? `Edit · ${annotationCount} region${annotationCount === 1 ? '' : 's'}`
       : 'Apply edit'
     : 'Generate';
-  const isPrimaryDisabled = isGenerating || !prompt.trim() || (shouldEdit && !canEdit);
+  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !prompt.trim());
 
   const submitPrimary = () => {
     if (isPrimaryDisabled) return;
@@ -153,7 +154,7 @@ export function BottomComposer({
                   submitPrimary();
                 }
               }}
-              placeholder={shouldEdit ? 'Describe edits for the annotated regions…' : 'Describe the image you want to create…'}
+              placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : 'Describe the image you want to create…'}
               className="max-h-36 min-h-10 resize-none border-0 bg-transparent px-1 py-2 text-sm text-[#f5f5f5] placeholder:text-[#666] focus-visible:ring-0"
               data-testid="bottom-prompt-input"
             />

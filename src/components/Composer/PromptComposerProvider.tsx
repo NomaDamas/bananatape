@@ -44,6 +44,7 @@ interface PromptComposerContextValue {
 
 const OPENAI_MAX_INPUT_IMAGES = 16;
 const EDIT_FLOW_RESERVED_IMAGES = 2;
+const ANNOTATION_ONLY_EDIT_PROMPT = 'Apply the changes indicated by the annotations on the image.';
 
 const PromptComposerContext = createContext<PromptComposerContextValue | null>(null);
 
@@ -60,6 +61,9 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const baseImage = useEditorStore((s) => s.baseImage);
   const setBaseImage = useEditorStore((s) => s.setBaseImage);
   const clearAnnotations = useEditorStore((s) => s.clearAnnotations);
+  const paths = useEditorStore((s) => s.paths);
+  const boxes = useEditorStore((s) => s.boxes);
+  const memos = useEditorStore((s) => s.memos);
 
   const addEntry = useHistoryStore((s) => s.addEntry);
   const { exportAnnotatedImage, exportMask, resizeToSquare1024 } = useCanvasExport();
@@ -67,6 +71,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const canEdit = !!baseImage;
   const hasReferenceImages = referenceImages.length > 0;
+  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
 
   useEffect(() => {
     referenceImagesRef.current = referenceImages;
@@ -165,8 +170,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     setPrompt('');
   }, []);
 
-  const buildSubmittedPrompt = useCallback(() => {
-    const trimmedPrompt = prompt.trim();
+  const buildSubmittedPrompt = useCallback((fallbackPrompt?: string) => {
+    const trimmedPrompt = prompt.trim() || fallbackPrompt?.trim() || '';
     const trimmedSystemPrompt = systemPrompt.trim();
 
     if (!trimmedSystemPrompt) {
@@ -264,7 +269,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   ]);
 
   const handleEdit = useCallback(async () => {
-    const submittedPrompt = prompt.trim();
+    const submittedPrompt = prompt.trim() || (hasAnnotations ? ANNOTATION_ONLY_EDIT_PROMPT : '');
     if (!baseImage || !submittedPrompt || isGenerating) return;
     if (!validateOpenAIReferenceCount(EDIT_FLOW_RESERVED_IMAGES)) return;
     setMode('edit');
@@ -277,7 +282,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       ]);
 
       const formData = new FormData();
-      formData.append('prompt', buildSubmittedPrompt());
+      formData.append('prompt', buildSubmittedPrompt(ANNOTATION_ONLY_EDIT_PROMPT));
       formData.append('provider', provider);
 
       let originalBlob = await fetch(baseImage).then((r) => r.blob());
@@ -303,7 +308,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       if (data.imageDataUrl) {
         addEntry({
           imageDataUrl: data.imageDataUrl,
-          prompt,
+          prompt: submittedPrompt,
           provider,
           type: 'edit',
         });
@@ -328,6 +333,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     clearPromptComposer,
     exportAnnotatedImage,
     exportMask,
+    hasAnnotations,
     isGenerating,
     prompt,
     provider,

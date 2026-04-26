@@ -4,6 +4,7 @@ import { editImage } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
 const OPENAI_MAX_INPUT_IMAGES = 16;
+const ANNOTATION_ONLY_EDIT_PROMPT = 'Apply the changes indicated by the annotations on the image.';
 
 function isFile(value: FormDataEntryValue | null): value is File {
   return value instanceof File && value.size > 0;
@@ -24,12 +25,13 @@ export async function POST(request: Request) {
     const images = formData.getAll('images').filter(isFile);
     const maskImage = formData.get('maskImage');
 
-    if (typeof prompt !== 'string' || !prompt.trim()) {
+    if (typeof prompt !== 'string') {
       return NextResponse.json(
         { error: 'prompt is required' },
         { status: 400 },
       );
     }
+    const submittedPrompt = prompt.trim() || ANNOTATION_ONLY_EDIT_PROMPT;
 
     if (typeof provider !== 'string' || !provider.trim()) {
       return NextResponse.json(
@@ -62,14 +64,14 @@ export async function POST(request: Request) {
       const imageDataUrls = await Promise.all(images.map(fileToDataUrl));
 
       imageDataUrl = await godTiboGenerate({
-        prompt,
+        prompt: submittedPrompt,
         images: imageDataUrls,
       });
 
       return NextResponse.json({
         success: true,
         imageDataUrl,
-        prompt,
+        prompt: submittedPrompt,
         provider: 'god-tibo',
       });
     }
@@ -94,13 +96,13 @@ export async function POST(request: Request) {
     imageDataUrl = await editImage({
       images,
       maskImage,
-      prompt,
+      prompt: submittedPrompt,
     });
 
     return NextResponse.json({
       success: true,
       imageDataUrl,
-      prompt,
+      prompt: submittedPrompt,
       provider: 'openai',
     });
   } catch (error) {

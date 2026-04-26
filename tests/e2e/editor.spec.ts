@@ -70,8 +70,10 @@ function getPromptInput(page: import('@playwright/test').Page) {
     .locator([
       'textarea[placeholder*="generate" i]',
       'textarea[placeholder*="describe" i]',
+      'textarea[placeholder*="optional" i]',
       'input[placeholder*="generate" i]',
       'input[placeholder*="describe" i]',
+      'input[placeholder*="optional" i]',
     ].join(', '))
     .first();
 }
@@ -129,6 +131,7 @@ test.describe('BananaTape Editor', () => {
     await expect(page.getByRole('heading', { name: /history/i })).toBeVisible();
     await expect(page.locator('[data-testid="canvas-container"]')).toBeVisible();
     await expect(page.getByText(/No image loaded|Start by describing/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /share/i })).toHaveCount(0);
 
     await expect(page.locator('button[title="Pan (1)"]')).toBeVisible();
     await expect(page.locator('button[title="Pen (2)"]')).toBeVisible();
@@ -555,6 +558,56 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.up();
   });
 
+  test('submits an annotated edit without an extra prompt', async ({ page }) => {
+    await page.unroute('/api/edit');
+    let uploadedPrompt = '';
+
+    await page.route('/api/edit', async (route) => {
+      const body = route.request().postDataBuffer();
+      if (!body) throw new Error('Expected multipart edit body');
+      uploadedPrompt = extractMultipartTextPart(body, 'prompt');
+
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: BLUE_IMAGE_DATA_URL,
+          prompt: 'annotation-only edit',
+          provider: 'god-tibo',
+        }),
+      });
+    });
+
+    await chooseProvider(page, 'codex');
+
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('annotation-only source');
+    await getGenerateButton(page).click();
+    await expect(page.getByAltText('Canvas base')).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
+    await expect(promptInput).toHaveValue('');
+    await page.waitForFunction(() => {
+      const img = document.querySelector('img[alt="Canvas base"]') as HTMLImageElement | null;
+      return img?.complete && img.naturalWidth > 0;
+    });
+
+    await page.locator('button[title="Box (3)"]').click();
+    const canvas = page.locator('canvas').first();
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    await page.mouse.move(bounds.x + 40, bounds.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 180, bounds.y + 180, { steps: 10 });
+    await page.mouse.up();
+
+    const editButton = getEditButton(page);
+    await expect(editButton).toBeEnabled();
+    await editButton.click();
+
+    await expect.poll(() => uploadedPrompt).toContain('Apply the changes indicated by the annotations on the image.');
+  });
+
   test('adds sticky memo and arrow to annotated edit upload', async ({ page }) => {
     await page.unroute('/api/edit');
 
@@ -607,6 +660,8 @@ test.describe('BananaTape Editor', () => {
     await expect(memoTextarea).toBeVisible();
     await expect(memoTextarea).toHaveAttribute('spellcheck', 'false');
     await expect(memoTextarea).toHaveAttribute('data-gramm', 'false');
+    await expect(memoTextarea).toHaveCSS('font-size', '16px');
+    await expect(memoTextarea).toHaveCSS('line-height', '24px');
     const initialMemoBox = await memo.boundingBox();
     if (!initialMemoBox) throw new Error('Sticky memo not found');
 

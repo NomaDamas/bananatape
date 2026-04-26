@@ -47,9 +47,14 @@ export function TopToolbar() {
   const mode = useEditorStore((s) => s.mode);
   const isGenerating = useEditorStore((s) => s.isGenerating);
   const baseImage = useEditorStore((s) => s.baseImage);
+  const paths = useEditorStore((s) => s.paths);
+  const boxes = useEditorStore((s) => s.boxes);
+  const memos = useEditorStore((s) => s.memos);
 
   const { downloadImage } = useDownload();
   const providers = getEnabledProviders();
+  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
+  const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || hasAnnotations);
 
   const handleReferenceImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     void addReferenceFiles(Array.from(event.target.files ?? []));
@@ -180,7 +185,7 @@ export function TopToolbar() {
                 size="sm"
                 variant="outline"
                 className="h-8 gap-1.5"
-                disabled={!canEdit || isGenerating || !prompt.trim()}
+                disabled={isGenerating || !canSubmitEdit}
                 onClick={handleEdit}
               >
                 {isGenerating && mode === 'edit' ? (
