@@ -8,19 +8,19 @@
   <img src="docs/images/bananatape-editor-workspace-context.jpg" alt="BananaTape local-first image editing workspace showing annotation-driven editing and version history" width="100%" />
 </p>
 
-**BananaTape is natural-language Photoshop for AI image models** — a local-first vibe design canvas where you describe the image you want, mark up what should change, attach references, and let an image model patch the result into shape.
+**BananaTape is a local image editor for AI image generation and editing.** Write a prompt, mark up the image, attach references, and keep the results in a project folder.
 
-BananaTape is built around a simple idea: **the canvas should be a conversation surface**. Instead of learning layers, masks, selections, and export flows, you point at the image, leave notes, attach references, and ask the model to make the change.
+It is meant for quick iteration: generate an image, annotate what should change, run an edit, and go back to earlier versions when needed.
 
-## Why it feels different
+## What the editor gives you
 
-- **Annotate first, prompt second.** Draw boxes, arrows, pen marks, and sticky notes directly over the image. The model sees the same visual instructions you see.
-- **Project context stays visible.** System prompts and reference images live next to the canvas, so each edit keeps the style, brief, and source material in view.
-- **History is always one click away.** Every generation is saved in the sidebar. Pick the version that worked, then keep editing from there.
-- **The UI stays focused on making images.** Project creation, launch, status, and cleanup are CLI-first; the editor itself stays clean.
-- **Local-first by default.** Projects persist as folders on disk with images, references, settings, and history you can inspect or back up yourself.
+- **Canvas annotations.** Draw boxes, arrows, pen marks, and sticky notes over the image before editing.
+- **Project context.** Keep a system prompt and reference images attached to the project.
+- **Version history.** Save each generation or edit in the sidebar and reopen earlier results.
+- **Local project folders.** Store project metadata, references, and generated assets on disk.
+- **CLI project management.** Create, launch, list, stop, and delete projects from the command line.
 
-The product is intentionally scrappy: part banana-on-the-wall art joke, part duct-tape utility. It is for people who can explain a vibe but do not want to learn professional design tooling first.
+The goal is not to replace a full design tool. It is a small editor for prompt-based image work where visual notes are easier than writing a long prompt.
 
 ## What BananaTape does
 
@@ -34,13 +34,13 @@ The product is intentionally scrappy: part banana-on-the-wall art joke, part duc
 
 ## Why BananaTape
 
-Traditional design tools assume you know how to design. BananaTape assumes you know how to point, scribble, and explain what you want in plain language.
+BananaTape keeps the image workflow simple and keeps project management outside the editor UI.
 
 | Traditional tools | BananaTape |
 | --- | --- |
 | Layers, masks, tool modes | Prompt, annotate, generate |
 | Pixel-perfect selections | Sticky notes, arrows, boxes |
-| Design vocabulary required | Natural language is enough |
+| Design vocabulary required | Plain-language instructions |
 | Complex file/project UI | CLI-managed local project folders |
 | Manual versioning | History sidebar |
 
