@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -66,6 +67,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const memos = useEditorStore((s) => s.memos);
 
   const addEntry = useHistoryStore((s) => s.addEntry);
+  const selectedHistoryId = useHistoryStore((s) => s.selectedId);
   const { exportAnnotatedImage, exportMask, resizeToSquare1024 } = useCanvasExport();
   const { addToast } = useToast();
 
@@ -126,7 +128,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     }
   }, [addToast]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       if (isGenerating) return;
 
@@ -236,12 +238,16 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       }
       if (data.imageDataUrl) {
         addEntry({
+          id: data.metadata?.id,
+          timestamp: data.metadata?.timestamp,
           imageDataUrl: data.imageDataUrl,
+          assetId: data.assetId,
+          assetUrl: data.assetUrl,
           prompt,
           provider,
           type: 'generate',
         });
-        setBaseImage(data.imageDataUrl, { width: 0, height: 0 });
+        setBaseImage(data.assetUrl ?? data.imageDataUrl, { width: 0, height: 0 });
         setMode('edit');
         clearPromptComposer();
         addToast('Image generated successfully', 'success');
@@ -284,6 +290,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       const formData = new FormData();
       formData.append('prompt', buildSubmittedPrompt(ANNOTATION_ONLY_EDIT_PROMPT));
       formData.append('provider', provider);
+      if (selectedHistoryId) formData.append('parentId', selectedHistoryId);
 
       let originalBlob = await fetch(baseImage).then((r) => r.blob());
 
@@ -307,12 +314,17 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       }
       if (data.imageDataUrl) {
         addEntry({
+          id: data.metadata?.id,
+          timestamp: data.metadata?.timestamp,
           imageDataUrl: data.imageDataUrl,
+          assetId: data.assetId,
+          assetUrl: data.assetUrl,
           prompt: submittedPrompt,
           provider,
           type: 'edit',
+          parentId: data.metadata?.parentId,
         });
-        setBaseImage(data.imageDataUrl, { width: 0, height: 0 });
+        setBaseImage(data.assetUrl ?? data.imageDataUrl, { width: 0, height: 0 });
         clearAnnotations();
         clearPromptComposer();
         addToast('Image edited successfully', 'success');
@@ -338,6 +350,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     prompt,
     provider,
     resizeToSquare1024,
+    selectedHistoryId,
     setBaseImage,
     setIsGenerating,
     setMode,

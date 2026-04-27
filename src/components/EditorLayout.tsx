@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useHistoryStore } from '@/stores/useHistoryStore';
 import { CanvasContainer } from './Canvas/CanvasContainer';
 import { PromptComposerProvider, usePromptComposer } from './Composer/PromptComposerProvider';
 import { BottomComposer } from './Composer/BottomComposer';
@@ -26,7 +27,36 @@ function StandaloneEditorShell() {
 
   const { toasts, removeToast } = useToast();
   const baseImage = useEditorStore((s) => s.baseImage);
+  const setBaseImage = useEditorStore((s) => s.setBaseImage);
+  const hydrateEntries = useHistoryStore((s) => s.hydrateEntries);
   const [isExportOpen, setIsExportOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateProjectHistory() {
+      try {
+        const sessionRes = await fetch('/api/projects/current', { cache: 'no-store' });
+        if (!sessionRes.ok) return;
+        const session = await sessionRes.json();
+        if (session.persistence !== 'project') return;
+        const historyRes = await fetch('/api/projects/history', { cache: 'no-store' });
+        if (!historyRes.ok) return;
+        const history = await historyRes.json();
+        if (cancelled || !Array.isArray(history.entries)) return;
+        hydrateEntries(history.entries.map((entry: { assetUrl?: string; imageDataUrl?: string }) => ({
+          ...entry,
+          imageDataUrl: entry.imageDataUrl ?? entry.assetUrl,
+        })));
+        const first = history.entries[0];
+        if (first?.assetUrl) setBaseImage(first.assetUrl, { width: 0, height: 0 });
+      } catch {
+        // No active local project session; keep no-project fallback behavior.
+      }
+    }
+    void hydrateProjectHistory();
+    return () => { cancelled = true; };
+  }, [hydrateEntries, setBaseImage]);
+
   const {
     prompt,
     setPrompt,

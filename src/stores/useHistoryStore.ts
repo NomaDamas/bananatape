@@ -5,7 +5,8 @@ import type { HistoryEntry } from './types';
 interface HistoryState {
   entries: HistoryEntry[];
   selectedId: string | null;
-  addEntry: (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => void;
+  addEntry: (entry: Omit<HistoryEntry, 'id' | 'timestamp'> & Partial<Pick<HistoryEntry, 'id' | 'timestamp'>>) => void;
+  hydrateEntries: (entries: HistoryEntry[]) => void;
   selectEntry: (id: string) => void;
   deleteEntry: (id: string) => void;
   clearHistory: () => void;
@@ -18,12 +19,13 @@ export const useHistoryStore = create<HistoryState>()(
     addEntry: (entry) => set((state) => {
       const newEntry: HistoryEntry = {
         ...entry,
-        id: nanoid(),
-        timestamp: Date.now(),
+        id: entry.id ?? nanoid(),
+        timestamp: entry.timestamp ?? Date.now(),
       };
       const entries = [newEntry, ...state.entries].slice(0, 20);
       return { entries, selectedId: newEntry.id };
     }),
+    hydrateEntries: (entries) => set({ entries, selectedId: entries[0]?.id ?? null }),
     selectEntry: (id) => set({ selectedId: id }),
     deleteEntry: (id) => set((state) => ({
       entries: state.entries.filter((e) => e.id !== id),

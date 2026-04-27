@@ -45,10 +45,13 @@ export interface EditorState {
 
 export interface HistoryEntry {
   id: string;
-  imageDataUrl: string;
+  imageDataUrl?: string;
+  assetId?: string;
+  assetUrl?: string;
   prompt: string;
   provider: Provider;
   type: 'generate' | 'edit';
   timestamp: number;
-  parentId?: string;
+  parentId?: string | null;
 }
+

@@ -24,6 +24,8 @@ export function HistoryItem({ entry, index, total, isSelected, onSelect, onDelet
   const isLast = index === total - 1;
   const TypeIcon = entry.type === 'edit' ? Wand2 : Sparkles;
 
+  const imageSrc = entry.assetUrl ?? entry.imageDataUrl ?? '';
+
   return (
     <div className="flex items-stretch gap-2" data-testid="history-timeline-row">
       <div className="flex w-3.5 shrink-0 flex-col items-center">
@@ -54,7 +56,7 @@ export function HistoryItem({ entry, index, total, isSelected, onSelect, onDelet
         {isSelected && <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-[#0d99ff]" />}
         <div className="relative aspect-[4/5] overflow-hidden bg-black">
           <img
-            src={entry.imageDataUrl}
+            src={imageSrc}
             alt={entry.prompt.slice(0, 50)}
             className="h-full w-full object-cover"
             loading="lazy"

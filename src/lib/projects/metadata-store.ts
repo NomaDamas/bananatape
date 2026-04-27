@@ -1,0 +1,114 @@
+import { mkdir, readFile, rename, open } from 'node:fs/promises';
+import path from 'node:path';
+import { nanoid } from 'nanoid';
+import type { Provider } from '@/types';
+import { createEmptyHistory, HISTORY_SCHEMA_VERSION, isProjectHistory, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectResultType } from './schema';
+import { ensureProjectDirectories, getHistoryPath, getManifestPath } from './paths';
+import { withProjectLock } from './locks';
+import { sanitizeProjectName, slugifyProjectName } from './validate';
+
+async function readJson<T>(filePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(filePath, 'utf8')) as T;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const data = `${JSON.stringify(value, null, 2)}\n`;
+  const handle = await open(tmp, 'w');
+  try {
+    await handle.writeFile(data, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await rename(tmp, filePath);
+}
+
+export async function createProject(projectRoot: string, name: string): Promise<ProjectManifest> {
+  const cleanName = sanitizeProjectName(name);
+  const now = new Date().toISOString();
+  const manifest: ProjectManifest = {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    id: slugifyProjectName(cleanName),
+    name: cleanName,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await ensureProjectDirectories(projectRoot);
+  await atomicWriteJson(getManifestPath(projectRoot), manifest);
+  await atomicWriteJson(getHistoryPath(projectRoot), createEmptyHistory());
+  return manifest;
+}
+
+export async function readProjectManifest(projectRoot: string): Promise<ProjectManifest> {
+  const manifest = await readJson<ProjectManifest>(getManifestPath(projectRoot));
+  if (!manifest || manifest.schemaVersion !== PROJECT_SCHEMA_VERSION) {
+    throw new Error('Invalid BananaTape project manifest');
+  }
+  return manifest;
+}
+
+export async function readProjectHistory(projectRoot: string): Promise<ProjectHistory> {
+  const history = await readJson<ProjectHistory>(getHistoryPath(projectRoot));
+  if (!history) return createEmptyHistory();
+  if (!isProjectHistory(history)) throw new Error('Invalid BananaTape history file');
+  return history;
+}
+
+export interface AppendHistoryEntryOptions {
+  type: ProjectResultType;
+  provider: Provider;
+  prompt: string;
+  assetId: string;
+  assetPath: string;
+  parentId?: string | null;
+}
+
+export async function appendHistoryEntry(projectRoot: string, options: AppendHistoryEntryOptions): Promise<ProjectHistoryEntry> {
+  return withProjectLock(projectRoot, async () => {
+    const history = await readProjectHistory(projectRoot);
+    const now = new Date();
+    const entry: ProjectHistoryEntry = {
+      id: `hist_${nanoid(12)}`,
+      type: options.type,
+      provider: options.provider,
+      prompt: options.prompt,
+      assetId: options.assetId,
+      assetPath: options.assetPath,
+      thumbnailPath: null,
+      parentId: options.parentId ?? null,
+      createdAt: now.toISOString(),
+      timestamp: now.getTime(),
+    };
+    const next: ProjectHistory = {
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      revision: history.revision + 1,
+      entries: [entry, ...history.entries],
+    };
+    await atomicWriteJson(getHistoryPath(projectRoot), next);
+    return entry;
+  });
+}
+
+export async function deleteHistoryEntry(projectRoot: string, entryId: string): Promise<ProjectHistory> {
+  return withProjectLock(projectRoot, async () => {
+    const history = await readProjectHistory(projectRoot);
+    const next: ProjectHistory = {
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      revision: history.revision + 1,
+      entries: history.entries.filter((entry) => entry.id !== entryId),
+    };
+    await atomicWriteJson(getHistoryPath(projectRoot), next);
+    return next;
+  });
+}
+
+export async function writeJsonForTests(filePath: string, value: unknown): Promise<void> {
+  await atomicWriteJson(filePath, value);
+}

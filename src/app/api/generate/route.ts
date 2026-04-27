@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { persistImageResult } from '@/lib/projects/asset-store';
+import { hasActiveProject, requireProjectSession } from '@/lib/projects/session';
 import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { editImage as openaiEdit, generateImage as openaiGenerate } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
@@ -41,6 +43,7 @@ async function parseGenerateRequest(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const projectSession = hasActiveProject() ? await requireProjectSession() : null;
     const { prompt, provider, size, quality, referenceImages } = await parseGenerateRequest(request);
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -81,13 +84,28 @@ export async function POST(request: Request) {
       imageDataUrl = await openaiGenerate({ prompt, size, quality });
     }
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       success: true,
       imageDataUrl,
       prompt,
       provider: provider ?? 'openai',
       referenceImageCount: referenceImages.length,
-    });
+    };
+
+    if (projectSession) {
+      const persisted = await persistImageResult({
+        projectRoot: projectSession.projectRoot,
+        imageDataUrl,
+        prompt,
+        provider: (provider ?? 'openai') as 'openai' | 'god-tibo',
+        type: 'generate',
+      });
+      response.assetId = persisted.historyEntry.assetId;
+      response.assetUrl = persisted.assetUrl;
+      response.metadata = persisted.historyEntry;
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Generate error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';

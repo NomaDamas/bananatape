@@ -17,8 +17,15 @@ export function HistorySidebar() {
     const entry = entries.find((e) => e.id === id);
     if (entry) {
       selectEntry(id);
-      setBaseImage(entry.imageDataUrl, { width: 0, height: 0 });
+      setBaseImage(entry.assetUrl ?? entry.imageDataUrl ?? null, { width: 0, height: 0 });
     }
+  };
+
+  const handleDelete = (id: string) => {
+    deleteEntry(id);
+    void fetch(`/api/projects/history/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {
+      // In no-project/dev mode this endpoint is expected to be unavailable.
+    });
   };
 
   return (
@@ -56,7 +63,7 @@ export function HistorySidebar() {
                   total={entries.length}
                   isSelected={entry.id === selectedId}
                   onSelect={() => handleSelect(entry.id)}
-                  onDelete={() => deleteEntry(entry.id)}
+                  onDelete={() => handleDelete(entry.id)}
                 />
               ))}
             </div>

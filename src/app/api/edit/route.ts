@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { persistImageResult } from '@/lib/projects/asset-store';
+import { hasActiveProject, requireProjectSession } from '@/lib/projects/session';
 import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { editImage } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
@@ -10,6 +12,10 @@ function isFile(value: FormDataEntryValue | null): value is File {
   return value instanceof File && value.size > 0;
 }
 
+function optionalString(value: FormDataEntryValue | null): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 async function fileToDataUrl(file: File): Promise<string> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString('base64');
@@ -18,10 +24,12 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 export async function POST(request: Request) {
   try {
+    const projectSession = hasActiveProject() ? await requireProjectSession() : null;
     const formData = await request.formData();
 
     const prompt = formData.get('prompt');
     const provider = formData.get('provider');
+    const parentId = formData.get('parentId');
     const images = formData.getAll('images').filter(isFile);
     const maskImage = formData.get('maskImage');
 
@@ -68,12 +76,26 @@ export async function POST(request: Request) {
         images: imageDataUrls,
       });
 
-      return NextResponse.json({
+      const response: Record<string, unknown> = {
         success: true,
         imageDataUrl,
         prompt: submittedPrompt,
         provider: 'god-tibo',
-      });
+      };
+      if (projectSession) {
+        const persisted = await persistImageResult({
+          projectRoot: projectSession.projectRoot,
+          imageDataUrl,
+          prompt: submittedPrompt,
+          provider: 'god-tibo',
+          type: 'edit',
+          parentId: optionalString(parentId),
+        });
+        response.assetId = persisted.historyEntry.assetId;
+        response.assetUrl = persisted.assetUrl;
+        response.metadata = persisted.historyEntry;
+      }
+      return NextResponse.json(response);
     }
 
     if (images.length > OPENAI_MAX_INPUT_IMAGES) {
@@ -99,12 +121,26 @@ export async function POST(request: Request) {
       prompt: submittedPrompt,
     });
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       success: true,
       imageDataUrl,
       prompt: submittedPrompt,
       provider: 'openai',
-    });
+    };
+    if (projectSession) {
+      const persisted = await persistImageResult({
+        projectRoot: projectSession.projectRoot,
+        imageDataUrl,
+        prompt: submittedPrompt,
+        provider: 'openai',
+        type: 'edit',
+        parentId: optionalString(parentId),
+      });
+      response.assetId = persisted.historyEntry.assetId;
+      response.assetUrl = persisted.assetUrl;
+      response.metadata = persisted.historyEntry;
+    }
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Edit error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
