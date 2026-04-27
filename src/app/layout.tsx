@@ -32,7 +32,7 @@ export default function RootLayout({
       lang="en"
       className={`${pretendard.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex h-full overflow-hidden">
         <TooltipProvider>
           <ToastProvider>{children}</ToastProvider>
         </TooltipProvider>

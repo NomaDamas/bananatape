@@ -84,7 +84,7 @@ function StandaloneEditorShell() {
   ), [referenceImages]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-[#e6e6e6]">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#1e1e1e] text-[#e6e6e6]">
       <TopBar canExport={!!baseImage} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <LeftPanel

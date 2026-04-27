@@ -287,13 +287,17 @@ test.describe('BananaTape Editor', () => {
         return {
           viewport: { width: window.innerWidth, height: window.innerHeight },
           documentWidth: document.documentElement.scrollWidth,
+          documentHeight: document.documentElement.scrollHeight,
           bodyWidth: document.body.scrollWidth,
+          bodyHeight: document.body.scrollHeight,
           rects,
         };
       });
 
       expect(layout.documentWidth, `${viewport.width}×${viewport.height} should not create document-level horizontal scroll`).toBeLessThanOrEqual(viewport.width);
       expect(layout.bodyWidth, `${viewport.width}×${viewport.height} should not create body-level horizontal scroll`).toBeLessThanOrEqual(viewport.width);
+      expect(layout.documentHeight, `${viewport.width}×${viewport.height} should not create document-level vertical scroll`).toBeLessThanOrEqual(viewport.height);
+      expect(layout.bodyHeight, `${viewport.width}×${viewport.height} should not create body-level vertical scroll`).toBeLessThanOrEqual(viewport.height);
 
       for (const [name, rect] of Object.entries(layout.rects)) {
         expect(rect, `${name} should exist at ${viewport.width}×${viewport.height}`).not.toBeNull();
@@ -305,6 +309,20 @@ test.describe('BananaTape Editor', () => {
         expect(rect!.bottom, `${name} should not overflow bottom at ${viewport.width}×${viewport.height}`).toBeLessThanOrEqual(layout.viewport.height);
       }
     }
+  });
+
+  test('mouse wheel does not move the document viewport', async ({ page }) => {
+    await page.goto('/');
+    await page.mouse.move(1000, 360);
+    await page.mouse.wheel(0, 900);
+
+    const scrollState = await page.evaluate(() => ({
+      windowY: window.scrollY,
+      documentTop: document.documentElement.scrollTop,
+      bodyTop: document.body.scrollTop,
+    }));
+
+    expect(scrollState).toEqual({ windowY: 0, documentTop: 0, bodyTop: 0 });
   });
 
   test('provider choices expose only implemented providers', async ({ page }) => {
