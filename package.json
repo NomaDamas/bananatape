@@ -74,6 +74,7 @@
     "postcss.config.mjs",
     "components.json",
     "README.md",
+    "docs/images/",
     ".next/standalone/",
     ".next/static/",
     ".next/BUILD_ID"

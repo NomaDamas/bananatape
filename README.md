@@ -1,7 +1,7 @@
 # BananaTape
 
 <p align="center">
-  <img src="docs/images/bananatape-editor-annotated-request.jpg" alt="BananaTape editor with handwritten regions, sticky notes, project context, references, and generation history" width="100%" />
+  <img src="docs/images/bananatape-editor-annotated-request.jpg" alt="BananaTape editor with references, a generated poster, canvas annotations, and history" width="100%" />
 </p>
 
 <p align="center">
@@ -21,6 +21,107 @@ It is meant for quick iteration: generate an image, annotate what should change,
 - **CLI project management.** Create, launch, list, stop, and delete projects from the command line.
 
 The goal is not to replace a full design tool. It is a small editor for prompt-based image work where visual notes are easier than writing a long prompt.
+
+## Quick start
+
+Install the CLI from npm:
+
+```bash
+npm install -g bananatape
+```
+
+Create a project and open the editor:
+
+```bash
+bananatape create "Logo Explorations"
+bananatape launch logo-explorations
+```
+
+The editor opens in your browser at `127.0.0.1` on an available port. Each project runs independently, so multiple projects can be open at the same time.
+
+Basic loop:
+
+1. Add a system prompt if the project needs consistent context.
+2. Attach reference images if needed.
+3. Type a prompt and generate an image.
+4. Mark up the image with boxes, arrows, pen strokes, or sticky notes.
+5. Run an edit.
+6. Use the history sidebar to return to earlier results.
+
+Useful commands:
+
+```bash
+bananatape list
+bananatape status
+bananatape launch <project>
+bananatape stop <project>
+bananatape delete <project>
+```
+
+## Provider setup
+
+BananaTape has two provider options in the editor.
+
+### OpenAI
+
+The OpenAI provider reads `OPENAI_API_KEY` from the environment.
+
+```bash
+export OPENAI_API_KEY="sk-..."
+bananatape launch logo-explorations
+```
+
+For a persistent local setup, add the export to your shell profile, such as `~/.zshrc`, then restart the shell.
+
+### codex
+
+The `codex` provider uses the local Codex auth file at:
+
+```text
+~/.codex/auth.json
+```
+
+Set it up by installing and signing in to Codex CLI first. After login, launch BananaTape from the same machine:
+
+```bash
+bananatape launch logo-explorations
+```
+
+If the auth file is missing or expired, the `codex` provider will fail until Codex CLI is signed in again.
+
+## Quick start for AI agents
+
+When operating this repo or helping a user run BananaTape, use these steps:
+
+```bash
+# Install published CLI
+npm install -g bananatape
+
+# Optional: configure where local project folders are stored
+export BANANATAPE_PROJECTS_DIR="$HOME/Documents/BananaTape Projects"
+
+# Provider choice A: OpenAI
+export OPENAI_API_KEY="<user-provided-key>"
+
+# Provider choice B: codex
+# Verify the user has signed in with Codex CLI and ~/.codex/auth.json exists.
+test -f "$HOME/.codex/auth.json"
+
+# Create and launch a project
+bananatape create "Agent Smoke Test"
+bananatape launch agent-smoke-test --no-open
+
+# Inspect runtime state
+bananatape status agent-smoke-test
+```
+
+Agent notes:
+
+- Do not ask users to paste API keys into README examples, issues, or commits.
+- Prefer environment variables or the user's existing shell profile for `OPENAI_API_KEY`.
+- Do not modify `~/.codex/auth.json`; ask the user to sign in with Codex CLI if it is missing.
+- Use `BANANATAPE_PROJECTS_DIR` for reproducible local project locations during tests.
+- Use `bananatape stop <project>` when a smoke test is finished.
 
 ## What BananaTape does
 
@@ -76,32 +177,16 @@ Project management is intentionally CLI-first. The editor does not include a pro
 
 ## CLI usage
 
-Build the app first:
-
-```bash
-npm install
-npm run build
-```
-
-Create and launch a project:
-
-```bash
-node bin/bananatape.mjs create "Logo Explorations"
-node bin/bananatape.mjs launch logo-explorations
-```
-
-The CLI starts BananaTape on `127.0.0.1` using a free port and opens your browser.
-
 ### Commands
 
 ```bash
-node bin/bananatape.mjs create <name> [--dir <parent>]
-node bin/bananatape.mjs list
-node bin/bananatape.mjs launch <project> [--port <port>] [--no-open] [--rebuild]
-node bin/bananatape.mjs open <project>
-node bin/bananatape.mjs status [project]
-node bin/bananatape.mjs stop <project|--all>
-node bin/bananatape.mjs delete <project> [--delete-files]
+bananatape create <name> [--dir <parent>]
+bananatape list
+bananatape launch <project> [--port <port>] [--no-open] [--rebuild]
+bananatape open <project>
+bananatape status [project]
+bananatape stop <project|--all>
+bananatape delete <project> [--delete-files]
 ```
 
 Notes:
@@ -111,13 +196,6 @@ Notes:
 - `status` shows running projects, ports, PIDs, and launch IDs.
 - `delete <project>` unregisters the project but keeps files by default.
 - `delete <project> --delete-files` removes the project folder from disk.
-
-If the package is linked or installed as a bin, the same commands are available as:
-
-```bash
-bananatape create "Logo Explorations"
-bananatape launch logo-explorations
-```
 
 ## Development server
 
@@ -131,15 +209,6 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 In this mode, BananaTape still works as an editor, but project persistence is only active when launched with `BANANATAPE_ACTIVE_PROJECT_PATH` through the CLI.
-
-## Providers
-
-BananaTape currently supports:
-
-- OpenAI image generation/editing
-- `codex` via the private Codex backend path used by this project
-
-Provider code is kept separate from the canvas workflow so additional image models can be added later.
 
 ## Environment variables
 
@@ -215,8 +284,6 @@ The workflow intentionally derives the npm version from the release tag so `pack
 - No complex asset browser.
 - No parallel multi-version generation UI yet.
 
-## Product positioning
+## Intended users
 
-> Photoshop, but with words, annotations, references, and duct tape.
-
-BananaTape is for non-designers, founders, PMs, and developers who need visuals but think in words and rough marks instead of layers and masks.
+BananaTape is for people who need to generate or edit images with prompts and quick visual notes. It is useful for small design tasks, marketing drafts, product mockups, and image iteration where a full design tool would be more setup than needed.
