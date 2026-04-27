@@ -1,5 +1,5 @@
 const PROJECT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
-const ASSET_ID_PATTERN = /^img_[a-zA-Z0-9_-]{8,80}$/;
+const ASSET_ID_PATTERN = /^(img|ref)_[a-zA-Z0-9_-]{8,100}$/;
 
 export function slugifyProjectName(name: string): string {
   const slug = name

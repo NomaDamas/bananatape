@@ -8,10 +8,11 @@ import { cn } from '@/lib/utils';
 interface TopBarProps {
   canExport: boolean;
   onExportClick: () => void;
+  projectName?: string;
   className?: string;
 }
 
-export function TopBar({ canExport, onExportClick, className }: TopBarProps) {
+export function TopBar({ canExport, onExportClick, projectName = 'Untitled design', className }: TopBarProps) {
   return (
     <header
       data-testid="standalone-top-bar"
@@ -26,7 +27,7 @@ export function TopBar({ canExport, onExportClick, className }: TopBarProps) {
         <div className="flex min-w-0 items-center gap-1.5 text-xs">
           <span className="hidden text-[#b3b3b3] sm:inline">BananaTape</span>
           <span className="hidden text-[#666] sm:inline">/</span>
-          <span className="truncate font-medium text-white">Untitled design</span>
+          <span className="truncate font-medium text-white" title={projectName}>{projectName}</span>
         </div>
       </div>
 

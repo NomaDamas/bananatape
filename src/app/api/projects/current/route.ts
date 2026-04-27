@@ -8,7 +8,6 @@ export async function GET() {
     return NextResponse.json(await getCurrentProjectSummary());
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message.includes('Unauthorized') || message.includes('session') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

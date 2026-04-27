@@ -106,7 +106,6 @@ describe('bananatape CLI project lifecycle', () => {
         port: 6553,
         pid: 99999999,
         launchId: 'deadbeef',
-        cookieName: 'bt_session_deadbeef',
         startedAt: new Date().toISOString(),
       }],
     }, null, 2));
@@ -130,7 +129,7 @@ describe('bananatape CLI project lifecycle', () => {
       const status = await waitUntilRunning('launchable');
       expect(status.stdout).toContain('status: running');
       expect(status.stdout).toContain(`url: http://127.0.0.1:${port}`);
-      expect(status.stdout).toContain('cookieName: bt_session_');
+      expect(status.stdout).not.toContain('cookieName');
 
       const runtime = JSON.parse(await readFile(path.join(home, 'runtime.json'), 'utf8'));
       expect(runtime.running).toHaveLength(1);
@@ -139,7 +138,8 @@ describe('bananatape CLI project lifecycle', () => {
         projectPath: path.join(projectsDir, 'launchable'),
         port,
       });
-      expect(runtime.running[0].cookieName).toBe(`bt_session_${runtime.running[0].launchId}`);
+      expect(runtime.running[0].launchId).toEqual(expect.any(String));
+      expect(runtime.running[0].cookieName).toBeUndefined();
     } finally {
       await runCli(['stop', 'launchable']);
     }

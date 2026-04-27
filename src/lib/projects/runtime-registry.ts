@@ -8,7 +8,6 @@ export interface RunningProject {
   port: number;
   pid: number;
   launchId: string;
-  cookieName: string;
   startedAt: string;
 }
 

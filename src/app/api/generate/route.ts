@@ -43,7 +43,7 @@ async function parseGenerateRequest(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const projectSession = hasActiveProject() ? await requireProjectSession() : null;
+    const projectSession = hasActiveProject() ? requireProjectSession() : null;
     const { prompt, provider, size, quality, referenceImages } = await parseGenerateRequest(request);
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {

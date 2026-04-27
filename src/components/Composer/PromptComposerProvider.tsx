@@ -23,6 +23,8 @@ export interface ReferenceImage {
   id: string;
   file: File;
   previewUrl: string;
+  persistedReferenceId?: string;
+  ownsPreviewUrl?: boolean;
 }
 
 type ReferenceSource = 'file-picker' | 'paste';
@@ -54,6 +56,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
   const referenceImagesRef = useRef<ReferenceImage[]>([]);
+  const didLoadProjectSettingsRef = useRef(false);
 
   const provider = useEditorStore((s) => s.provider);
   const setMode = useEditorStore((s) => s.setMode);
@@ -81,9 +84,66 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      referenceImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      referenceImagesRef.current.forEach((image) => {
+        if (image.ownsPreviewUrl) URL.revokeObjectURL(image.previewUrl);
+      });
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateProjectSettings() {
+      try {
+        const response = await fetch('/api/projects/settings', { cache: 'no-store' });
+        if (!response.ok) return;
+        const settings = await response.json();
+        if (cancelled) return;
+
+        setSystemPrompt(typeof settings.systemPrompt === 'string' ? settings.systemPrompt : '');
+
+        if (Array.isArray(settings.referenceImages)) {
+          const persistedReferences = await Promise.all(settings.referenceImages.map(async (reference: {
+            id: string;
+            assetUrl: string;
+            name: string;
+            mimeType: string;
+          }) => {
+            const blob = await fetch(reference.assetUrl, { cache: 'no-store' }).then((assetResponse) => assetResponse.blob());
+            return {
+              id: reference.id,
+              persistedReferenceId: reference.id,
+              file: new File([blob], reference.name || 'reference.png', { type: reference.mimeType || blob.type || 'image/png' }),
+              previewUrl: reference.assetUrl,
+              ownsPreviewUrl: false,
+            } satisfies ReferenceImage;
+          }));
+          if (!cancelled) setReferenceImages(persistedReferences);
+        }
+      } catch {
+        // No active project settings endpoint in no-project/dev mode.
+      } finally {
+        didLoadProjectSettingsRef.current = true;
+      }
+    }
+
+    void hydrateProjectSettings();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!didLoadProjectSettingsRef.current) return;
+    const timeout = window.setTimeout(() => {
+      void fetch('/api/projects/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt }),
+      }).catch(() => {
+        // No-project/dev mode keeps the system prompt in memory only.
+      });
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [systemPrompt]);
 
   const addReferenceFiles = useCallback(async (files: File[], source: ReferenceSource = 'file-picker') => {
     const result = await normalizeReferenceFiles(files);
@@ -102,14 +162,35 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
     if (result.files.length === 0) return;
 
-    setReferenceImages((current) => [
-      ...current,
-      ...result.files.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-      })),
-    ]);
+    const localReferences = result.files.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      ownsPreviewUrl: true,
+    }));
+
+    setReferenceImages((current) => [...current, ...localReferences]);
+
+    void (async () => {
+      try {
+        const formData = new FormData();
+        result.files.forEach((file) => formData.append('referenceImages', file, file.name));
+        const response = await fetch('/api/projects/references', { method: 'POST', body: formData });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!Array.isArray(payload.referenceImages)) return;
+        setReferenceImages((current) => current.map((reference) => {
+          const localIndex = localReferences.findIndex((local) => local.id === reference.id);
+          const persisted = payload.referenceImages[localIndex];
+          return persisted ? {
+            ...reference,
+            persistedReferenceId: persisted.id,
+          } : reference;
+        }));
+      } catch {
+        // No-project/dev mode keeps reference images in memory only.
+      }
+    })();
 
     if (result.convertedCount > 0) {
       addToast(
@@ -156,14 +237,22 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const removeReferenceImage = useCallback((id: string) => {
     setReferenceImages((current) => {
       const image = current.find((item) => item.id === id);
-      if (image) URL.revokeObjectURL(image.previewUrl);
+      if (image?.ownsPreviewUrl) URL.revokeObjectURL(image.previewUrl);
+      if (image?.persistedReferenceId) {
+        void fetch(`/api/projects/references?referenceId=${encodeURIComponent(image.persistedReferenceId)}`, {
+          method: 'DELETE',
+        }).catch(() => undefined);
+      }
       return current.filter((item) => item.id !== id);
     });
   }, []);
 
   const clearReferenceImages = useCallback(() => {
     setReferenceImages((current) => {
-      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      current.forEach((image) => {
+        if (image.ownsPreviewUrl) URL.revokeObjectURL(image.previewUrl);
+      });
+      void fetch('/api/projects/references', { method: 'DELETE' }).catch(() => undefined);
       return [];
     });
   }, []);

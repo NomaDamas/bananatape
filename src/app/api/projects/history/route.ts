@@ -13,7 +13,7 @@ function toClientEntry(entry: Awaited<ReturnType<typeof readProjectHistory>>['en
 
 export async function GET() {
   try {
-    const session = await requireProjectSession();
+    const session = requireProjectSession();
     const history = await readProjectHistory(session.projectRoot);
     return NextResponse.json({ ...history, entries: history.entries.map(toClientEntry) });
   } catch (error) {

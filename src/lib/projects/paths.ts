@@ -36,6 +36,7 @@ export function getHistoryPath(projectRoot: string): string {
 
 export async function ensureProjectDirectories(projectRoot: string): Promise<void> {
   await mkdir(path.join(projectRoot, 'assets'), { recursive: true });
+  await mkdir(path.join(projectRoot, 'references'), { recursive: true });
   await mkdir(path.join(projectRoot, 'thumbnails'), { recursive: true });
   await mkdir(path.join(projectRoot, 'tmp'), { recursive: true });
 }

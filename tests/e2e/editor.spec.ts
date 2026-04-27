@@ -146,6 +146,109 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('button[title="Zoom out"]').first()).toBeVisible();
   });
 
+  test('shows active CLI project name in the top bar', async ({ page }) => {
+    await page.route('/api/projects/current', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          persistence: 'project',
+          projectId: 'summer-campaign',
+          projectName: 'Summer Campaign',
+          launchId: 'test-launch',
+        }),
+      });
+    });
+    await page.route('/api/projects/history', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ schemaVersion: 1, revision: 0, entries: [] }),
+      });
+    });
+
+    await page.reload();
+
+    await expect(page.locator('[data-testid="standalone-top-bar"]')).toContainText('Summer Campaign');
+    await expect(page.locator('[data-testid="standalone-top-bar"]')).not.toContainText('Untitled design');
+  });
+
+  test('hydrates project-level system prompt and reference images', async ({ page }) => {
+    await page.route('/api/projects/settings', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            systemPrompt: 'Always keep the banana tape gritty.',
+            referenceImages: [{
+              id: 'ref-test',
+              assetId: 'ref_20260427T000000Z_testref1',
+              assetPath: 'references/ref_20260427T000000Z_testref1.png',
+              assetUrl: '/api/projects/assets/ref_20260427T000000Z_testref1',
+              name: 'mood.png',
+              mimeType: 'image/png',
+              createdAt: new Date().toISOString(),
+            }],
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    });
+    await page.route('/api/projects/assets/ref_20260427T000000Z_testref1', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from(RED_IMAGE_DATA_URL.split(',')[1], 'base64'),
+      });
+    });
+
+    await page.reload();
+
+    await expect(page.getByPlaceholder('Instructions that are included with every generation/edit prompt.')).toHaveValue('Always keep the banana tape gritty.');
+    await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
+  });
+
+  test('history panel scrolls when it has many persisted entries', async ({ page }) => {
+    const entries = Array.from({ length: 24 }, (_, index) => ({
+      id: `hist_${index}`,
+      type: index % 2 === 0 ? 'generate' : 'edit',
+      provider: 'openai',
+      prompt: `Persisted version ${index + 1}`,
+      assetId: `img_20260427T0000${String(index).padStart(2, '0')}Z_test${index}`,
+      assetPath: `assets/img_${index}.png`,
+      assetUrl: `/api/projects/assets/img_20260427T0000${String(index).padStart(2, '0')}Z_test${index}`,
+      parentId: null,
+      createdAt: new Date().toISOString(),
+      timestamp: Date.now() - index,
+    }));
+
+    await page.route('/api/projects/current', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ persistence: 'project', projectId: 'scroll-test', projectName: 'Scroll Test' }),
+      });
+    });
+    await page.route('/api/projects/history', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ schemaVersion: 1, revision: entries.length, entries }),
+      });
+    });
+
+    await page.reload();
+    await expect(page.locator('[data-testid="history-timeline-row"]')).toHaveCount(entries.length);
+
+    const viewport = page.locator('[data-testid="history-timeline"] [data-slot="scroll-area-viewport"]');
+    await viewport.hover();
+    const before = await viewport.evaluate((element) => element.scrollTop);
+    await page.mouse.wheel(0, 800);
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(before);
+  });
+
   test('keeps canvas and composer usable across narrow and wide viewports', async ({ page }) => {
     const viewports = [
       { width: 1365, height: 768 }, // 16:9 laptop

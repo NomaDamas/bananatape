@@ -24,7 +24,7 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 export async function POST(request: Request) {
   try {
-    const projectSession = hasActiveProject() ? await requireProjectSession() : null;
+    const projectSession = hasActiveProject() ? requireProjectSession() : null;
     const formData = await request.formData();
 
     const prompt = formData.get('prompt');

@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, open } from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { Provider } from '@/types';
-import { createEmptyHistory, HISTORY_SCHEMA_VERSION, isProjectHistory, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectResultType } from './schema';
+import { createEmptyHistory, createEmptyProjectSettings, HISTORY_SCHEMA_VERSION, isProjectHistory, normalizeProjectSettings, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectReferenceImage, type ProjectResultType, type ProjectSettings } from './schema';
 import { ensureProjectDirectories, getHistoryPath, getManifestPath } from './paths';
 import { withProjectLock } from './locks';
 import { sanitizeProjectName, slugifyProjectName } from './validate';
@@ -39,6 +39,7 @@ export async function createProject(projectRoot: string, name: string): Promise<
     name: cleanName,
     createdAt: now,
     updatedAt: now,
+    settings: createEmptyProjectSettings(),
   };
   await ensureProjectDirectories(projectRoot);
   await atomicWriteJson(getManifestPath(projectRoot), manifest);
@@ -52,6 +53,80 @@ export async function readProjectManifest(projectRoot: string): Promise<ProjectM
     throw new Error('Invalid BananaTape project manifest');
   }
   return manifest;
+}
+
+export async function readProjectSettings(projectRoot: string): Promise<ProjectSettings> {
+  const manifest = await readProjectManifest(projectRoot);
+  return normalizeProjectSettings(manifest.settings);
+}
+
+async function updateProjectManifest(
+  projectRoot: string,
+  update: (manifest: ProjectManifest) => ProjectManifest,
+): Promise<ProjectManifest> {
+  return withProjectLock(projectRoot, async () => {
+    const current = await readProjectManifest(projectRoot);
+    const next = update({
+      ...current,
+      settings: normalizeProjectSettings(current.settings),
+      updatedAt: new Date().toISOString(),
+    });
+    await atomicWriteJson(getManifestPath(projectRoot), next);
+    return next;
+  });
+}
+
+export async function updateProjectSettings(
+  projectRoot: string,
+  patch: Partial<Pick<ProjectSettings, 'systemPrompt'>>,
+): Promise<ProjectSettings> {
+  const manifest = await updateProjectManifest(projectRoot, (current) => ({
+    ...current,
+    settings: {
+      ...normalizeProjectSettings(current.settings),
+      ...patch,
+    },
+  }));
+  return normalizeProjectSettings(manifest.settings);
+}
+
+export async function appendProjectReference(projectRoot: string, reference: ProjectReferenceImage): Promise<ProjectSettings> {
+  const manifest = await updateProjectManifest(projectRoot, (current) => {
+    const settings = normalizeProjectSettings(current.settings);
+    return {
+      ...current,
+      settings: {
+        ...settings,
+        referenceImages: [...settings.referenceImages, reference],
+      },
+    };
+  });
+  return normalizeProjectSettings(manifest.settings);
+}
+
+export async function removeProjectReference(projectRoot: string, referenceId: string): Promise<ProjectSettings> {
+  const manifest = await updateProjectManifest(projectRoot, (current) => {
+    const settings = normalizeProjectSettings(current.settings);
+    return {
+      ...current,
+      settings: {
+        ...settings,
+        referenceImages: settings.referenceImages.filter((reference) => reference.id !== referenceId),
+      },
+    };
+  });
+  return normalizeProjectSettings(manifest.settings);
+}
+
+export async function clearProjectReferences(projectRoot: string): Promise<ProjectSettings> {
+  const manifest = await updateProjectManifest(projectRoot, (current) => ({
+    ...current,
+    settings: {
+      ...normalizeProjectSettings(current.settings),
+      referenceImages: [],
+    },
+  }));
+  return normalizeProjectSettings(manifest.settings);
 }
 
 export async function readProjectHistory(projectRoot: string): Promise<ProjectHistory> {

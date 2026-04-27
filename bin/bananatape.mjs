@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
@@ -96,7 +95,7 @@ async function status(ref) {
     return;
   }
   for (const entry of entries) {
-    console.log(`${entry.projectId}\n  status: running\n  url: http://127.0.0.1:${entry.port}\n  pid: ${entry.pid}\n  launchId: ${entry.launchId}\n  cookieName: ${entry.cookieName}`);
+    console.log(`${entry.projectId}\n  status: running\n  url: http://127.0.0.1:${entry.port}\n  pid: ${entry.pid}\n  launchId: ${entry.launchId}`);
   }
 }
 async function deleteProject(ref, options) {
@@ -170,25 +169,21 @@ async function launchProject(ref, options) {
     });
   }
   const port = await findFreePort(options.port);
-  const launchId = crypto.randomBytes(4).toString('hex');
-  const cookieName = `bt_session_${launchId}`;
-  const bootstrapToken = crypto.randomBytes(32).toString('hex');
+  const launchId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const child = spawn('npm', ['run', 'start', '--', '--hostname', '127.0.0.1', '--port', String(port)], {
     cwd: APP_ROOT,
     env: {
       ...process.env,
       BANANATAPE_ACTIVE_PROJECT_PATH: project.path,
       BANANATAPE_LAUNCH_ID: launchId,
-      BANANATAPE_COOKIE_NAME: cookieName,
-      BANANATAPE_BOOTSTRAP_TOKEN: bootstrapToken,
     },
     stdio: ['ignore', 'ignore', 'ignore'],
     detached: true,
   });
   child.unref();
-  runtime.running.push({ projectId: project.id, projectPath: project.path, port, pid: child.pid, launchId, cookieName, startedAt: nowIso() });
+  runtime.running.push({ projectId: project.id, projectPath: project.path, port, pid: child.pid, launchId, startedAt: nowIso() });
   await writeRuntime(runtime);
-  const url = `http://127.0.0.1:${port}/bootstrap?token=${bootstrapToken}`;
+  const url = `http://127.0.0.1:${port}`;
   if (!options.noOpen) spawnBrowser(url);
   console.log(`Launched ${project.id} at http://127.0.0.1:${port}`);
 }

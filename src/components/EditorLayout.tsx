@@ -30,6 +30,7 @@ function StandaloneEditorShell() {
   const setBaseImage = useEditorStore((s) => s.setBaseImage);
   const hydrateEntries = useHistoryStore((s) => s.hydrateEntries);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [projectName, setProjectName] = useState('Untitled design');
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +40,9 @@ function StandaloneEditorShell() {
         if (!sessionRes.ok) return;
         const session = await sessionRes.json();
         if (session.persistence !== 'project') return;
+        if (typeof session.projectName === 'string' && session.projectName.trim()) {
+          setProjectName(session.projectName);
+        }
         const historyRes = await fetch('/api/projects/history', { cache: 'no-store' });
         if (!historyRes.ok) return;
         const history = await historyRes.json();
@@ -50,7 +54,7 @@ function StandaloneEditorShell() {
         const first = history.entries[0];
         if (first?.assetUrl) setBaseImage(first.assetUrl, { width: 0, height: 0 });
       } catch {
-        // No active local project session; keep no-project fallback behavior.
+        // No active local project; keep no-project fallback behavior.
       }
     }
     void hydrateProjectHistory();
@@ -81,7 +85,7 @@ function StandaloneEditorShell() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-[#e6e6e6]">
-      <TopBar canExport={!!baseImage} onExportClick={() => setIsExportOpen(true)} />
+      <TopBar canExport={!!baseImage} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <LeftPanel
           references={referencePreviews}

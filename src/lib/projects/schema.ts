@@ -11,6 +11,21 @@ export interface ProjectManifest {
   name: string;
   createdAt: string;
   updatedAt: string;
+  settings?: ProjectSettings;
+}
+
+export interface ProjectReferenceImage {
+  id: string;
+  assetId: string;
+  assetPath: string;
+  name: string;
+  mimeType: string;
+  createdAt: string;
+}
+
+export interface ProjectSettings {
+  systemPrompt: string;
+  referenceImages: ProjectReferenceImage[];
 }
 
 export interface ProjectHistoryEntry {
@@ -35,6 +50,18 @@ export interface ProjectHistory {
 export interface PersistedImageResult {
   historyEntry: ProjectHistoryEntry;
   assetUrl: string;
+}
+
+export function createEmptyProjectSettings(): ProjectSettings {
+  return { systemPrompt: '', referenceImages: [] };
+}
+
+export function normalizeProjectSettings(settings: ProjectManifest['settings']): ProjectSettings {
+  return {
+    ...createEmptyProjectSettings(),
+    ...(settings ?? {}),
+    referenceImages: Array.isArray(settings?.referenceImages) ? settings.referenceImages : [],
+  };
 }
 
 export function createEmptyHistory(): ProjectHistory {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dataUrlToBuffer, persistImageResult, readAsset } from '@/lib/projects/asset-store';
-import { createProject, readProjectHistory, readProjectManifest } from '@/lib/projects/metadata-store';
+import { appendProjectReference, createProject, readProjectHistory, readProjectManifest, readProjectSettings, removeProjectReference, updateProjectSettings } from '@/lib/projects/metadata-store';
 import { assertProjectRelativePath, resolveInsideProject } from '@/lib/projects/paths';
 import { assertValidAssetId, assertValidProjectId, slugifyProjectName } from '@/lib/projects/validate';
 
@@ -50,6 +50,35 @@ describe('project metadata and asset persistence', () => {
     expect(manifest.id).toBe('launch-test');
     await expect(readProjectManifest(projectRoot)).resolves.toMatchObject({ id: 'launch-test', name: 'Launch Test' });
     await expect(readProjectHistory(projectRoot)).resolves.toMatchObject({ revision: 0, entries: [] });
+    await expect(readProjectSettings(projectRoot)).resolves.toEqual({ systemPrompt: '', referenceImages: [] });
+  });
+
+  it('persists project-level system prompt and reference image metadata', async () => {
+    const projectRoot = await tempProjectRoot();
+    await createProject(projectRoot, 'Settings Test');
+
+    await updateProjectSettings(projectRoot, { systemPrompt: 'Always use moody lighting.' });
+    await appendProjectReference(projectRoot, {
+      id: 'ref_meta_1',
+      assetId: 'ref_20260427T000000Z_abcdef12',
+      assetPath: 'references/ref_20260427T000000Z_abcdef12.png',
+      name: 'style.png',
+      mimeType: 'image/png',
+      createdAt: new Date().toISOString(),
+    });
+
+    await expect(readProjectSettings(projectRoot)).resolves.toMatchObject({
+      systemPrompt: 'Always use moody lighting.',
+      referenceImages: [
+        expect.objectContaining({ id: 'ref_meta_1', name: 'style.png' }),
+      ],
+    });
+
+    await removeProjectReference(projectRoot, 'ref_meta_1');
+    await expect(readProjectSettings(projectRoot)).resolves.toMatchObject({
+      systemPrompt: 'Always use moody lighting.',
+      referenceImages: [],
+    });
   });
 
   it('decodes data URLs and persists assets plus history metadata without embedding image data', async () => {
