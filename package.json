@@ -82,6 +82,7 @@
     ".next/*.js",
     ".next/server/",
     ".next/static/",
-    ".next/types/"
+    ".next/types/",
+    "skills/"
   ]
 }
