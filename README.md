@@ -1,8 +1,26 @@
 # BananaTape
 
+<p align="center">
+  <img src="docs/images/bananatape-editor-annotated-request.jpg" alt="BananaTape editor with handwritten regions, sticky notes, project context, references, and generation history" width="100%" />
+</p>
+
+<p align="center">
+  <img src="docs/images/bananatape-editor-workspace-context.jpg" alt="BananaTape local-first image editing workspace showing annotation-driven editing and version history" width="100%" />
+</p>
+
 **BananaTape is natural-language Photoshop for AI image models** — a local-first vibe design canvas where you describe the image you want, mark up what should change, attach references, and let an image model patch the result into shape.
 
-The product is intentionally scrappy: part banana-on-the-wall art joke, part duct-tape utility. It is for people who can explain a vibe but do not want to learn layers, masks, bezier curves, or professional design tooling first.
+BananaTape is built around a simple idea: **the canvas should be a conversation surface**. Instead of learning layers, masks, selections, and export flows, you point at the image, leave notes, attach references, and ask the model to make the change.
+
+## Why it feels different
+
+- **Annotate first, prompt second.** Draw boxes, arrows, pen marks, and sticky notes directly over the image. The model sees the same visual instructions you see.
+- **Project context stays visible.** System prompts and reference images live next to the canvas, so each edit keeps the style, brief, and source material in view.
+- **History is always one click away.** Every generation is saved in the sidebar. Pick the version that worked, then keep editing from there.
+- **The UI stays focused on making images.** Project creation, launch, status, and cleanup are CLI-first; the editor itself stays clean.
+- **Local-first by default.** Projects persist as folders on disk with images, references, settings, and history you can inspect or back up yourself.
+
+The product is intentionally scrappy: part banana-on-the-wall art joke, part duct-tape utility. It is for people who can explain a vibe but do not want to learn professional design tooling first.
 
 ## What BananaTape does
 
