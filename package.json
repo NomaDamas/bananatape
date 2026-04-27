@@ -1,7 +1,6 @@
 {
   "name": "bananatape",
   "version": "0.1.0",
-  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -41,5 +40,42 @@
   },
   "bin": {
     "bananatape": "./bin/bananatape.mjs"
-  }
+  },
+  "description": "Natural-language Photoshop for AI image models — a local-first vibe design canvas.",
+  "keywords": [
+    "ai",
+    "image-generation",
+    "image-editing",
+    "design",
+    "canvas",
+    "cli"
+  ],
+  "homepage": "https://github.com/NomaDamas/bananatape#readme",
+  "bugs": {
+    "url": "https://github.com/NomaDamas/bananatape/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NomaDamas/bananatape.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "next.config.ts",
+    "postcss.config.mjs",
+    "components.json",
+    "README.md",
+    ".next/standalone/",
+    ".next/static/",
+    ".next/BUILD_ID"
+  ]
 }

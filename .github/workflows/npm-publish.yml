@@ -1,0 +1,72 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish BananaTape to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+          cache: npm
+
+      - name: Extract version from release tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          node -e "const v = process.argv[1]; if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(v)) { console.error('Release tag must be semver, e.g. v1.2.3 or 1.2.3. Got: ' + v); process.exit(1); }" "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply release version to package metadata
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Verify package
+        run: |
+          npm run lint
+          npm run typecheck
+          npx vitest run
+          npm run build
+
+      - name: Smoke test packed CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(mktemp -d)"
+          INSTALL_DIR="$(mktemp -d)"
+          npm pack --pack-destination "$PACKAGE_DIR"
+          PACKAGE_TARBALL="$PACKAGE_DIR/bananatape-${{ steps.version.outputs.version }}.tgz"
+          cd "$INSTALL_DIR"
+          npm init -y >/dev/null
+          npm install "$PACKAGE_TARBALL" >/dev/null
+          export BANANATAPE_HOME="$INSTALL_DIR/home"
+          export BANANATAPE_PROJECTS_DIR="$INSTALL_DIR/projects"
+          ./node_modules/.bin/bananatape create "Release Smoke"
+          ./node_modules/.bin/bananatape launch release-smoke --no-open --port 45991
+          trap './node_modules/.bin/bananatape stop release-smoke || true' EXIT
+          curl --fail --silent --show-error http://127.0.0.1:45991/api/projects/current
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -146,6 +146,9 @@ async function findFreePort(preferred) {
 async function buildExists() {
   try { await fs.access(path.join(APP_ROOT, '.next', 'BUILD_ID')); return true; } catch { return false; }
 }
+async function standaloneServerExists() {
+  try { await fs.access(path.join(APP_ROOT, '.next', 'standalone', 'server.js')); return true; } catch { return false; }
+}
 function spawnBrowser(url) {
   if (process.platform === 'darwin') return spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
   if (process.platform === 'win32') return spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true }).unref();
@@ -170,7 +173,21 @@ async function launchProject(ref, options) {
   }
   const port = await findFreePort(options.port);
   const launchId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const child = spawn('npm', ['run', 'start', '--', '--hostname', '127.0.0.1', '--port', String(port)], {
+  const hasStandaloneServer = await standaloneServerExists();
+  const child = hasStandaloneServer
+    ? spawn(process.execPath, [path.join(APP_ROOT, '.next', 'standalone', 'server.js')], {
+      cwd: APP_ROOT,
+      env: {
+        ...process.env,
+        HOSTNAME: '127.0.0.1',
+        PORT: String(port),
+        BANANATAPE_ACTIVE_PROJECT_PATH: project.path,
+        BANANATAPE_LAUNCH_ID: launchId,
+      },
+      stdio: ['ignore', 'ignore', 'ignore'],
+      detached: true,
+    })
+    : spawn('npm', ['run', 'start', '--', '--hostname', '127.0.0.1', '--port', String(port)], {
     cwd: APP_ROOT,
     env: {
       ...process.env,

@@ -1,28 +1,118 @@
 # BananaTape
 
-**BananaTape is natural-language Photoshop for AI image models** — a vibe design canvas where you describe what you want, mark up the image with sticky notes, arrows, boxes, and references, then let the model patch it into shape.
+**BananaTape is natural-language Photoshop for AI image models** — a local-first vibe design canvas where you describe the image you want, mark up what should change, attach references, and let an image model patch the result into shape.
 
-The name is the product thesis: part banana-on-the-wall art joke, part duct-tape utility. It is for people who do not want to learn layers, masks, bezier curves, or design systems before they can fix an image.
+The product is intentionally scrappy: part banana-on-the-wall art joke, part duct-tape utility. It is for people who can explain a vibe but do not want to learn layers, masks, bezier curves, or professional design tooling first.
 
-## What it does
+## What BananaTape does
 
 - Generate a new image from a prompt.
-- Edit an existing image by annotating directly on the canvas.
-- Add sticky memo notes that become part of the annotated screenshot sent to the model.
-- Draw arrows and bounding boxes to point at exactly what should change.
-- Attach reference images from the file picker or by copy/paste.
-- Keep generation history so you can jump back to the version that worked.
+- Edit an image by drawing directly on the canvas.
+- Add sticky memo notes, arrows, and boxes to explain changes visually.
+- Attach reference images from the file picker or clipboard paste.
+- Keep a project history so you can jump back to a previous version.
+- Persist project results, system prompts, and reference images in local folders.
+- Launch and manage projects from a CLI while keeping the editor UI focused on image work.
 
 ## Why BananaTape
 
-Traditional design tools assume you know how to design. BananaTape assumes you know how to point, scribble, and explain the vibe in plain language.
+Traditional design tools assume you know how to design. BananaTape assumes you know how to point, scribble, and explain what you want in plain language.
 
 | Traditional tools | BananaTape |
 | --- | --- |
-| Layers, masks, tools, panels | Prompt, annotate, generate |
+| Layers, masks, tool modes | Prompt, annotate, generate |
 | Pixel-perfect selections | Sticky notes, arrows, boxes |
 | Design vocabulary required | Natural language is enough |
-| File/version management | History sidebar |
+| Complex file/project UI | CLI-managed local project folders |
+| Manual versioning | History sidebar |
+
+## Local-first project model
+
+BananaTape is designed first as a local app that runs a Next.js server on `127.0.0.1` and opens in your normal browser. It does **not** use Electron, Tauri, Photino, or a native wrapper in the current V1.
+
+Projects are regular folders on disk. By default they are stored at:
+
+```text
+~/Documents/BananaTape Projects/
+```
+
+You can override the root directory with:
+
+```bash
+export BANANATAPE_PROJECTS_DIR="/path/to/projects"
+```
+
+Each project looks like this:
+
+```text
+my-project/
+  project.json          # project metadata, system prompt, reference metadata
+  history.json          # generated/edited image history
+  assets/               # generated and edited images
+  references/           # project-level reference images
+  thumbnails/           # reserved for future thumbnails
+  tmp/                  # reserved for temporary files
+```
+
+Project management is intentionally CLI-first. The editor does not include a project dashboard, project creation screen, cloud sync, or complex asset browser.
+
+## CLI usage
+
+Build the app first:
+
+```bash
+npm install
+npm run build
+```
+
+Create and launch a project:
+
+```bash
+node bin/bananatape.mjs create "Logo Explorations"
+node bin/bananatape.mjs launch logo-explorations
+```
+
+The CLI starts BananaTape on `127.0.0.1` using a free port and opens your browser.
+
+### Commands
+
+```bash
+node bin/bananatape.mjs create <name> [--dir <parent>]
+node bin/bananatape.mjs list
+node bin/bananatape.mjs launch <project> [--port <port>] [--no-open] [--rebuild]
+node bin/bananatape.mjs open <project>
+node bin/bananatape.mjs status [project]
+node bin/bananatape.mjs stop <project|--all>
+node bin/bananatape.mjs delete <project> [--delete-files]
+```
+
+Notes:
+
+- `launch` and `open` are aliases.
+- Multiple projects can run at the same time on different ports.
+- `status` shows running projects, ports, PIDs, and launch IDs.
+- `delete <project>` unregisters the project but keeps files by default.
+- `delete <project> --delete-files` removes the project folder from disk.
+
+If the package is linked or installed as a bin, the same commands are available as:
+
+```bash
+bananatape create "Logo Explorations"
+bananatape launch logo-explorations
+```
+
+## Development server
+
+For normal Next.js development without a project folder:
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+In this mode, BananaTape still works as an editor, but project persistence is only active when launched with `BANANATAPE_ACTIVE_PROJECT_PATH` through the CLI.
 
 ## Providers
 
@@ -31,31 +121,84 @@ BananaTape currently supports:
 - OpenAI image generation/editing
 - `codex` via the private Codex backend path used by this project
 
-The provider layer is intentionally kept separate so future image models can be added without changing the canvas workflow.
+Provider code is kept separate from the canvas workflow so additional image models can be added later.
 
-## Getting Started
+## Environment variables
 
-Install dependencies and run the development server:
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Scripts
+Common variables:
 
 ```bash
-npm run lint      # ESLint
-npm run build     # Production build
-npx tsc --noEmit  # TypeScript check
-npx vitest run    # Unit tests
-npx playwright test tests/e2e/editor.spec.ts # Editor e2e tests
+BANANATAPE_PROJECTS_DIR   # optional project root override
+BANANATAPE_HOME           # optional CLI runtime/registry directory override
+OPENAI_API_KEY            # required for OpenAI provider calls
 ```
+
+The CLI sets these automatically for launched app instances:
+
+```bash
+BANANATAPE_ACTIVE_PROJECT_PATH
+BANANATAPE_LAUNCH_ID
+```
+
+## Testing and quality checks
+
+```bash
+npm run lint
+npm run typecheck
+npx vitest run
+npx playwright test
+npm run build
+```
+
+Useful smoke test:
+
+```bash
+npm run build
+node bin/bananatape.mjs create "Smoke Test"
+node bin/bananatape.mjs launch smoke-test
+```
+
+Then generate or edit an image and inspect:
+
+```bash
+cat ~/Documents/"BananaTape Projects"/smoke-test/history.json
+ls ~/Documents/"BananaTape Projects"/smoke-test/assets
+```
+
+## Release and npm publishing
+
+BananaTape publishes to the public npm registry from GitHub Releases.
+
+Release flow:
+
+1. Make sure the release workflow exists on `main`.
+2. Add an npm automation token to the GitHub repository secret named `NPM_TOKEN`.
+3. Create and publish a GitHub Release with a semver tag such as `v0.2.0` or `0.2.0`.
+4. The GitHub Action checks out that tag, extracts `0.2.0`, runs:
+
+   ```bash
+   npm version 0.2.0 --no-git-tag-version --allow-same-version
+   npm run lint
+   npm run typecheck
+   npx vitest run
+   npm run build
+   npm publish --access public --provenance
+   ```
+
+5. The package is published as `bananatape@0.2.0`.
+
+The workflow intentionally derives the npm version from the release tag so `package.json` does not need to be manually updated before every release.
+
+## Current V1 non-goals
+
+- No Electron/Tauri/native desktop wrapper.
+- No in-app project dashboard or project creation UI.
+- No cloud sync.
+- No complex asset browser.
+- No parallel multi-version generation UI yet.
 
 ## Product positioning
 
 > Photoshop, but with words, annotations, references, and duct tape.
 
-BananaTape is built for non-designers, founders, PMs, and developers who need visuals but think in words and rough marks instead of layers and masks.
+BananaTape is for non-designers, founders, PMs, and developers who need visuals but think in words and rough marks instead of layers and masks.
