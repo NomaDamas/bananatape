@@ -25,7 +25,7 @@ export function ToolPalette() {
   const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.length > 0;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex max-w-full items-center gap-1 overflow-x-auto">
       {tools.map((tool) => {
         const Icon = tool.icon;
         const isActive = activeTool === tool.id;
@@ -34,7 +34,7 @@ export function ToolPalette() {
             key={tool.id}
             size="icon"
             variant={isActive ? 'default' : 'ghost'}
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
             onClick={() => setActiveTool(tool.id)}
             title={tool.shortcut ? `${tool.label} (${tool.shortcut})` : tool.label}
           >
@@ -43,12 +43,12 @@ export function ToolPalette() {
         );
       })}
 
-      <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-800 mx-1" />
+      <div className="mx-1 h-5 w-px shrink-0 bg-neutral-200 dark:bg-neutral-800" />
 
       <Button
         size="icon"
         variant="ghost"
-        className="h-8 w-8"
+        className="h-8 w-8 shrink-0"
         onClick={zoomIn}
         title="Zoom in"
       >
@@ -58,19 +58,19 @@ export function ToolPalette() {
       <Button
         size="icon"
         variant="ghost"
-        className="h-8 w-8"
+        className="h-8 w-8 shrink-0"
         onClick={zoomOut}
         title="Zoom out"
       >
         <ZoomOut className="w-4 h-4" />
       </Button>
 
-      <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-800 mx-1" />
+      <div className="mx-1 h-5 w-px shrink-0 bg-neutral-200 dark:bg-neutral-800" />
 
       <Button
         size="icon"
         variant="ghost"
-        className="h-8 w-8"
+        className="h-8 w-8 shrink-0"
         onClick={clearAnnotations}
         disabled={!hasAnnotations}
         title="Clear annotations"

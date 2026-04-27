@@ -146,6 +146,64 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('button[title="Zoom out"]').first()).toBeVisible();
   });
 
+  test('keeps canvas and composer usable across narrow and wide viewports', async ({ page }) => {
+    const viewports = [
+      { width: 1365, height: 768 }, // 16:9 laptop
+      { width: 960, height: 640 }, // 3:2 compact desktop
+      { width: 800, height: 800 }, // square window
+      { width: 790, height: 900 }, // half-screen split view
+      { width: 640, height: 960 }, // 2:3 portrait tablet
+      { width: 390, height: 844 }, // 9:16 phone
+      { width: 360, height: 640 }, // very narrow phone
+    ];
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+
+      const layout = await page.evaluate(() => {
+        const selectors = {
+          canvas: '[data-testid="canvas-container"]',
+          composer: '[data-testid="standalone-bottom-composer"]',
+          prompt: '[data-testid="bottom-prompt-input"]',
+          primaryAction: '[data-testid="bottom-primary-action"]',
+        };
+
+        const rects = Object.fromEntries(Object.entries(selectors).map(([key, selector]) => {
+          const rect = document.querySelector(selector)?.getBoundingClientRect();
+          return [key, rect ? {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+          } : null];
+        }));
+
+        return {
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          documentWidth: document.documentElement.scrollWidth,
+          bodyWidth: document.body.scrollWidth,
+          rects,
+        };
+      });
+
+      expect(layout.documentWidth, `${viewport.width}×${viewport.height} should not create document-level horizontal scroll`).toBeLessThanOrEqual(viewport.width);
+      expect(layout.bodyWidth, `${viewport.width}×${viewport.height} should not create body-level horizontal scroll`).toBeLessThanOrEqual(viewport.width);
+
+      for (const [name, rect] of Object.entries(layout.rects)) {
+        expect(rect, `${name} should exist at ${viewport.width}×${viewport.height}`).not.toBeNull();
+        expect(rect!.width, `${name} should retain usable width at ${viewport.width}×${viewport.height}`).toBeGreaterThan(24);
+        expect(rect!.height, `${name} should retain usable height at ${viewport.width}×${viewport.height}`).toBeGreaterThan(24);
+        expect(rect!.left, `${name} should not overflow left at ${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0);
+        expect(rect!.right, `${name} should not overflow right at ${viewport.width}×${viewport.height}`).toBeLessThanOrEqual(layout.viewport.width);
+        expect(rect!.top, `${name} should not overflow top at ${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0);
+        expect(rect!.bottom, `${name} should not overflow bottom at ${viewport.width}×${viewport.height}`).toBeLessThanOrEqual(layout.viewport.height);
+      }
+    }
+  });
+
   test('provider choices expose only implemented providers', async ({ page }) => {
     await page.locator('[data-testid="bottom-provider-select"]').click();
 

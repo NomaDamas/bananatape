@@ -29,7 +29,7 @@ export function HistorySidebar() {
   };
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-black bg-[#2c2c2c] text-neutral-200">
+    <aside className="hidden w-72 shrink-0 flex-col overflow-hidden border-l border-black bg-[#2c2c2c] text-neutral-200 xl:flex">
       <div className="flex h-10 items-center justify-between border-b border-[#1e1e1e] px-3.5">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.03em] text-white">
           History

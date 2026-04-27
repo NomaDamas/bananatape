@@ -76,14 +76,17 @@ export function BottomComposer({
   return (
     <div
       data-testid="standalone-bottom-composer"
-      className={cn('pointer-events-none fixed inset-x-[288px] bottom-5 z-30 flex justify-center px-6', className)}
+      className={cn(
+        'pointer-events-none fixed inset-x-3 bottom-3 z-30 flex justify-center sm:inset-x-4 sm:bottom-4 md:left-[264px] md:right-4 xl:right-[304px]',
+        className,
+      )}
     >
-      <div className="pointer-events-auto flex w-full max-w-5xl flex-col gap-2 rounded-2xl border border-white/10 bg-[#2c2c2c]/95 p-2 text-[#e6e6e6] shadow-2xl shadow-black/40 backdrop-blur">
-        <div className="flex items-center justify-between gap-3 px-1">
-          <div className="rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+      <div className="pointer-events-auto flex max-h-[min(70vh,24rem)] w-full max-w-5xl flex-col gap-2 overflow-y-auto rounded-2xl border border-white/10 bg-[#2c2c2c]/95 p-2 text-[#e6e6e6] shadow-2xl shadow-black/40 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
             <ToolPalette />
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
             <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomOut} title="Zoom out">
               <Minus className="h-3 w-3" />
             </Button>
@@ -115,7 +118,7 @@ export function BottomComposer({
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
             <input
               ref={fileInputRef}
               type="file"
@@ -128,61 +131,65 @@ export function BottomComposer({
               }}
               data-testid="bottom-reference-image-input"
             />
-            <Button
-              type="button"
-              size="icon"
-              variant={references.length > 0 ? 'secondary' : 'ghost'}
-              className="relative h-10 w-10 shrink-0 rounded-lg text-[#b3b3b3] hover:bg-white/10 hover:text-white"
-              disabled={isGenerating}
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach reference image"
-            >
-              <ImagePlus className="h-4 w-4" />
-              {references.length > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0d99ff] px-1 text-[10px] text-white">
-                  {references.length}
-                </span>
-              )}
-            </Button>
+            <div className="flex min-w-0 flex-1 items-end gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant={references.length > 0 ? 'secondary' : 'ghost'}
+                className="relative h-10 w-10 shrink-0 rounded-lg text-[#b3b3b3] hover:bg-white/10 hover:text-white"
+                disabled={isGenerating}
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach reference image"
+              >
+                <ImagePlus className="h-4 w-4" />
+                {references.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0d99ff] px-1 text-[10px] text-white">
+                    {references.length}
+                  </span>
+                )}
+              </Button>
 
-            <Textarea
-              value={prompt}
-              onChange={(event) => onPromptChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && event.metaKey) {
-                  event.preventDefault();
-                  submitPrimary();
-                }
-              }}
-              placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : 'Describe the image you want to create…'}
-              className="max-h-36 min-h-10 resize-none border-0 bg-transparent px-1 py-2 text-sm text-[#f5f5f5] placeholder:text-[#666] focus-visible:ring-0"
-              data-testid="bottom-prompt-input"
-            />
+              <Textarea
+                value={prompt}
+                onChange={(event) => onPromptChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && event.metaKey) {
+                    event.preventDefault();
+                    submitPrimary();
+                  }
+                }}
+                placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : 'Describe the image you want to create…'}
+                className="max-h-36 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-[#f5f5f5] placeholder:text-[#666] focus-visible:ring-0"
+                data-testid="bottom-prompt-input"
+              />
+            </div>
 
-            <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
-              <SelectTrigger className="h-10 w-[150px] shrink-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6]" data-testid="bottom-provider-select">
-                <span className="truncate">{formatProviderLabel(provider)}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="god-tibo">codex</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:shrink-0">
+              <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
+                <SelectTrigger className="h-10 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[150px]" data-testid="bottom-provider-select">
+                  <span className="truncate">{formatProviderLabel(provider)}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="god-tibo">codex</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Button
-              type="button"
-              size="lg"
-              className="h-10 shrink-0 rounded-lg bg-[#0d99ff] px-4 text-white hover:bg-[#0b85df]"
-              disabled={isPrimaryDisabled}
-              onClick={submitPrimary}
-              data-testid="bottom-primary-action"
-            >
-              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4" /> : <Wand2 className="h-4 w-4" />}
-              {primaryLabel}
-            </Button>
+              <Button
+                type="button"
+                size="lg"
+                className="h-10 min-w-0 shrink-0 rounded-lg bg-[#0d99ff] px-3 text-white hover:bg-[#0b85df] sm:px-4"
+                disabled={isPrimaryDisabled}
+                onClick={submitPrimary}
+                data-testid="bottom-primary-action"
+              >
+                {isGenerating ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Wand2 className="h-4 w-4 shrink-0" />}
+                <span className="truncate">{primaryLabel}</span>
+              </Button>
+            </div>
           </div>
 
-          <div className="mt-1 flex items-center justify-between px-12 text-[10px] text-[#666]">
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0 text-[10px] text-[#666] sm:px-12">
             <span>Cmd+Enter to submit · paste images to add references</span>
             <span>{prompt.length} chars</span>
           </div>

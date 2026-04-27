@@ -54,7 +54,7 @@ export function LeftPanel({
   return (
     <aside
       data-testid="standalone-left-panel"
-      className={cn('flex w-[248px] shrink-0 flex-col border-r border-white/10 bg-[#252525] text-[#e6e6e6]', className)}
+      className={cn('hidden w-[248px] shrink-0 flex-col border-r border-white/10 bg-[#252525] text-[#e6e6e6] md:flex', className)}
     >
       <div className="flex h-9 items-center border-b border-white/10 px-2">
         <button
