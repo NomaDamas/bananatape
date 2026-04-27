@@ -72,11 +72,16 @@
     "public/",
     "next.config.ts",
     "postcss.config.mjs",
+    "tsconfig.json",
+    "next-env.d.ts",
     "components.json",
     "README.md",
     "docs/images/",
-    ".next/standalone/",
+    ".next/BUILD_ID",
+    ".next/*.json",
+    ".next/*.js",
+    ".next/server/",
     ".next/static/",
-    ".next/BUILD_ID"
+    ".next/types/"
   ]
 }

@@ -56,6 +56,11 @@ jobs:
           INSTALL_DIR="$(mktemp -d)"
           npm pack --pack-destination "$PACKAGE_DIR"
           PACKAGE_TARBALL="$PACKAGE_DIR/bananatape-${{ steps.version.outputs.version }}.tgz"
+          tar -tzf "$PACKAGE_TARBALL" | tee "$PACKAGE_DIR/files.txt"
+          if grep -E '(^|/)(\.next/standalone/|node_modules/|Cargo\.(toml|lock)$|.*\.(rs|node|dylib)$)' "$PACKAGE_DIR/files.txt"; then
+            echo "Package contains standalone/native build artifacts." >&2
+            exit 1
+          fi
           cd "$INSTALL_DIR"
           npm init -y >/dev/null
           npm install "$PACKAGE_TARBALL" >/dev/null
