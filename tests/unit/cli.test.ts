@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -147,6 +147,51 @@ describe('bananatape CLI project lifecycle', () => {
     const stoppedRuntime = JSON.parse(await readFile(path.join(home, 'runtime.json'), 'utf8'));
     expect(stoppedRuntime.running).toEqual([]);
   }, 20_000);
+
+  it('refreshes standalone static and public assets before launching', async () => {
+    const appRoot = await mkdtemp(path.join(os.tmpdir(), 'bananatape-app-root-'));
+    const standaloneRoot = path.join(appRoot, '.next', 'standalone');
+    const sourceStatic = path.join(appRoot, '.next', 'static', 'chunks');
+    const destinationStatic = path.join(standaloneRoot, '.next', 'static', 'chunks');
+    const sourcePublic = path.join(appRoot, 'public');
+    const destinationPublic = path.join(standaloneRoot, 'public');
+
+    await mkdir(sourceStatic, { recursive: true });
+    await mkdir(destinationStatic, { recursive: true });
+    await mkdir(sourcePublic, { recursive: true });
+    await mkdir(destinationPublic, { recursive: true });
+    await writeFile(path.join(appRoot, '.next', 'BUILD_ID'), 'test-build');
+    await writeFile(path.join(sourceStatic, 'current.js'), 'console.log("current")');
+    await writeFile(path.join(destinationStatic, 'stale.js'), 'console.log("stale")');
+    await writeFile(path.join(sourcePublic, 'current.txt'), 'current public');
+    await writeFile(path.join(destinationPublic, 'stale.txt'), 'stale public');
+    await writeFile(path.join(standaloneRoot, 'server.js'), `
+      const http = require('node:http');
+      const server = http.createServer((request, response) => {
+        response.end(request.url === '/api/projects/current' ? '{}' : 'ok');
+      });
+      server.listen(Number(process.env.PORT), process.env.HOSTNAME);
+      process.on('SIGTERM', () => server.close(() => process.exit(0)));
+    `);
+
+    env = {
+      ...env,
+      BANANATAPE_TEST_APP_ROOT: appRoot,
+    };
+    await runCli(['create', 'Asset Sync']);
+    const port = await freePort();
+
+    try {
+      await runCli(['launch', 'asset-sync', '--port', String(port), '--no-open']);
+      await expect(readFile(path.join(destinationStatic, 'current.js'), 'utf8')).resolves.toContain('current');
+      await expect(readFile(path.join(destinationStatic, 'stale.js'), 'utf8')).rejects.toThrow();
+      await expect(readFile(path.join(destinationPublic, 'current.txt'), 'utf8')).resolves.toBe('current public');
+      await expect(readFile(path.join(destinationPublic, 'stale.txt'), 'utf8')).rejects.toThrow();
+    } finally {
+      await runCli(['stop', 'asset-sync']);
+      await rm(appRoot, { recursive: true, force: true });
+    }
+  });
 
   it('rejects an occupied explicit launch port', async () => {
     await runCli(['create', 'Port Collision']);
