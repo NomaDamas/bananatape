@@ -152,14 +152,15 @@ async function buildExists() {
 async function standaloneServerExists() {
   return pathExists(path.join(APP_ROOT, '.next', 'standalone', 'server.js'));
 }
-async function copyIfMissing(source, destination) {
-  if (await pathExists(destination) || !(await pathExists(source))) return;
+async function syncDirectoryIfPresent(source, destination) {
+  if (!(await pathExists(source))) return;
+  await fs.rm(destination, { recursive: true, force: true });
   await fs.cp(source, destination, { recursive: true });
 }
 async function prepareStandaloneServer() {
   const standaloneRoot = path.join(APP_ROOT, '.next', 'standalone');
-  await copyIfMissing(path.join(APP_ROOT, '.next', 'static'), path.join(standaloneRoot, '.next', 'static'));
-  await copyIfMissing(path.join(APP_ROOT, 'public'), path.join(standaloneRoot, 'public'));
+  await syncDirectoryIfPresent(path.join(APP_ROOT, '.next', 'static'), path.join(standaloneRoot, '.next', 'static'));
+  await syncDirectoryIfPresent(path.join(APP_ROOT, 'public'), path.join(standaloneRoot, 'public'));
 }
 function spawnBrowser(url) {
   if (process.platform === 'darwin') return spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
