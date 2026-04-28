@@ -7,7 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCHEMA_VERSION = 1;
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DEFAULT_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const APP_ROOT = path.resolve(process.env.NODE_ENV === 'test' && process.env.BANANATAPE_TEST_APP_ROOT ? process.env.BANANATAPE_TEST_APP_ROOT : DEFAULT_APP_ROOT);
 
 function homeDir() { return os.homedir(); }
 function runtimeDir() { return path.resolve(process.env.BANANATAPE_HOME || path.join(homeDir(), '.bananatape')); }
@@ -154,8 +155,18 @@ async function standaloneServerExists() {
 }
 async function syncDirectoryIfPresent(source, destination) {
   if (!(await pathExists(source))) return;
-  await fs.rm(destination, { recursive: true, force: true });
-  await fs.cp(source, destination, { recursive: true });
+  const parent = path.dirname(destination);
+  const temporary = path.join(parent, `.${path.basename(destination)}-${process.pid}-${Date.now()}.tmp`);
+  await fs.mkdir(parent, { recursive: true });
+  await fs.rm(temporary, { recursive: true, force: true });
+  try {
+    await fs.cp(source, temporary, { recursive: true });
+    await fs.rm(destination, { recursive: true, force: true });
+    await fs.rename(temporary, destination);
+  } catch (error) {
+    await fs.rm(temporary, { recursive: true, force: true });
+    throw error;
+  }
 }
 async function prepareStandaloneServer() {
   const standaloneRoot = path.join(APP_ROOT, '.next', 'standalone');
