@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from 'react';
-import { ImagePlus, Layers3, Palette, Sparkles, Trash2, X } from 'lucide-react';
+import { FileText, ImagePlus, Layers3, Lock, Palette, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
+import { DesignContextViewer } from './DesignContextViewer';
 
 interface LeftPanelProps {
   references: ReferenceImagePreview[];
@@ -15,6 +16,10 @@ interface LeftPanelProps {
   onClearReferences: () => void;
   systemPrompt: string;
   onSystemPromptChange: (value: string) => void;
+  designContext: string;
+  designContextFileName: string;
+  onReplaceDesignContext: (file: File) => void | Promise<void>;
+  onClearDesignContext: () => void | Promise<void>;
   className?: string;
 }
 
@@ -32,10 +37,15 @@ export function LeftPanel({
   onClearReferences,
   systemPrompt,
   onSystemPromptChange,
+  designContext,
+  designContextFileName,
+  onReplaceDesignContext,
+  onClearDesignContext,
   className,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<'context' | 'styles'>('context');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const designFileInputRef = useRef<HTMLInputElement | null>(null);
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
@@ -50,6 +60,7 @@ export function LeftPanel({
   ], [baseImage, boxes.length, memos.length, paths.length]);
 
   const annotationCount = paths.length + boxes.length + memos.length;
+  const hasDesignContext = designContext.trim().length > 0;
 
   return (
     <aside
@@ -75,6 +86,83 @@ export function LeftPanel({
 
       {tab === 'context' ? (
         <div className="flex-1 overflow-y-auto py-2">
+          <section data-testid="design-context-section" className="border-b border-[#1e1e1e] px-3 py-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#999]">
+                <Lock className="h-3 w-3" />
+                Design System
+                {hasDesignContext && (
+                  <span className="rounded bg-[#14351f] px-1.5 py-0.5 text-[9px] normal-case tracking-normal text-[#86efac]">
+                    applied
+                  </span>
+                )}
+              </div>
+              {hasDesignContext && (
+                <button
+                  type="button"
+                  className="text-[10px] text-[#808080] hover:text-white"
+                  onClick={() => void onClearDesignContext()}
+                  data-testid="design-context-clear"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <input
+              ref={designFileInputRef}
+              type="file"
+              accept=".md,.markdown,text/markdown,text/plain"
+              className="hidden"
+              data-testid="design-context-file-input"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void onReplaceDesignContext(file);
+                event.currentTarget.value = '';
+              }}
+            />
+            {hasDesignContext ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[10px] text-[#a8a8a8]">
+                  <FileText className="h-3 w-3 shrink-0" />
+                  <span className="truncate" title={designContextFileName || 'DESIGN.md'}>
+                    {designContextFileName || 'DESIGN.md'}
+                  </span>
+                </div>
+                <div
+                  data-testid="design-context-content"
+                  className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-[#1e1e1e] p-2.5"
+                >
+                  <DesignContextViewer markdown={designContext} />
+                </div>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  className="w-full justify-center bg-[#2a2a2a] text-[10px] text-[#cfcfcf] hover:bg-[#3b3b3b]"
+                  onClick={() => designFileInputRef.current?.click()}
+                  data-testid="design-context-replace"
+                >
+                  <Upload className="h-3 w-3" />
+                  Replace
+                </Button>
+                <p className="text-[10px] leading-4 text-[#808080]">
+                  Read-only. Replace by uploading a new <code className="rounded bg-[#1e1e1e] px-1 text-[#cfcfcf]">.md</code> file.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 bg-[#1e1e1e] text-xs text-[#808080] hover:border-[#0d99ff]/60 hover:text-[#e6e6e6]"
+                onClick={() => designFileInputRef.current?.click()}
+                data-testid="design-context-upload"
+              >
+                <Lock className="h-4 w-4" />
+                <span>Upload DESIGN.md</span>
+                <span className="text-[10px] text-[#666]">.md or .markdown</span>
+              </button>
+            )}
+          </section>
+
           <section className="border-b border-[#1e1e1e] px-3 py-2">
             <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#999]">
               <Sparkles className="h-3 w-3" />

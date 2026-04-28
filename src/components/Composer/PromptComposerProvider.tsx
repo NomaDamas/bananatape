@@ -35,6 +35,10 @@ interface PromptComposerContextValue {
   referenceImages: ReferenceImage[];
   systemPrompt: string;
   setSystemPrompt: (prompt: string) => void;
+  designContext: string;
+  designContextFileName: string;
+  replaceDesignContext: (file: File) => Promise<void>;
+  clearDesignContext: () => Promise<void>;
   addReferenceFiles: (files: File[], source?: ReferenceSource) => Promise<void>;
   removeReferenceImage: (id: string) => void;
   clearReferenceImages: () => void;
@@ -43,6 +47,7 @@ interface PromptComposerContextValue {
   handleEdit: () => Promise<void>;
   canEdit: boolean;
   hasReferenceImages: boolean;
+  hasDesignContext: boolean;
 }
 
 const OPENAI_MAX_INPUT_IMAGES = 16;
@@ -55,6 +60,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const [prompt, setPrompt] = useState('');
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [designContext, setDesignContext] = useState('');
+  const [designContextFileName, setDesignContextFileName] = useState('');
   const referenceImagesRef = useRef<ReferenceImage[]>([]);
   const didLoadProjectSettingsRef = useRef(false);
 
@@ -76,6 +83,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const canEdit = !!baseImage;
   const hasReferenceImages = referenceImages.length > 0;
+  const hasDesignContext = designContext.trim().length > 0;
   const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
 
   useEffect(() => {
@@ -101,6 +109,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
 
         setSystemPrompt(typeof settings.systemPrompt === 'string' ? settings.systemPrompt : '');
+        setDesignContext(typeof settings.designContext === 'string' ? settings.designContext : '');
+        setDesignContextFileName(typeof settings.designContextFileName === 'string' ? settings.designContextFileName : '');
 
         if (Array.isArray(settings.referenceImages)) {
           const persistedReferences = await Promise.all(settings.referenceImages.map(async (reference: {
@@ -261,19 +271,78 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     setPrompt('');
   }, []);
 
+  const replaceDesignContext = useCallback(async (file: File) => {
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.md') && !lowerName.endsWith('.markdown')) {
+      addToast('Design context must be a .md or .markdown file', 'error');
+      return;
+    }
+
+    let nextContent: string;
+    try {
+      nextContent = await file.text();
+    } catch {
+      addToast('Could not read the design context file', 'error');
+      return;
+    }
+
+    setDesignContext(nextContent);
+    setDesignContextFileName(file.name);
+
+    try {
+      const formData = new FormData();
+      formData.append('designContext', file, file.name);
+      const response = await fetch('/api/projects/design-context', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok && response.status !== 404) {
+        const payload = await response.json().catch(() => ({}));
+        addToast(typeof payload?.error === 'string' ? payload.error : 'Could not save design context', 'error');
+        return;
+      }
+      if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        if (payload && typeof payload.designContext === 'string') {
+          setDesignContext(payload.designContext);
+          setDesignContextFileName(typeof payload.designContextFileName === 'string' ? payload.designContextFileName : file.name);
+        }
+        addToast('Design context updated', 'success');
+      }
+    } catch {
+      // No-project/dev mode keeps the design context in memory only.
+    }
+  }, [addToast]);
+
+  const clearDesignContext = useCallback(async () => {
+    setDesignContext('');
+    setDesignContextFileName('');
+    try {
+      await fetch('/api/projects/design-context', { method: 'DELETE' });
+    } catch {
+      // No-project/dev mode keeps state in memory only.
+    }
+  }, []);
+
   const buildSubmittedPrompt = useCallback((fallbackPrompt?: string) => {
     const trimmedPrompt = prompt.trim() || fallbackPrompt?.trim() || '';
     const trimmedSystemPrompt = systemPrompt.trim();
+    const trimmedDesignContext = designContext.trim();
 
-    if (!trimmedSystemPrompt) {
+    if (!trimmedSystemPrompt && !trimmedDesignContext) {
       return trimmedPrompt;
     }
 
-    return [
-      `System prompt:\n${trimmedSystemPrompt}`,
-      `User prompt:\n${trimmedPrompt}`,
-    ].join('\n\n');
-  }, [prompt, systemPrompt]);
+    const sections: string[] = [];
+    if (trimmedDesignContext) {
+      sections.push(`Design context:\n${trimmedDesignContext}`);
+    }
+    if (trimmedSystemPrompt) {
+      sections.push(`System prompt:\n${trimmedSystemPrompt}`);
+    }
+    sections.push(`User prompt:\n${trimmedPrompt}`);
+    return sections.join('\n\n');
+  }, [designContext, prompt, systemPrompt]);
 
   const appendReferenceImages = useCallback((formData: FormData, fieldName: 'images' | 'referenceImages') => {
     referenceImages.forEach((reference, index) => {
@@ -452,6 +521,10 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     referenceImages,
     systemPrompt,
     setSystemPrompt,
+    designContext,
+    designContextFileName,
+    replaceDesignContext,
+    clearDesignContext,
     addReferenceFiles,
     removeReferenceImage,
     clearReferenceImages,
@@ -460,16 +533,22 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     handleEdit,
     canEdit,
     hasReferenceImages,
+    hasDesignContext,
   }), [
     addReferenceFiles,
     canEdit,
+    clearDesignContext,
     clearPromptComposer,
     clearReferenceImages,
+    designContext,
+    designContextFileName,
     handleEdit,
     handleGenerate,
+    hasDesignContext,
     hasReferenceImages,
     prompt,
     referenceImages,
+    replaceDesignContext,
     systemPrompt,
     setSystemPrompt,
     removeReferenceImage,

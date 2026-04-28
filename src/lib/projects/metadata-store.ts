@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, open } from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { Provider } from '@/types';
-import { createEmptyHistory, createEmptyProjectSettings, HISTORY_SCHEMA_VERSION, isProjectHistory, normalizeProjectSettings, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectReferenceImage, type ProjectResultType, type ProjectSettings } from './schema';
+import { createEmptyHistory, createEmptyProjectSettings, HISTORY_SCHEMA_VERSION, isProjectHistory, normalizeProjectSettings, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectReferenceImage, type ProjectResultType, type ProjectSettings, type ProjectSettingsPatch } from './schema';
 import { ensureProjectDirectories, getHistoryPath, getManifestPath } from './paths';
 import { withProjectLock } from './locks';
 import { sanitizeProjectName, slugifyProjectName } from './validate';
@@ -78,7 +78,7 @@ async function updateProjectManifest(
 
 export async function updateProjectSettings(
   projectRoot: string,
-  patch: Partial<Pick<ProjectSettings, 'systemPrompt'>>,
+  patch: ProjectSettingsPatch,
 ): Promise<ProjectSettings> {
   const manifest = await updateProjectManifest(projectRoot, (current) => ({
     ...current,
@@ -88,6 +88,28 @@ export async function updateProjectSettings(
     },
   }));
   return normalizeProjectSettings(manifest.settings);
+}
+
+export interface DesignContextInput {
+  content: string;
+  fileName: string;
+}
+
+export async function setProjectDesignContext(
+  projectRoot: string,
+  input: DesignContextInput,
+): Promise<ProjectSettings> {
+  return updateProjectSettings(projectRoot, {
+    designContext: input.content,
+    designContextFileName: input.fileName,
+  });
+}
+
+export async function clearProjectDesignContext(projectRoot: string): Promise<ProjectSettings> {
+  return updateProjectSettings(projectRoot, {
+    designContext: '',
+    designContextFileName: '',
+  });
 }
 
 export async function appendProjectReference(projectRoot: string, reference: ProjectReferenceImage): Promise<ProjectSettings> {

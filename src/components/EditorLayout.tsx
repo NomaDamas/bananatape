@@ -67,6 +67,10 @@ function StandaloneEditorShell() {
     referenceImages,
     systemPrompt,
     setSystemPrompt,
+    designContext,
+    designContextFileName,
+    replaceDesignContext,
+    clearDesignContext,
     addReferenceFiles,
     removeReferenceImage,
     clearReferenceImages,
@@ -94,6 +98,10 @@ function StandaloneEditorShell() {
           onClearReferences={clearReferenceImages}
           systemPrompt={systemPrompt}
           onSystemPromptChange={setSystemPrompt}
+          designContext={designContext}
+          designContextFileName={designContextFileName}
+          onReplaceDesignContext={replaceDesignContext}
+          onClearDesignContext={clearDesignContext}
         />
         <main className="relative min-w-0 flex-1 overflow-hidden">
           <CanvasContainer className="h-full w-full" />
