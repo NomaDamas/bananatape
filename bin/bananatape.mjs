@@ -143,11 +143,23 @@ async function findFreePort(preferred) {
     });
   });
 }
+async function pathExists(file) {
+  try { await fs.access(file); return true; } catch { return false; }
+}
 async function buildExists() {
-  try { await fs.access(path.join(APP_ROOT, '.next', 'BUILD_ID')); return true; } catch { return false; }
+  return pathExists(path.join(APP_ROOT, '.next', 'BUILD_ID'));
 }
 async function standaloneServerExists() {
-  try { await fs.access(path.join(APP_ROOT, '.next', 'standalone', 'server.js')); return true; } catch { return false; }
+  return pathExists(path.join(APP_ROOT, '.next', 'standalone', 'server.js'));
+}
+async function copyIfMissing(source, destination) {
+  if (await pathExists(destination) || !(await pathExists(source))) return;
+  await fs.cp(source, destination, { recursive: true });
+}
+async function prepareStandaloneServer() {
+  const standaloneRoot = path.join(APP_ROOT, '.next', 'standalone');
+  await copyIfMissing(path.join(APP_ROOT, '.next', 'static'), path.join(standaloneRoot, '.next', 'static'));
+  await copyIfMissing(path.join(APP_ROOT, 'public'), path.join(standaloneRoot, 'public'));
 }
 function spawnBrowser(url) {
   if (process.platform === 'darwin') return spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
@@ -174,6 +186,7 @@ async function launchProject(ref, options) {
   const port = await findFreePort(options.port);
   const launchId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const hasStandaloneServer = await standaloneServerExists();
+  if (hasStandaloneServer) await prepareStandaloneServer();
   const child = hasStandaloneServer
     ? spawn(process.execPath, [path.join(APP_ROOT, '.next', 'standalone', 'server.js')], {
       cwd: APP_ROOT,

@@ -70,6 +70,34 @@ jobs:
           ./node_modules/.bin/bananatape launch release-smoke --no-open --port 45991
           trap './node_modules/.bin/bananatape stop release-smoke || true' EXIT
           curl --fail --silent --show-error http://127.0.0.1:45991/api/projects/current
+          curl --fail --silent --show-error http://127.0.0.1:45991/ -o page.html
+          node <<'NODE'
+          const fs = require('node:fs');
+          const http = require('node:http');
+          const html = fs.readFileSync('page.html', 'utf8');
+          const assets = [...new Set([...html.matchAll(/(?:href|src)=\"([^\"]*\/_next\/static\/[^\"]+)/g)].map((match) => match[1]))];
+          if (assets.length === 0) {
+            throw new Error('No Next.js static assets found in rendered page');
+          }
+          async function status(path) {
+            return new Promise((resolve, reject) => {
+              http.get(`http://127.0.0.1:45991${path}`, (response) => {
+                response.resume();
+                response.on('end', () => resolve(response.statusCode));
+              }).on('error', reject);
+            });
+          }
+          (async () => {
+            const failures = [];
+            for (const asset of assets) {
+              const code = await status(asset);
+              if (code !== 200) failures.push(`${code} ${asset}`);
+            }
+            if (failures.length) {
+              throw new Error(`Static asset smoke test failed:\n${failures.join('\n')}`);
+            }
+          })();
+          NODE
 
       - name: Publish to npm
         run: npm publish --access public --provenance
