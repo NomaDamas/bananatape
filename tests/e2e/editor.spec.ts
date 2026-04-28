@@ -210,6 +210,134 @@ test.describe('BananaTape Editor', () => {
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
   });
 
+  test('shows the design system upload guidance when no design context is set', async ({ page }) => {
+    const section = page.locator('[data-testid="design-context-section"]');
+    await expect(section).toBeVisible();
+    await expect(section).toContainText(/Design System/i);
+    await expect(section.locator('[data-testid="design-context-upload"]')).toBeVisible();
+    await expect(section.locator('[data-testid="design-context-upload"]')).toContainText(/Upload DESIGN\.md/);
+    await expect(section.locator('[data-testid="design-context-content"]')).toHaveCount(0);
+    await expect(section.getByText(/applied/i)).toHaveCount(0);
+  });
+
+  test('renders an uploaded DESIGN.md as read-only markdown with lock affordance', async ({ page }) => {
+    let nextDesignContext = '# Brand voice\n\n- Be **bold**.\n- Stay _consistent_.\n\nUse `bananatape` everywhere.';
+    let nextFileName = 'DESIGN.md';
+
+    await page.route('/api/projects/design-context', async (route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            designContext: nextDesignContext,
+            designContextFileName: nextFileName,
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ designContext: '', designContextFileName: '' }),
+      });
+    });
+
+    const section = page.locator('[data-testid="design-context-section"]');
+    await section.locator('[data-testid="design-context-file-input"]').setInputFiles({
+      name: 'DESIGN.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(nextDesignContext, 'utf-8'),
+    });
+
+    const viewer = section.locator('[data-testid="design-context-viewer"]');
+    await expect(viewer).toBeVisible();
+    await expect(viewer.locator('h1')).toHaveText('Brand voice');
+    await expect(viewer.locator('strong')).toHaveText('bold');
+    await expect(viewer.locator('em')).toHaveText('consistent');
+    await expect(viewer.locator('ul li')).toHaveCount(2);
+    await expect(viewer.locator('code').first()).toHaveText('bananatape');
+
+    await expect(section.getByText('applied')).toBeVisible();
+    await expect(section.locator('[data-testid="design-context-replace"]')).toBeVisible();
+    await expect(section.getByText('DESIGN.md', { exact: true })).toBeVisible();
+
+    expect(await viewer.locator('script').count()).toBe(0);
+
+    nextDesignContext = '## Tone\n\n- Stay punchy.';
+    nextFileName = 'BRAND.md';
+    await section.locator('[data-testid="design-context-file-input"]').setInputFiles({
+      name: 'BRAND.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(nextDesignContext, 'utf-8'),
+    });
+
+    await expect(viewer.locator('h2')).toHaveText('Tone');
+    await expect(section.getByText('BRAND.md', { exact: true })).toBeVisible();
+  });
+
+  test('escapes raw HTML inside the design context payload (no XSS)', async ({ page }) => {
+    const malicious = '# Heading\n\n<script>window.__designContextPwned = true;</script>\n\n<img src=x onerror="window.__designContextImgPwned = true">';
+
+    await page.route('/api/projects/design-context', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          designContext: malicious,
+          designContextFileName: 'DESIGN.md',
+        }),
+      });
+    });
+
+    const section = page.locator('[data-testid="design-context-section"]');
+    await section.locator('[data-testid="design-context-file-input"]').setInputFiles({
+      name: 'DESIGN.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(malicious, 'utf-8'),
+    });
+
+    const viewer = section.locator('[data-testid="design-context-viewer"]');
+    await expect(viewer.locator('h1')).toHaveText('Heading');
+    await expect(viewer.locator('script')).toHaveCount(0);
+    await expect(viewer.locator('img')).toHaveCount(0);
+    expect(await viewer.textContent()).toContain('<script>');
+
+    const pwned = await page.evaluate(() => ({
+      script: (window as unknown as { __designContextPwned?: boolean }).__designContextPwned ?? false,
+      img: (window as unknown as { __designContextImgPwned?: boolean }).__designContextImgPwned ?? false,
+    }));
+    expect(pwned.script).toBe(false);
+    expect(pwned.img).toBe(false);
+  });
+
+  test('hydrates an existing design context from project settings', async ({ page }) => {
+    await page.route('/api/projects/settings', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            systemPrompt: '',
+            referenceImages: [],
+            designContext: '# Hydrated\n- ready',
+            designContextFileName: 'STORED.md',
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    });
+
+    await page.reload();
+
+    const section = page.locator('[data-testid="design-context-section"]');
+    await expect(section.locator('[data-testid="design-context-viewer"] h1')).toHaveText('Hydrated');
+    await expect(section.getByText('STORED.md', { exact: true })).toBeVisible();
+    await expect(section.getByText('applied')).toBeVisible();
+  });
+
   test('history panel scrolls when it has many persisted entries', async ({ page }) => {
     const entries = Array.from({ length: 24 }, (_, index) => ({
       id: `hist_${index}`,

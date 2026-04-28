@@ -26,7 +26,18 @@ export interface ProjectReferenceImage {
 export interface ProjectSettings {
   systemPrompt: string;
   referenceImages: ProjectReferenceImage[];
+  // Locked markdown loaded from DESIGN.md upload. Replaced only via the
+  // /api/projects/design-context endpoint; never written through PUT settings.
+  // Optional so legacy project.json files round-trip unchanged.
+  designContext?: string;
+  designContextFileName?: string;
 }
+
+// Narrow on purpose: do not widen to Partial<ProjectSettings> or callers can
+// silently overwrite referenceImages or future read-only fields.
+export type ProjectSettingsPatch = Partial<
+  Pick<ProjectSettings, 'systemPrompt' | 'designContext' | 'designContextFileName'>
+>;
 
 export interface ProjectHistoryEntry {
   id: string;
@@ -57,11 +68,19 @@ export function createEmptyProjectSettings(): ProjectSettings {
 }
 
 export function normalizeProjectSettings(settings: ProjectManifest['settings']): ProjectSettings {
-  return {
+  const normalized: ProjectSettings = {
     ...createEmptyProjectSettings(),
     ...(settings ?? {}),
     referenceImages: Array.isArray(settings?.referenceImages) ? settings.referenceImages : [],
   };
+
+  if (typeof normalized.designContext !== 'string' || normalized.designContext.length === 0) {
+    delete normalized.designContext;
+  }
+  if (typeof normalized.designContextFileName !== 'string' || normalized.designContextFileName.length === 0) {
+    delete normalized.designContextFileName;
+  }
+  return normalized;
 }
 
 export function createEmptyHistory(): ProjectHistory {
