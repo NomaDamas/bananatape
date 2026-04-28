@@ -69,7 +69,16 @@ jobs:
           ./node_modules/.bin/bananatape create "Release Smoke"
           ./node_modules/.bin/bananatape launch release-smoke --no-open --port 45991
           trap './node_modules/.bin/bananatape stop release-smoke || true' EXIT
-          curl --fail --silent --show-error http://127.0.0.1:45991/api/projects/current
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:45991/api/projects/current; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "BananaTape smoke server did not become ready." >&2
+              exit 1
+            fi
+            sleep 1
+          done
           curl --fail --silent --show-error http://127.0.0.1:45991/ -o page.html
           node <<'NODE'
           const fs = require('node:fs');
