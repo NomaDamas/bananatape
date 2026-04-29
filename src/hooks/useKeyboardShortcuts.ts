@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect } from 'react';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useDeleteToast } from './useDeleteToast';
 
 export function useKeyboardShortcuts() {
+  const showDeleteToast = useDeleteToast();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -34,6 +38,17 @@ export function useKeyboardShortcuts() {
       if (e.key === 'Escape') {
         e.preventDefault();
         state.setActiveTool('pan');
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const canvasState = useCanvasStore.getState();
+        if (canvasState.selectedImageIds.length > 0) {
+          e.preventDefault();
+          const count = canvasState.selectedImageIds.length;
+          canvasState.deleteImages(canvasState.selectedImageIds);
+          showDeleteToast(count);
+        }
         return;
       }
 
@@ -81,5 +96,5 @@ export function useKeyboardShortcuts() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [showDeleteToast]);
 }

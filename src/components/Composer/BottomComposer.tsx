@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToolPalette } from '@/components/Toolbar/ToolPalette';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { Provider } from '@/types';
@@ -46,10 +47,13 @@ export function BottomComposer({
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
-  const zoom = useEditorStore((s) => s.zoom);
-  const zoomIn = useEditorStore((s) => s.zoomIn);
-  const zoomOut = useEditorStore((s) => s.zoomOut);
-  const resetViewport = useEditorStore((s) => s.resetViewport);
+  const zoom = useCanvasStore((s) => s.viewport.zoom);
+  const zoomIn = useCanvasStore((s) => s.zoomIn);
+  const zoomOut = useCanvasStore((s) => s.zoomOut);
+  const resetViewport = useCanvasStore((s) => s.resetViewport);
+  const parallelCount = useEditorStore((s) => s.parallelCount);
+  const incrementParallelCount = useEditorStore((s) => s.incrementParallelCount);
+  const decrementParallelCount = useEditorStore((s) => s.decrementParallelCount);
 
   const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length;
   const canEdit = !!baseImage;
@@ -174,6 +178,53 @@ export function BottomComposer({
                   <SelectItem value="openai">OpenAI</SelectItem>
                 </SelectContent>
               </Select>
+
+              <div
+                role="spinbutton"
+                tabIndex={0}
+                aria-label="Parallel generations"
+                aria-valuemin={1}
+                aria-valuenow={parallelCount}
+                aria-valuetext={`${parallelCount} parallel generation${parallelCount === 1 ? '' : 's'}`}
+                title="Parallel generations"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    incrementParallelCount();
+                  } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    decrementParallelCount();
+                  }
+                }}
+                className="flex h-10 items-center gap-1 rounded-lg border border-white/10 bg-[#2c2c2c] px-1.5 text-xs text-neutral-300 outline-none focus-visible:ring-1 focus-visible:ring-[#0d99ff]"
+                data-testid="parallel-count-stepper"
+              >
+                <button
+                  type="button"
+                  aria-label="Decrease parallel count"
+                  onClick={decrementParallelCount}
+                  disabled={parallelCount <= 1}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  data-testid="parallel-count-decrement"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <span
+                  className="min-w-[1.25rem] text-center font-mono text-sm font-semibold tabular-nums text-white"
+                  data-testid="parallel-count-value"
+                >
+                  {parallelCount}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase parallel count"
+                  onClick={incrementParallelCount}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+                  data-testid="parallel-count-increment"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               <Button
                 type="button"

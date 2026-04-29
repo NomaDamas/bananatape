@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import type { HistoryEntry } from './types';
 
-interface HistoryState {
+export interface HistoryState {
   entries: HistoryEntry[];
   selectedId: string | null;
   addEntry: (entry: Omit<HistoryEntry, 'id' | 'timestamp'> & Partial<Pick<HistoryEntry, 'id' | 'timestamp'>>) => void;
@@ -10,6 +10,11 @@ interface HistoryState {
   selectEntry: (id: string) => void;
   deleteEntry: (id: string) => void;
   clearHistory: () => void;
+}
+
+export function selectEntriesForImage(state: HistoryState, imageId: string | null): HistoryEntry[] {
+  if (imageId === null) return [];
+  return state.entries.filter((e) => e.imageId === imageId);
 }
 
 export const useHistoryStore = create<HistoryState>()(

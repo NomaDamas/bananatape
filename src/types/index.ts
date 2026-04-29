@@ -56,3 +56,5 @@ export interface EditOptions {
   maskImage: Blob;
   prompt: string;
 }
+
+export * from './canvas';

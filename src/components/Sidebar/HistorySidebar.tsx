@@ -1,13 +1,21 @@
 "use client";
 
+import { useMemo } from 'react';
 import { Clock3 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useHistoryStore } from '@/stores/useHistoryStore';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { HistoryItem } from './HistoryItem';
 
 export function HistorySidebar() {
-  const entries = useHistoryStore((s) => s.entries);
+  const focusedImageId = useCanvasStore((s) => s.focusedImageId);
+  // Zustand 5 + React 19: selectors must return stable references; filter via useMemo, not inside the selector.
+  const allEntries = useHistoryStore((s) => s.entries);
+  const entries = useMemo(
+    () => (focusedImageId === null ? [] : allEntries.filter((e) => e.imageId === focusedImageId)),
+    [allEntries, focusedImageId],
+  );
   const selectedId = useHistoryStore((s) => s.selectedId);
   const selectEntry = useHistoryStore((s) => s.selectEntry);
   const deleteEntry = useHistoryStore((s) => s.deleteEntry);
@@ -40,7 +48,16 @@ export function HistorySidebar() {
       </div>
       <ScrollArea className="min-h-0 flex-1" data-testid="history-timeline">
         <div className="px-2.5 py-2">
-          {entries.length === 0 && (
+          {focusedImageId === null && (
+            <div className="px-4 py-10 text-center text-neutral-500">
+              <div className="mx-auto mb-3 flex h-13 w-13 items-center justify-center rounded-xl bg-white/[0.04] text-neutral-600">
+                <Clock3 className="h-6 w-6" />
+              </div>
+              <p className="mb-1 text-xs font-medium text-neutral-300">Click an image to see its history</p>
+              <p className="text-[11px] leading-5 text-neutral-500">History is scoped to the focused canvas image.</p>
+            </div>
+          )}
+          {focusedImageId !== null && entries.length === 0 && (
             <div className="px-4 py-10 text-center text-neutral-500">
               <div className="mx-auto mb-3 flex h-13 w-13 items-center justify-center rounded-xl bg-white/[0.04] text-neutral-600">
                 <Clock3 className="h-6 w-6" />
@@ -53,7 +70,7 @@ export function HistorySidebar() {
               </p>
             </div>
           )}
-          {entries.length > 0 && (
+          {focusedImageId !== null && entries.length > 0 && (
             <div className="flex flex-col gap-1.5">
               {entries.map((entry, index) => (
                 <HistoryItem

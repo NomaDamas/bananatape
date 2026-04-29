@@ -34,6 +34,9 @@ interface EditorActions {
   zoomOut: () => void;
   resetViewport: () => void;
   setIsSpacePressed: (v: boolean) => void;
+  setParallelCount: (count: number) => void;
+  incrementParallelCount: () => void;
+  decrementParallelCount: () => void;
 }
 
 const initialState: EditorState = {
@@ -55,7 +58,13 @@ const initialState: EditorState = {
   panX: 0,
   panY: 0,
   isSpacePressed: false,
+  parallelCount: 1,
 };
+
+function clampParallelCount(count: number): number {
+  if (!Number.isFinite(count)) return 1;
+  return Math.max(1, Math.round(count));
+}
 
 export const useEditorStore = create<EditorState & EditorActions>()(
   temporal(
@@ -117,6 +126,9 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       })),
       resetViewport: () => set({ zoom: 1, panX: 0, panY: 0 }),
       setIsSpacePressed: (v) => set({ isSpacePressed: v }),
+      setParallelCount: (count) => set({ parallelCount: clampParallelCount(count) }),
+      incrementParallelCount: () => set((state) => ({ parallelCount: clampParallelCount(state.parallelCount + 1) })),
+      decrementParallelCount: () => set((state) => ({ parallelCount: clampParallelCount(state.parallelCount - 1) })),
     })),
     {
       partialize: (state) => ({

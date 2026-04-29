@@ -41,6 +41,7 @@ export interface EditorState {
   panX: number;
   panY: number;
   isSpacePressed: boolean;
+  parallelCount: number;
 }
 
 export interface HistoryEntry {
@@ -53,5 +54,5 @@ export interface HistoryEntry {
   type: 'generate' | 'edit';
   timestamp: number;
   parentId?: string | null;
+  imageId?: string | null;
 }
-
