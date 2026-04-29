@@ -34,6 +34,10 @@ export function getHistoryPath(projectRoot: string): string {
   return path.join(projectRoot, 'history.json');
 }
 
+export function getLive2DManifestPath(projectRoot: string): string {
+  return path.join(projectRoot, 'live2d', 'manifest.json');
+}
+
 export async function ensureProjectDirectories(projectRoot: string): Promise<void> {
   await mkdir(path.join(projectRoot, 'assets'), { recursive: true });
   await mkdir(path.join(projectRoot, 'references'), { recursive: true });

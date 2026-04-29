@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dataUrlToBuffer, persistImageResult, readAsset } from '@/lib/projects/asset-store';
-import { appendProjectReference, createProject, readProjectHistory, readProjectManifest, readProjectSettings, removeProjectReference, updateProjectSettings } from '@/lib/projects/metadata-store';
+import { appendProjectReference, createProject, enableLive2DMode, readProjectHistory, readProjectManifest, readProjectSettings, removeProjectReference, updateProjectSettings, writeLive2DManifest } from '@/lib/projects/metadata-store';
 import { assertProjectRelativePath, resolveInsideProject } from '@/lib/projects/paths';
 import { assertValidAssetId, assertValidProjectId, slugifyProjectName } from '@/lib/projects/validate';
 
@@ -50,7 +50,7 @@ describe('project metadata and asset persistence', () => {
     expect(manifest.id).toBe('launch-test');
     await expect(readProjectManifest(projectRoot)).resolves.toMatchObject({ id: 'launch-test', name: 'Launch Test' });
     await expect(readProjectHistory(projectRoot)).resolves.toMatchObject({ revision: 0, entries: [] });
-    await expect(readProjectSettings(projectRoot)).resolves.toEqual({ systemPrompt: '', referenceImages: [] });
+    await expect(readProjectSettings(projectRoot)).resolves.toEqual({ systemPrompt: '', referenceImages: [], live2d: { enabled: false, selectedHistoryEntryId: null } });
   });
 
   it('persists project-level system prompt and reference image metadata', async () => {
@@ -80,6 +80,43 @@ describe('project metadata and asset persistence', () => {
       referenceImages: [],
     });
   });
+
+
+  it('enables Live2D mode and writes a selected live2d manifest contract', async () => {
+    const projectRoot = await tempProjectRoot();
+    await createProject(projectRoot, 'Live2D Test');
+
+    const persisted = await persistImageResult({
+      projectRoot,
+      imageDataUrl: PNG_1X1,
+      prompt: 'Live2D part sheet',
+      provider: 'god-tibo',
+      type: 'generate',
+    });
+
+    const settings = await enableLive2DMode(projectRoot);
+    expect(settings.live2d.enabled).toBe(true);
+    expect(settings.systemPrompt).toContain('Live2D-ready upper-body anime character part sheet');
+
+    const live2dManifest = await writeLive2DManifest(projectRoot, persisted.historyEntry.id);
+    expect(live2dManifest).toMatchObject({
+      schemaVersion: 1,
+      selected: {
+        historyEntryId: persisted.historyEntry.id,
+        assetPath: persisted.historyEntry.assetPath,
+        provider: 'god-tibo',
+      },
+      annotations: [],
+      hiddenAreaNotes: [],
+    });
+
+    const manifestFile = JSON.parse(await readFile(path.join(projectRoot, 'live2d', 'manifest.json'), 'utf8'));
+    expect(manifestFile.selected.historyEntryId).toBe(persisted.historyEntry.id);
+    await expect(readProjectSettings(projectRoot)).resolves.toMatchObject({
+      live2d: { enabled: true, selectedHistoryEntryId: persisted.historyEntry.id },
+    });
+  });
+
 
   it('decodes data URLs and persists assets plus history metadata without embedding image data', async () => {
     const projectRoot = await tempProjectRoot();
