@@ -26,10 +26,11 @@ export function useKeyboardShortcuts() {
       if (e.metaKey || e.ctrlKey) {
         if (e.key === 'z') {
           e.preventDefault();
+          const canvasTemporal = useCanvasStore.temporal.getState();
           if (e.shiftKey) {
-            if ('redo' in state && typeof state.redo === 'function') state.redo();
+            canvasTemporal.redo();
           } else {
-            if ('undo' in state && typeof state.undo === 'function') state.undo();
+            canvasTemporal.undo();
           }
           return;
         }
@@ -60,23 +61,29 @@ export function useKeyboardShortcuts() {
 
       if (e.key === '2') {
         e.preventDefault();
-        state.setActiveTool('pen');
+        state.setActiveTool('move');
         return;
       }
 
       if (e.key === '3') {
         e.preventDefault();
-        state.setActiveTool('box');
+        state.setActiveTool('pen');
         return;
       }
 
       if (e.key === '4') {
         e.preventDefault();
-        state.setActiveTool('arrow');
+        state.setActiveTool('box');
         return;
       }
 
       if (e.key === '5') {
+        e.preventDefault();
+        state.setActiveTool('arrow');
+        return;
+      }
+
+      if (e.key === '6') {
         e.preventDefault();
         state.setActiveTool('memo');
         return;

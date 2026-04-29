@@ -5,6 +5,7 @@ import { Check, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { useCanvasDrawingPerImage } from '@/hooks/useCanvasDrawingPerImage';
+import { useImageDrag } from '@/hooks/useImageDrag';
 import {
   ACTIVE_BOX_STROKE_WIDTH,
   createCanvasMapper,
@@ -63,7 +64,7 @@ function ScopedDrawingLayer({ image }: { image: CanvasImage }) {
     }
   }, [activeBox, activePath, image.boxes, image.paths, image.size, toolColor]);
 
-  const isPanning = activeTool === 'pan' || isSpacePressed;
+  const isPanning = activeTool === 'pan' || activeTool === 'move' || isSpacePressed;
 
   return (
     <canvas
@@ -127,30 +128,55 @@ function ScopedMemoOverlay({ image, isFocused }: { image: CanvasImage; isFocused
 export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSelect, onCheckboxToggle, onDelete, onRetry }: CanvasImageItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const size = getImageSize(image);
+  const activeTool = useEditorStore((s) => s.activeTool);
+  const moveEnabled = activeTool === 'move';
+  const drag = useImageDrag(image, { enabled: moveEnabled });
+  const suppressClickRef = useRef(false);
+
+  const effectivePosition = drag.livePosition ?? image.position;
 
   const handleBodyClick = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     onSelect(image.id, event.shiftKey || event.metaKey || event.ctrlKey);
   }, [image.id, onSelect]);
+
+  const handlePointerUp = useCallback((event: React.PointerEvent) => {
+    if (drag.didMove) {
+      suppressClickRef.current = true;
+    }
+    drag.onPointerUp(event);
+  }, [drag]);
 
   const shellClass = cn(
     'group absolute overflow-hidden rounded-xl bg-[#141414] shadow-[0_18px_50px_rgba(0,0,0,0.35)] transition-shadow',
     isFocused ? 'ring-4 ring-[#0d99ff]' : isSelected ? 'ring-2 ring-[#5bb8ff]' : 'ring-1 ring-white/10 hover:ring-white/25',
   );
 
+  const moveCursor = moveEnabled ? (drag.isDragging ? 'grabbing' : 'grab') : undefined;
+
   return (
     <div
       className={shellClass}
       data-canvas-image-id={image.id}
       style={{
-        left: image.position.x,
-        top: image.position.y,
+        left: effectivePosition.x,
+        top: effectivePosition.y,
         width: size.width,
         height: size.height,
         contentVisibility: 'auto',
         containIntrinsicSize: `${size.width}px ${size.height}px`,
+        cursor: moveCursor,
+        touchAction: moveEnabled ? 'none' : undefined,
       }}
       onClick={handleBodyClick}
+      onPointerDown={moveEnabled ? drag.onPointerDown : undefined}
+      onPointerMove={moveEnabled ? drag.onPointerMove : undefined}
+      onPointerUp={moveEnabled ? handlePointerUp : undefined}
+      onPointerCancel={moveEnabled ? drag.onPointerCancel : undefined}
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -191,7 +217,11 @@ export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSel
         </>
       )}
 
-      <label className="absolute left-2 top-2 z-40 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 has-[:checked]:opacity-100" onClick={(event) => event.stopPropagation()}>
+      <label
+        className="absolute left-2 top-2 z-40 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 has-[:checked]:opacity-100"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <input type="checkbox" className="peer sr-only" checked={isSelected} onChange={() => onCheckboxToggle(image.id)} />
         <span className="flex h-4 w-4 items-center justify-center rounded border border-white/45 bg-black/30 peer-checked:border-[#0d99ff] peer-checked:bg-[#0d99ff]">
           {isSelected && <Check className="h-3 w-3" />}
@@ -202,6 +232,7 @@ export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSel
         type="button"
         className="absolute right-2 top-2 z-40 flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white opacity-0 backdrop-blur transition-opacity hover:bg-red-500 group-hover:opacity-100"
         onClick={(event) => { event.stopPropagation(); onDelete(image.id); }}
+        onPointerDown={(event) => event.stopPropagation()}
         aria-label="Delete image"
       >
         <X className="h-4 w-4" />

@@ -26,7 +26,7 @@ export function DrawingLayer({ containerRef, imageSize }: DrawingLayerProps) {
   const toolColor = useEditorStore((s) => s.toolColor);
   const isSpacePressed = useEditorStore((s) => s.isSpacePressed);
 
-  const isPanning = activeTool === 'pan' || isSpacePressed;
+  const isPanning = activeTool === 'pan' || activeTool === 'move' || isSpacePressed;
   const pointerEvents = isPanning ? 'none' : 'auto';
 
   const { onPointerDown, onPointerMove, onPointerUp, activeBox } = useCanvasDrawing({

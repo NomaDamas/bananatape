@@ -2,14 +2,15 @@
 
 import { useEditorStore } from '@/stores/useEditorStore';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight, Hand, Pen, Square, StickyNote, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowUpRight, Hand, Move, Pen, Square, StickyNote, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 
 const tools = [
   { id: 'pan' as const, icon: Hand, label: 'Pan', shortcut: '1' },
-  { id: 'pen' as const, icon: Pen, label: 'Pen', shortcut: '2' },
-  { id: 'box' as const, icon: Square, label: 'Box', shortcut: '3' },
-  { id: 'arrow' as const, icon: ArrowUpRight, label: 'Arrow', shortcut: '4' },
-  { id: 'memo' as const, icon: StickyNote, label: 'Sticky memo', shortcut: '5' },
+  { id: 'move' as const, icon: Move, label: 'Move image', shortcut: '2' },
+  { id: 'pen' as const, icon: Pen, label: 'Pen', shortcut: '3' },
+  { id: 'box' as const, icon: Square, label: 'Box', shortcut: '4' },
+  { id: 'arrow' as const, icon: ArrowUpRight, label: 'Arrow', shortcut: '5' },
+  { id: 'memo' as const, icon: StickyNote, label: 'Sticky memo', shortcut: '6' },
 ];
 
 export function ToolPalette() {

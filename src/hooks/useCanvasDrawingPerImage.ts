@@ -34,7 +34,7 @@ export function useCanvasDrawingPerImage({ imageId, imageSize }: UseCanvasDrawin
   }, []);
 
   const onPointerDown = useCallback((event: React.PointerEvent) => {
-    if (activeTool === 'pan') return;
+    if (activeTool === 'pan' || activeTool === 'move') return;
     event.preventDefault();
     event.stopPropagation();
 
