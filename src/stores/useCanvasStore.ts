@@ -12,9 +12,8 @@ export interface CanvasState {
   // Image storage
   images: Record<string, CanvasImage>;
   imageOrder: string[];
-  // Selection model — separate from focus
-  selectedImageIds: string[];
-  focusedImageId: string | null;
+  // Focus model
+  focusedImageIds: string[];
   // Viewport
   viewport: { panX: number; panY: number; zoom: number; width: number; height: number };
 }
@@ -27,12 +26,8 @@ export interface CanvasActions {
   deleteImage(id: string): void;
   deleteImages(ids: string[]): void;
 
-  // Selection (additive flag controls whether to clear or toggle)
-  selectImage(id: string, additive?: boolean): void;
-  clearSelection(): void;
-  toggleSelection(id: string): void;
-
   // Focus
+  setFocusedImages(ids: string[], additive?: boolean): void;
   setFocusedImage(id: string | null): void;
 
   // Per-image annotations
@@ -60,7 +55,7 @@ export interface CanvasActions {
   resetViewport(): void;
 
   // Reset / hydration
-  hydrate(images: Record<string, CanvasImage>, imageOrder: string[], focusedImageId?: string | null): void;
+  hydrate(images: Record<string, CanvasImage>, imageOrder: string[], focusedImageIds?: string[]): void;
   resetCanvas(): void;
 }
 
@@ -69,8 +64,7 @@ export type CanvasStore = CanvasState & CanvasActions;
 const initialState: CanvasState = {
   images: {},
   imageOrder: [],
-  selectedImageIds: [],
-  focusedImageId: null,
+  focusedImageIds: [],
   viewport: { panX: 0, panY: 0, zoom: 1, width: 0, height: 0 },
 };
 
@@ -82,8 +76,8 @@ function withoutIds(ids: string[], idsToRemove: Set<string>): string[] {
   return ids.filter((id) => !idsToRemove.has(id));
 }
 
-function toggleId(ids: string[], id: string): string[] {
-  return ids.includes(id) ? ids.filter((selectedId) => selectedId !== id) : [...ids, id];
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids));
 }
 
 function withTemporalPaused(fn: () => void): void {
@@ -103,7 +97,7 @@ export const useCanvasStore = create<CanvasStore>()(
       addImage: (image) => set((state) => ({
         images: { ...state.images, [image.id]: image },
         imageOrder: [...state.imageOrder, image.id],
-        focusedImageId: state.focusedImageId === null && image.status === 'ready' ? image.id : state.focusedImageId,
+        focusedImageIds: state.focusedImageIds.length === 0 && image.status === 'ready' ? [image.id] : state.focusedImageIds,
       })),
       addImages: (images) => set((state) => {
         const nextImages = { ...state.images };
@@ -116,7 +110,7 @@ export const useCanvasStore = create<CanvasStore>()(
         return {
           images: nextImages,
           imageOrder: nextImageOrder,
-          focusedImageId: state.focusedImageId === null && firstReadyImage ? firstReadyImage.id : state.focusedImageId,
+          focusedImageIds: state.focusedImageIds.length === 0 && firstReadyImage ? [firstReadyImage.id] : state.focusedImageIds,
         };
       }),
       updateImage: (id, patch) => set((state) => {
@@ -131,8 +125,7 @@ export const useCanvasStore = create<CanvasStore>()(
         return {
           images,
           imageOrder: withoutIds(state.imageOrder, idsToRemove),
-          selectedImageIds: withoutIds(state.selectedImageIds, idsToRemove),
-          focusedImageId: state.focusedImageId === id ? null : state.focusedImageId,
+          focusedImageIds: withoutIds(state.focusedImageIds, idsToRemove),
         };
       }),
       deleteImages: (ids) => set((state) => {
@@ -149,18 +142,13 @@ export const useCanvasStore = create<CanvasStore>()(
         return {
           images,
           imageOrder: withoutIds(state.imageOrder, idsToRemove),
-          selectedImageIds: withoutIds(state.selectedImageIds, idsToRemove),
-          focusedImageId: state.focusedImageId && idsToRemove.has(state.focusedImageId) ? null : state.focusedImageId,
+          focusedImageIds: withoutIds(state.focusedImageIds, idsToRemove),
         };
       }),
-      selectImage: (id, additive = false) => set((state) => (
-        additive
-          ? { selectedImageIds: toggleId(state.selectedImageIds, id) }
-          : { selectedImageIds: [id], focusedImageId: id }
-      )),
-      clearSelection: () => set({ selectedImageIds: [] }),
-      toggleSelection: (id) => set((state) => ({ selectedImageIds: toggleId(state.selectedImageIds, id) })),
-      setFocusedImage: (id) => set({ focusedImageId: id }),
+      setFocusedImages: (ids, additive = false) => set((state) => ({
+        focusedImageIds: additive ? uniqueIds([...state.focusedImageIds, ...ids]) : uniqueIds(ids),
+      })),
+      setFocusedImage: (id) => set({ focusedImageIds: id === null ? [] : [id] }),
       addPathToImage: (imageId, path) => set((state) => {
         const image = state.images[imageId];
         if (!image) return {};
@@ -237,11 +225,10 @@ export const useCanvasStore = create<CanvasStore>()(
       zoomIn: () => set((state) => ({ viewport: { ...state.viewport, zoom: clampZoom(state.viewport.zoom * ZOOM_STEP) } })),
       zoomOut: () => set((state) => ({ viewport: { ...state.viewport, zoom: clampZoom(state.viewport.zoom / ZOOM_STEP) } })),
       resetViewport: () => set((state) => ({ viewport: { ...state.viewport, panX: 0, panY: 0, zoom: 1 } })),
-      hydrate: (images, imageOrder, focusedImageId = null) => set({
+      hydrate: (images, imageOrder, focusedImageIds = []) => set({
         images,
         imageOrder,
-        focusedImageId,
-        selectedImageIds: [],
+        focusedImageIds: uniqueIds(focusedImageIds),
       }),
       resetCanvas: () => {
         set(initialState);

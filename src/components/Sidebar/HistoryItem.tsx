@@ -9,6 +9,7 @@ interface HistoryItemProps {
   entry: HistoryEntry;
   index: number;
   total: number;
+  depth?: number;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: (e: React.MouseEvent) => void;
@@ -18,7 +19,7 @@ function formatProvider(provider: HistoryEntry['provider']) {
   return provider === 'god-tibo' ? 'codex' : 'OpenAI';
 }
 
-export function HistoryItem({ entry, index, total, isSelected, onSelect, onDelete }: HistoryItemProps) {
+export function HistoryItem({ entry, index, total, depth = 0, isSelected, onSelect, onDelete }: HistoryItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const isFirst = index === 0;
   const isLast = index === total - 1;
@@ -27,7 +28,7 @@ export function HistoryItem({ entry, index, total, isSelected, onSelect, onDelet
   const imageSrc = entry.assetUrl ?? entry.imageDataUrl ?? '';
 
   return (
-    <div className="flex items-stretch gap-2" data-testid="history-timeline-row">
+    <div className="flex items-stretch gap-2" data-testid="history-timeline-row" style={{ paddingLeft: depth * 16 }}>
       <div className="flex w-3.5 shrink-0 flex-col items-center">
         <div className={`w-0.5 flex-1 bg-[#3b3b3b] ${isFirst ? 'opacity-0' : ''}`} />
         <div

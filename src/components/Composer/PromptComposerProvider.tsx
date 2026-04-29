@@ -86,10 +86,9 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const { exportAnnotatedImage, exportMask, resizeToSquare1024 } = useCanvasExport();
   const parallelGenerate = useParallelGenerate();
   const { addToast } = useToast();
-  const selectedImageIds = useCanvasStore((s) => s.selectedImageIds);
-  const focusedImageId = useCanvasStore((s) => s.focusedImageId);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
   const focusedImagePromptValue = useCanvasStore((s) =>
-    s.focusedImageId ? s.images[s.focusedImageId]?.prompt ?? '' : null,
+    s.focusedImageIds.length === 1 ? s.images[s.focusedImageIds[0]]?.prompt ?? '' : null,
   );
   const viewportPanX = useCanvasStore((s) => s.viewport.panX);
   const viewportPanY = useCanvasStore((s) => s.viewport.panY);
@@ -109,17 +108,18 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     startTransition(() => {
       setPrompt((current) => (current === focusedImagePromptValue ? current : focusedImagePromptValue));
     });
-  }, [focusedImageId, focusedImagePromptValue]);
+  }, [focusedImageIds, focusedImagePromptValue]);
 
   useEffect(() => {
-    if (!focusedImageId) return;
+    if (focusedImageIds.length !== 1) return;
+    const focusedImageId = focusedImageIds[0];
     const timeout = window.setTimeout(() => {
       const current = useCanvasStore.getState().images[focusedImageId];
       if (!current || current.prompt === prompt) return;
       useCanvasStore.getState().updateImage(focusedImageId, { prompt });
     }, 300);
     return () => window.clearTimeout(timeout);
-  }, [focusedImageId, prompt]);
+  }, [focusedImageIds, prompt]);
 
   useEffect(() => {
     return () => {
@@ -397,7 +397,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         systemPrompt,
         designContext,
         referenceImages: referenceImages.map((reference) => ({ file: reference.file, id: reference.id })),
-        parentIds: selectedImageIds,
+        parentIds: focusedImageIds,
         rootOrigin,
       });
       startTransition(() => {
@@ -418,7 +418,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     parallelGenerate,
     prompt,
     referenceImages,
-    selectedImageIds,
+    focusedImageIds,
     setIsGenerating,
     setMode,
     systemPrompt,

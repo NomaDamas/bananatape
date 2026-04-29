@@ -17,8 +17,7 @@ export interface LegacyProjectFile {
 export interface CanvasState {
   images: Record<string, CanvasImage>;
   imageOrder: string[];
-  focusedImageId: string | null;
-  selectedImageIds: string[];
+  focusedImageIds: string[];
 }
 
 export interface ProjectFileV1 {
@@ -72,8 +71,7 @@ function emptyCanvas(): CanvasState {
   return {
     images: {},
     imageOrder: [],
-    focusedImageId: null,
-    selectedImageIds: [],
+    focusedImageIds: [],
   };
 }
 
@@ -91,8 +89,7 @@ export function migrateProjectV0ToV1(input: unknown): ProjectFileV1 {
       canvas: {
         images: { ...input.canvas.images },
         imageOrder: [...input.canvas.imageOrder],
-        focusedImageId: input.canvas.focusedImageId,
-        selectedImageIds: [...input.canvas.selectedImageIds],
+        focusedImageIds: [...input.canvas.focusedImageIds],
       },
     };
   }
@@ -148,8 +145,7 @@ export function migrateProjectV0ToV1(input: unknown): ProjectFileV1 {
       canvas: {
         images: { [id]: rootImage },
         imageOrder: [id],
-        focusedImageId: id,
-        selectedImageIds: [id],
+        focusedImageIds: [id],
       },
     };
   }

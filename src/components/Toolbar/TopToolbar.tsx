@@ -21,6 +21,7 @@ import { ToolPalette } from './ToolPalette';
 import { useDownload } from '@/hooks/useDownload';
 import { BrandLogo } from '@/components/BrandLogo';
 import { getEnabledProviders, usePromptComposer } from '@/components/Composer/PromptComposerProvider';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import type { Provider } from '@/types';
 
 function formatProviderLabel(provider: Provider) {
@@ -50,6 +51,7 @@ export function TopToolbar() {
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
 
   const { downloadImage } = useDownload();
   const providers = getEnabledProviders();
@@ -206,7 +208,7 @@ export function TopToolbar() {
           size="sm"
           variant="ghost"
           className="h-8 w-8 px-0"
-          disabled={!baseImage}
+          disabled={focusedImageIds.length === 0}
           onClick={downloadImage}
           title="Download image"
         >

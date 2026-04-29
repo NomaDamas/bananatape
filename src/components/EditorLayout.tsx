@@ -31,6 +31,7 @@ function StandaloneEditorShell() {
   const baseImage = useEditorStore((s) => s.baseImage);
   const setBaseImage = useEditorStore((s) => s.setBaseImage);
   const canvasImageCount = useCanvasStore((s) => s.imageOrder.length);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
   const hydrateCanvas = useCanvasStore((s) => s.hydrate);
   const hydrateEntries = useHistoryStore((s) => s.hydrateEntries);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -87,7 +88,7 @@ function StandaloneEditorShell() {
       memos: editor.memos,
       status: 'ready',
     };
-    hydrateCanvas({ [id]: rootImage }, [id], id);
+    hydrateCanvas({ [id]: rootImage }, [id], [id]);
   }, [baseImage, canvasImageCount, hydrateCanvas]);
 
   const {
@@ -118,7 +119,7 @@ function StandaloneEditorShell() {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#1e1e1e] text-[#e6e6e6]">
-      <TopBar canExport={!!baseImage} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
+      <TopBar canExport={focusedImageIds.length > 0} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <LeftPanel
           references={referencePreviews}
@@ -146,7 +147,7 @@ function StandaloneEditorShell() {
         onGenerate={handleGenerate}
         onEdit={handleEdit}
       />
-      <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={!!baseImage} />
+      <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={focusedImageIds.length > 0} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

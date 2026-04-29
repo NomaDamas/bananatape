@@ -44,7 +44,7 @@ export function TopBar({ canExport, onExportClick, projectName = 'Untitled desig
           className="h-7 gap-1.5 rounded-md px-2 text-[#b3b3b3] hover:bg-white/10 hover:text-white"
           disabled={!canExport}
           onClick={onExportClick}
-          title={canExport ? 'Export current image' : 'Generate or load an image to export'}
+          title={canExport ? 'Export focused images' : 'Focus an image to export'}
         >
           <Download className="h-3.5 w-3.5" />
           Export

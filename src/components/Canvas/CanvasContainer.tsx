@@ -30,7 +30,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
   const panY = useCanvasStore((s) => s.viewport.panY);
   const zoom = useCanvasStore((s) => s.viewport.zoom);
   const setViewport = useCanvasStore((s) => s.setViewport);
-  const clearSelection = useCanvasStore((s) => s.clearSelection);
+  const setFocusedImages = useCanvasStore((s) => s.setFocusedImages);
   const deleteImage = useCanvasStore((s) => s.deleteImage);
   const { generate, cancel } = useParallelGenerate();
   const showDeleteToast = useDeleteToast();
@@ -130,7 +130,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
       onClick={(event) => {
-        if (event.target === event.currentTarget) clearSelection();
+        if (event.target === event.currentTarget) setFocusedImages([], false);
       }}
       className={`relative overflow-hidden bg-[#1e1e1e] text-neutral-200 ${className || ''}`}
       style={{ cursor, touchAction: 'none' }}
@@ -154,7 +154,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
             willChange: 'transform',
           }}
           onClick={(event) => {
-            if (event.target === event.currentTarget) clearSelection();
+            if (event.target === event.currentTarget) setFocusedImages([], false);
           }}
         >
           <div className="absolute -top-7 left-0 flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-medium tracking-tight text-neutral-300">

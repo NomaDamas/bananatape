@@ -53,8 +53,7 @@ function resetStore(): void {
   useCanvasStore.setState({
     images: {},
     imageOrder: [],
-    selectedImageIds: [],
-    focusedImageId: null,
+    focusedImageIds: [],
     viewport: { panX: 0, panY: 0, zoom: 1, width: 0, height: 0 },
   });
   useCanvasStore.temporal.getState().clear();
@@ -103,53 +102,37 @@ describe('useCanvasStore', () => {
     expect(useCanvasStore.getState().images.b).toBe(second);
   });
 
-  it('deleteImage removes image, order, selection, and deleted focus', () => {
+  it('deleteImage removes image, order, and deleted focus', () => {
     useCanvasStore.getState().addImages([makeImage('a'), makeImage('b')]);
-    useCanvasStore.getState().selectImage('a');
-    useCanvasStore.getState().selectImage('b', true);
+    useCanvasStore.getState().setFocusedImages(['a', 'b']);
 
     useCanvasStore.getState().deleteImage('a');
 
     expect(useCanvasStore.getState().images.a).toBeUndefined();
     expect(useCanvasStore.getState().imageOrder).toEqual(['b']);
-    expect(useCanvasStore.getState().selectedImageIds).toEqual(['b']);
-    expect(useCanvasStore.getState().focusedImageId).toBeNull();
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['b']);
   });
 
-  it('selectImage without additive replaces selection and sets focus', () => {
-    useCanvasStore.getState().selectImage('a');
-    useCanvasStore.getState().selectImage('b');
+  it('setFocusedImages replaces focus and deduplicates ids', () => {
+    useCanvasStore.getState().setFocusedImages(['a']);
+    useCanvasStore.getState().setFocusedImages(['b', 'b', 'c']);
 
-    expect(useCanvasStore.getState().selectedImageIds).toEqual(['b']);
-    expect(useCanvasStore.getState().focusedImageId).toBe('b');
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['b', 'c']);
   });
 
-  it('selectImage additive toggles selection and leaves focus unchanged', () => {
-    useCanvasStore.getState().setFocusedImage('focus');
+  it('setFocusedImages additive unions focus and deduplicates ids', () => {
+    useCanvasStore.getState().setFocusedImages(['a', 'b']);
+    useCanvasStore.getState().setFocusedImages(['b', 'c'], true);
 
-    useCanvasStore.getState().selectImage('a', true);
-    useCanvasStore.getState().selectImage('a', true);
-
-    expect(useCanvasStore.getState().selectedImageIds).toEqual([]);
-    expect(useCanvasStore.getState().focusedImageId).toBe('focus');
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['a', 'b', 'c']);
   });
 
-  it('toggleSelection leaves focus unchanged', () => {
-    useCanvasStore.getState().setFocusedImage('focus');
-
-    useCanvasStore.getState().toggleSelection('a');
-
-    expect(useCanvasStore.getState().selectedImageIds).toEqual(['a']);
-    expect(useCanvasStore.getState().focusedImageId).toBe('focus');
-  });
-
-  it('setFocusedImage changes focus without changing selection', () => {
-    useCanvasStore.getState().toggleSelection('a');
-
+  it('setFocusedImage aliases single focus and clearing focus', () => {
     useCanvasStore.getState().setFocusedImage('b');
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['b']);
 
-    expect(useCanvasStore.getState().focusedImageId).toBe('b');
-    expect(useCanvasStore.getState().selectedImageIds).toEqual(['a']);
+    useCanvasStore.getState().setFocusedImage(null);
+    expect(useCanvasStore.getState().focusedImageIds).toEqual([]);
   });
 
   it('addPathToImage changes only the target image paths array', () => {
@@ -211,12 +194,11 @@ describe('useCanvasStore', () => {
     useCanvasStore.getState().addImage(makeImage('old'));
     const images = { a: makeImage('a'), b: makeImage('b') };
 
-    useCanvasStore.getState().hydrate(images, ['b', 'a'], 'b');
+    useCanvasStore.getState().hydrate(images, ['b', 'a'], ['b']);
 
     expect(useCanvasStore.getState().images).toBe(images);
     expect(useCanvasStore.getState().imageOrder).toEqual(['b', 'a']);
-    expect(useCanvasStore.getState().focusedImageId).toBe('b');
-    expect(useCanvasStore.getState().selectedImageIds).toEqual([]);
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['b']);
 
     useCanvasStore.temporal.getState().undo();
     expect(useCanvasStore.getState().imageOrder).toEqual(['old']);
@@ -224,26 +206,24 @@ describe('useCanvasStore', () => {
 
   it('resetCanvas empties state and clears the undo stack', () => {
     useCanvasStore.getState().addImage(makeImage('a'));
-    useCanvasStore.getState().selectImage('a');
+    useCanvasStore.getState().setFocusedImage('a');
     useCanvasStore.getState().setViewport({ panX: 10, panY: 20, zoom: 2 });
 
     useCanvasStore.getState().resetCanvas();
 
     expect(useCanvasStore.getState().images).toEqual({});
     expect(useCanvasStore.getState().imageOrder).toEqual([]);
-    expect(useCanvasStore.getState().selectedImageIds).toEqual([]);
-    expect(useCanvasStore.getState().focusedImageId).toBeNull();
+    expect(useCanvasStore.getState().focusedImageIds).toEqual([]);
     expect(useCanvasStore.getState().viewport).toEqual({ panX: 0, panY: 0, zoom: 1, width: 0, height: 0 });
     expect(pastLength()).toBe(0);
     expect(useCanvasStore.temporal.getState().futureStates.length).toBe(0);
   });
 
-  it('selection, focus, and viewport changes do not push undo entries', () => {
+  it('focus and viewport changes do not push undo entries', () => {
     const before = pastLength();
 
-    useCanvasStore.getState().selectImage('a');
-    useCanvasStore.getState().clearSelection();
-    useCanvasStore.getState().toggleSelection('b');
+    useCanvasStore.getState().setFocusedImages(['a']);
+    useCanvasStore.getState().setFocusedImages(['b'], true);
     useCanvasStore.getState().setFocusedImage('c');
     useCanvasStore.getState().setViewport({ panX: 20, panY: 30, zoom: 2 });
     useCanvasStore.getState().zoomIn();
@@ -273,23 +253,22 @@ describe('useCanvasStore', () => {
 
   it('auto-focuses first ready image only when no focus exists', () => {
     useCanvasStore.getState().addImage(makeImage('pending', 'pending'));
-    expect(useCanvasStore.getState().focusedImageId).toBeNull();
+    expect(useCanvasStore.getState().focusedImageIds).toEqual([]);
 
     useCanvasStore.getState().addImage(makeImage('ready'));
-    expect(useCanvasStore.getState().focusedImageId).toBe('ready');
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['ready']);
 
     useCanvasStore.getState().addImage(makeImage('later'));
-    expect(useCanvasStore.getState().focusedImageId).toBe('ready');
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['ready']);
   });
 
-  it('deleteImages removes multiple images and clears deleted focus', () => {
+  it('deleteImages removes multiple images and prunes deleted focus', () => {
     useCanvasStore.getState().addImages([makeImage('a'), makeImage('b'), makeImage('c')]);
-    useCanvasStore.setState({ selectedImageIds: ['a', 'b', 'c'], focusedImageId: 'b' } satisfies Partial<CanvasState>);
+    useCanvasStore.setState({ focusedImageIds: ['a', 'b', 'c'] } satisfies Partial<CanvasState>);
 
     useCanvasStore.getState().deleteImages(['a', 'b']);
 
     expect(useCanvasStore.getState().imageOrder).toEqual(['c']);
-    expect(useCanvasStore.getState().selectedImageIds).toEqual(['c']);
-    expect(useCanvasStore.getState().focusedImageId).toBeNull();
+    expect(useCanvasStore.getState().focusedImageIds).toEqual(['c']);
   });
 });

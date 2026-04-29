@@ -14,11 +14,9 @@ interface CanvasMultiContainerProps {
 export function CanvasMultiContainer({ onDeleteImage, onRetryImage }: CanvasMultiContainerProps) {
   const images = useCanvasStore((s) => s.images);
   const imageOrder = useCanvasStore((s) => s.imageOrder);
-  const selectedImageIds = useCanvasStore((s) => s.selectedImageIds);
-  const focusedImageId = useCanvasStore((s) => s.focusedImageId);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
   const viewport = useCanvasStore((s) => s.viewport);
-  const selectImage = useCanvasStore((s) => s.selectImage);
-  const toggleSelection = useCanvasStore((s) => s.toggleSelection);
+  const setFocusedImages = useCanvasStore((s) => s.setFocusedImages);
 
   const imageBounds = useMemo(() => imageOrder.map((id) => {
     const image = images[id];
@@ -47,11 +45,9 @@ export function CanvasMultiContainer({ onDeleteImage, onRetryImage }: CanvasMult
           <CanvasImageItem
             key={id}
             image={image}
-            isFocused={focusedImageId === id}
-            isSelected={selectedImageIds.includes(id)}
+            isFocused={focusedImageIds.includes(id)}
             isVisible={visibleIds.has(id)}
-            onSelect={selectImage}
-            onCheckboxToggle={toggleSelection}
+            onFocus={(imageId, additive) => setFocusedImages([imageId], additive)}
             onDelete={onDeleteImage}
             onRetry={onRetryImage}
           />

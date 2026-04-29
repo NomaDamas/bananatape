@@ -44,10 +44,10 @@ export function useKeyboardShortcuts() {
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const canvasState = useCanvasStore.getState();
-        if (canvasState.selectedImageIds.length > 0) {
+        if (canvasState.focusedImageIds.length > 0) {
           e.preventDefault();
-          const count = canvasState.selectedImageIds.length;
-          canvasState.deleteImages(canvasState.selectedImageIds);
+          const count = canvasState.focusedImageIds.length;
+          canvasState.deleteImages(canvasState.focusedImageIds);
           showDeleteToast(count);
         }
         return;

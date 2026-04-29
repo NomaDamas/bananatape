@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, RefreshCw, X } from 'lucide-react';
+import { Loader2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { useCanvasDrawingPerImage } from '@/hooks/useCanvasDrawingPerImage';
@@ -23,10 +23,8 @@ import { DEFAULT_PLACEHOLDER_LAYOUT, type CanvasImage } from '@/types/canvas';
 interface CanvasImageItemProps {
   image: CanvasImage;
   isFocused: boolean;
-  isSelected: boolean;
   isVisible: boolean;
-  onSelect: (id: string, additive: boolean) => void;
-  onCheckboxToggle: (id: string) => void;
+  onFocus: (id: string, additive: boolean) => void;
   onDelete: (id: string) => void;
   onRetry: (id: string) => void;
 }
@@ -125,7 +123,7 @@ function ScopedMemoOverlay({ image, isFocused }: { image: CanvasImage; isFocused
   );
 }
 
-export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSelect, onCheckboxToggle, onDelete, onRetry }: CanvasImageItemProps) {
+export function CanvasImageItem({ image, isFocused, isVisible, onFocus, onDelete, onRetry }: CanvasImageItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const size = getImageSize(image);
   const activeTool = useEditorStore((s) => s.activeTool);
@@ -141,8 +139,8 @@ export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSel
       suppressClickRef.current = false;
       return;
     }
-    onSelect(image.id, event.shiftKey || event.metaKey || event.ctrlKey);
-  }, [image.id, onSelect]);
+    onFocus(image.id, event.shiftKey || event.metaKey || event.ctrlKey);
+  }, [image.id, onFocus]);
 
   const handlePointerUp = useCallback((event: React.PointerEvent) => {
     if (drag.didMove) {
@@ -153,7 +151,7 @@ export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSel
 
   const shellClass = cn(
     'group absolute overflow-hidden rounded-xl bg-[#141414] shadow-[0_18px_50px_rgba(0,0,0,0.35)] transition-shadow',
-    isFocused ? 'ring-4 ring-[#0d99ff]' : isSelected ? 'ring-2 ring-[#5bb8ff]' : 'ring-1 ring-white/10 hover:ring-white/25',
+    isFocused ? 'ring-4 ring-[#0d99ff]' : 'ring-1 ring-white/10 hover:ring-white/25',
   );
 
   const moveCursor = moveEnabled ? (drag.isDragging ? 'grabbing' : 'grab') : undefined;
@@ -216,17 +214,6 @@ export function CanvasImageItem({ image, isFocused, isSelected, isVisible, onSel
           <ScopedMemoOverlay image={image} isFocused={isFocused} />
         </>
       )}
-
-      <label
-        className="absolute left-2 top-2 z-40 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 has-[:checked]:opacity-100"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        <input type="checkbox" className="peer sr-only" checked={isSelected} onChange={() => onCheckboxToggle(image.id)} />
-        <span className="flex h-4 w-4 items-center justify-center rounded border border-white/45 bg-black/30 peer-checked:border-[#0d99ff] peer-checked:bg-[#0d99ff]">
-          {isSelected && <Check className="h-3 w-3" />}
-        </span>
-      </label>
 
       <button
         type="button"

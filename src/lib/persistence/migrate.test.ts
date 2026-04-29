@@ -41,8 +41,7 @@ describe('migrateProjectV0ToV1', () => {
     expect(result.settings).toEqual(defaultSettings);
     expect(result.canvas.images).toEqual({});
     expect(result.canvas.imageOrder).toEqual([]);
-    expect(result.canvas.focusedImageId).toBeNull();
-    expect(result.canvas.selectedImageIds).toEqual([]);
+    expect(result.canvas.focusedImageIds).toEqual([]);
   });
 
   it('v0 with baseImage absorbs paths, boxes, memos into root image', () => {
@@ -61,8 +60,7 @@ describe('migrateProjectV0ToV1', () => {
     expect(result.canvas.imageOrder).toHaveLength(1);
 
     const id = result.canvas.imageOrder[0];
-    expect(result.canvas.focusedImageId).toBe(id);
-    expect(result.canvas.selectedImageIds).toEqual([id]);
+    expect(result.canvas.focusedImageIds).toEqual([id]);
 
     const img = result.canvas.images[id];
     expect(img.url).toBe('data:image/png;base64,abc');
@@ -112,8 +110,7 @@ describe('migrateProjectV0ToV1', () => {
       canvas: {
         images: {},
         imageOrder: [],
-        focusedImageId: null,
-        selectedImageIds: [],
+        focusedImageIds: [],
       },
     };
 
@@ -148,15 +145,14 @@ describe('migrateProjectV0ToV1', () => {
       canvas: {
         images: { 'existing-id': existingImage },
         imageOrder: ['existing-id'],
-        focusedImageId: 'existing-id',
-        selectedImageIds: ['existing-id'],
+        focusedImageIds: ['existing-id'],
       },
     };
 
     const result = migrateProjectV0ToV1(v1Input);
     expect(result.canvas.images['existing-id']).toEqual(existingImage);
     expect(result.canvas.imageOrder).toEqual(['existing-id']);
-    expect(result.canvas.focusedImageId).toBe('existing-id');
+    expect(result.canvas.focusedImageIds).toEqual(['existing-id']);
   });
 
   it('no baseImage but has paths produces empty canvas (orphaned paths ignored)', () => {
@@ -170,7 +166,7 @@ describe('migrateProjectV0ToV1', () => {
 
     expect(result.canvas.images).toEqual({});
     expect(result.canvas.imageOrder).toEqual([]);
-    expect(result.canvas.focusedImageId).toBeNull();
+    expect(result.canvas.focusedImageIds).toEqual([]);
   });
 
   it('null input returns empty v1', () => {
@@ -179,8 +175,7 @@ describe('migrateProjectV0ToV1', () => {
     expect(result.canvas).toEqual({
       images: {},
       imageOrder: [],
-      focusedImageId: null,
-      selectedImageIds: [],
+      focusedImageIds: [],
     });
   });
 
@@ -210,8 +205,7 @@ describe('migrateProjectV0ToV1', () => {
     expect(twice.schemaVersion).toBe(1);
     expect(twice.settings).toEqual(once.settings);
     expect(twice.canvas.imageOrder).toEqual(once.canvas.imageOrder);
-    expect(twice.canvas.focusedImageId).toBe(once.canvas.focusedImageId);
-    expect(twice.canvas.selectedImageIds).toEqual(once.canvas.selectedImageIds);
+    expect(twice.canvas.focusedImageIds).toEqual(once.canvas.focusedImageIds);
     expect(Object.keys(twice.canvas.images)).toEqual(Object.keys(once.canvas.images));
 
     const onceId = once.canvas.imageOrder[0];
