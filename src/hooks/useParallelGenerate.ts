@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
+import { useCanvasExport } from '@/hooks/useCanvasExport';
 import {
   abortAllGenerations,
   abortGeneration,
@@ -121,7 +122,7 @@ function createChildPlaceholders(input: {
     generationIndex: index,
     prompt: input.userPrompt,
     provider: input.provider,
-    type: 'generate' as const,
+    type: 'edit' as const,
     createdAt: input.createdAt,
     paths: [],
     boxes: [],
@@ -176,8 +177,15 @@ function appendReferenceImages(formData: FormData, referenceImages: { file: File
   });
 }
 
+function appendEditImages(formData: FormData, referenceImages: { file: File; id: string }[]): void {
+  referenceImages.forEach((reference, index) => {
+    formData.append('images', reference.file, `reference-${index}-${reference.file.name}`);
+  });
+}
+
 export function useParallelGenerate(): UseParallelGenerateApi {
   const activeImageIdsRef = useRef<Set<string>>(new Set());
+  const { exportImageWithAnnotations, resizeToSquare1024 } = useCanvasExport();
 
   const generate = useCallback(async (input: ParallelGenerateInput) => {
     const count = clampCount(input.count);
@@ -212,17 +220,30 @@ export function useParallelGenerate(): UseParallelGenerateApi {
 
     const fanOut = placeholders.map(async (placeholder) => {
       const handle = registerGeneration(placeholder.id);
-      const formData = new FormData();
-      formData.append('prompt', submittedPrompt);
-      formData.append('provider', placeholder.provider);
-      appendReferenceImages(formData, referenceImages);
 
       try {
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          body: formData,
-          signal: handle.signal,
-        });
+        const formData = new FormData();
+        formData.append('prompt', submittedPrompt);
+        formData.append('provider', placeholder.provider);
+
+        let endpoint = '/api/generate';
+        if (placeholder.parentId) {
+          endpoint = '/api/edit';
+          formData.append('parentId', placeholder.parentId);
+          const exported = await exportImageWithAnnotations(placeholder.parentId);
+          const shouldResize = placeholder.provider === 'openai';
+          const original = shouldResize ? await resizeToSquare1024(exported.original) : exported.original;
+          const annotated = shouldResize ? await resizeToSquare1024(exported.annotated) : exported.annotated;
+          const mask = shouldResize ? await resizeToSquare1024(exported.mask) : exported.mask;
+          formData.append('images', original, 'original.png');
+          formData.append('images', annotated, 'annotated.png');
+          appendEditImages(formData, referenceImages);
+          formData.append('maskImage', mask, 'mask.png');
+        } else {
+          appendReferenceImages(formData, referenceImages);
+        }
+
+        const response = await fetch(endpoint, { method: 'POST', body: formData, signal: handle.signal });
         const data = await parseGenerateResponse(response);
         if (!isLatest(placeholder.id, handle.requestId)) return;
 
@@ -242,7 +263,7 @@ export function useParallelGenerate(): UseParallelGenerateApi {
           imageId: placeholder.id,
           prompt: userPrompt,
           provider: placeholder.provider,
-          type: 'generate',
+          type: placeholder.type,
           imageDataUrl: data.imageDataUrl,
           assetId: data.assetId,
           assetUrl: data.assetUrl,
@@ -261,7 +282,7 @@ export function useParallelGenerate(): UseParallelGenerateApi {
     });
 
     await Promise.allSettled(fanOut);
-  }, []);
+  }, [exportImageWithAnnotations, resizeToSquare1024]);
 
   const cancel = useCallback((imageId: string) => {
     abortGeneration(imageId);

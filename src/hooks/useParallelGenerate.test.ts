@@ -16,6 +16,15 @@ import {
 } from '@/types/canvas';
 import type { UseParallelGenerateApi } from './useParallelGenerate';
 
+const canvasExportMocks = vi.hoisted(() => ({
+  exportImageWithAnnotations: vi.fn(),
+  resizeToSquare1024: vi.fn(),
+}));
+
+vi.mock('@/hooks/useCanvasExport', () => ({
+  useCanvasExport: () => canvasExportMocks,
+}));
+
 interface DeferredResponse {
   response: Promise<Response>;
   resolve(data: GeneratePayload, init?: { ok?: boolean; status?: number }): void;
@@ -161,16 +170,58 @@ function resolveSuccesses(calls: FetchCall[]) {
   });
 }
 
+function makeBlob(label: string): Blob {
+  return new Blob([label], { type: 'image/png' });
+}
+
+function makeReference(name: string): { file: File; id: string } {
+  return { file: new File([name], name, { type: 'image/png' }), id: name };
+}
+
+function defaultExportBlobs(id = 'parent') {
+  return {
+    original: makeBlob(`${id}-original`),
+    annotated: makeBlob(`${id}-annotated`),
+    mask: makeBlob(`${id}-mask`),
+    size: { width: 300, height: 200 },
+  };
+}
+
+function flushPromises(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
   __test_resetRegistry();
   useCanvasStore.getState().resetCanvas();
   useHistoryStore.getState().clearHistory();
   useEditorStore.getState().setProvider('openai');
+  canvasExportMocks.exportImageWithAnnotations.mockReset();
+  canvasExportMocks.resizeToSquare1024.mockReset();
+  canvasExportMocks.exportImageWithAnnotations.mockImplementation((imageId: string) => Promise.resolve(defaultExportBlobs(imageId)));
+  canvasExportMocks.resizeToSquare1024.mockImplementation((blob: Blob) => Promise.resolve(blob));
   mockImageConstructor();
 });
 
 describe('useParallelGenerate', () => {
+  it('keeps root generation on /api/generate without edit requests', async () => {
+    const { calls, fetchMock } = createFetchMock();
+    const result = renderUseParallelGenerate();
+
+    const generatePromise = result.current.generate({ count: 2, prompt: 'root only', rootOrigin: { x: 5, y: 6 } });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(calls.map((call) => call.input)).toEqual(['/api/generate', '/api/generate']);
+    expect(calls.some((call) => call.input === '/api/edit')).toBe(false);
+    expect(canvasExportMocks.exportImageWithAnnotations).not.toHaveBeenCalled();
+
+    resolveSuccesses(calls);
+    await generatePromise;
+  });
+
   it('fires three root requests and updates placeholders to ready as each completes', async () => {
     const { calls, fetchMock } = createFetchMock();
     const result = renderUseParallelGenerate();
@@ -210,6 +261,7 @@ describe('useParallelGenerate', () => {
     const placeholders = getImages().slice(2);
     expect(placeholders).toHaveLength(6);
     expect(placeholders.map((image) => image.parentId)).toEqual(['a', 'a', 'a', 'b', 'b', 'b']);
+    expect(placeholders.map((image) => image.type)).toEqual(['edit', 'edit', 'edit', 'edit', 'edit', 'edit']);
     expect(placeholders.map((image) => image.position)).toEqual([
       { x: 100, y: 200 + 250 + PARENT_CHILD_VERTICAL_GAP },
       { x: 100, y: 200 + 250 + PARENT_CHILD_VERTICAL_GAP + DEFAULT_PLACEHOLDER_LAYOUT.height + CHILD_VERTICAL_STACK_GAP },
@@ -219,8 +271,94 @@ describe('useParallelGenerate', () => {
       { x: 500, y: 600 + 180 + PARENT_CHILD_VERTICAL_GAP + 2 * (DEFAULT_PLACEHOLDER_LAYOUT.height + CHILD_VERTICAL_STACK_GAP) },
     ]);
 
+    await flushPromises();
     resolveSuccesses(calls);
     await generatePromise;
+  });
+
+  it('sends one selected parent through /api/edit for every requested child', async () => {
+    const { calls } = createFetchMock();
+    const parent = makeParent('p1', { x: 100, y: 200 });
+    useCanvasStore.getState().addImages([parent]);
+    const result = renderUseParallelGenerate();
+
+    const generatePromise = result.current.generate({
+      count: 2,
+      prompt: 'edit parent',
+      parentIds: ['p1'],
+      referenceImages: [makeReference('ref.png')],
+    });
+    await flushPromises();
+
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => call.input)).toEqual(['/api/edit', '/api/edit']);
+    expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenCalledTimes(2);
+    expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenNthCalledWith(1, 'p1');
+    expect(canvasExportMocks.resizeToSquare1024).toHaveBeenCalledTimes(6);
+
+    calls.forEach((call) => {
+      const body = call.init?.body;
+      expect(body).toBeInstanceOf(FormData);
+      const formData = body as FormData;
+      expect(formData.get('parentId')).toBe('p1');
+      expect(formData.getAll('images')).toHaveLength(3);
+      expect(formData.get('maskImage')).toBeInstanceOf(File);
+      expect(formData.get('provider')).toBe('openai');
+    });
+
+    resolveSuccesses(calls);
+    await generatePromise;
+
+    const children = getImages().slice(1);
+    expect(children.map((image) => image.status)).toEqual(['ready', 'ready']);
+    expect(useHistoryStore.getState().entries.map((entry) => entry.type)).toEqual(['edit', 'edit']);
+    expect(useHistoryStore.getState().entries.map((entry) => entry.parentId)).toEqual(['p1', 'p1']);
+  });
+
+  it('fans out multiple parents through /api/edit with each parent id', async () => {
+    const { calls } = createFetchMock();
+    useCanvasStore.getState().addImages([
+      makeParent('p1', { x: 0, y: 0 }),
+      makeParent('p2', { x: 400, y: 0 }),
+    ]);
+    const result = renderUseParallelGenerate();
+
+    const generatePromise = result.current.generate({ count: 2, prompt: 'multi edit', parentIds: ['p1', 'p2'] });
+    await flushPromises();
+
+    expect(calls).toHaveLength(4);
+    expect(calls.map((call) => call.input)).toEqual(['/api/edit', '/api/edit', '/api/edit', '/api/edit']);
+    expect(calls.map((call) => (call.init?.body as FormData).get('parentId'))).toEqual(['p1', 'p1', 'p2', 'p2']);
+
+    resolveSuccesses(calls);
+    await generatePromise;
+  });
+
+  it('keeps one parent export failure isolated while other parent edits continue', async () => {
+    const { calls } = createFetchMock();
+    useCanvasStore.getState().addImages([
+      makeParent('p1', { x: 0, y: 0 }),
+      makeParent('p2', { x: 400, y: 0 }),
+    ]);
+    canvasExportMocks.exportImageWithAnnotations.mockImplementation((imageId: string) => {
+      if (imageId === 'p1') return Promise.reject(new Error('parent pixels missing'));
+      return Promise.resolve(defaultExportBlobs(imageId));
+    });
+    const result = renderUseParallelGenerate();
+
+    const generatePromise = result.current.generate({ count: 2, prompt: 'mixed parent export', parentIds: ['p1', 'p2'] });
+    await flushPromises();
+
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => (call.init?.body as FormData).get('parentId'))).toEqual(['p2', 'p2']);
+    resolveSuccesses(calls);
+    await generatePromise;
+
+    const children = getImages().slice(2);
+    expect(children.map((image) => image.parentId)).toEqual(['p1', 'p1', 'p2', 'p2']);
+    expect(children.map((image) => image.status)).toEqual(['error', 'error', 'ready', 'ready']);
+    expect(children[0].error).toBe('parent pixels missing');
+    expect(children[1].error).toBe('parent pixels missing');
   });
 
   it('marks one failed placeholder as error while others succeed', async () => {
@@ -246,6 +384,24 @@ describe('useParallelGenerate', () => {
     const placeholderId = getImages()[0].id;
     registerGeneration(placeholderId);
     calls[0].deferred.resolve({ imageDataUrl: 'data:image/png;base64,stale' });
+    await generatePromise;
+
+    const image = useCanvasStore.getState().images[placeholderId];
+    expect(image.status).toBe('pending');
+    expect(image.url).toBe('');
+    expect(useHistoryStore.getState().entries).toHaveLength(0);
+  });
+
+  it('drops a stale edit response after a newer registration for the same child image', async () => {
+    const { calls } = createFetchMock();
+    useCanvasStore.getState().addImages([makeParent('p1', { x: 0, y: 0 })]);
+    const result = renderUseParallelGenerate();
+
+    const generatePromise = result.current.generate({ count: 1, prompt: 'stale edit', parentIds: ['p1'] });
+    await flushPromises();
+    const placeholderId = getImages()[1].id;
+    registerGeneration(placeholderId);
+    calls[0].deferred.resolve({ imageDataUrl: 'data:image/png;base64,stale-edit' });
     await generatePromise;
 
     const image = useCanvasStore.getState().images[placeholderId];

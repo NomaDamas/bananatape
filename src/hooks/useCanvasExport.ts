@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { overlayAnnotations } from '@/lib/canvas/annotate';
 import { generateMask } from '@/lib/canvas/mask';
 
@@ -96,5 +97,51 @@ export function useCanvasExport() {
     return canvasToBlob(canvas);
   }, [paths, boxes, imageSize]);
 
-  return { exportAnnotatedImage, exportMask, resizeToSquare1024 };
+  const exportImageWithAnnotations = useCallback(async (imageId: string): Promise<{
+    original: Blob;
+    annotated: Blob;
+    mask: Blob;
+    size: { width: number; height: number };
+  }> => {
+    const image = useCanvasStore.getState().images[imageId];
+    if (!image) {
+      throw new Error(`Canvas image ${imageId} was not found`);
+    }
+    if (!image.url) {
+      throw new Error(`Canvas image ${imageId} does not have source pixels`);
+    }
+
+    const response = await fetch(image.url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pixels for canvas image ${imageId}`);
+    }
+
+    const original = await response.blob();
+    const baseImage = await loadImageFromBlob(original);
+    const naturalSize = image.size.width > 0 && image.size.height > 0
+      ? image.size
+      : { width: baseImage.naturalWidth, height: baseImage.naturalHeight };
+
+    const annotatedCanvas = overlayAnnotations({
+      baseImage,
+      paths: image.paths,
+      boxes: image.boxes,
+      memos: image.memos,
+      naturalSize,
+    });
+    const maskCanvas = generateMask({
+      paths: image.paths,
+      boxes: image.boxes,
+      naturalSize,
+    });
+
+    return {
+      original,
+      annotated: await canvasToBlob(annotatedCanvas),
+      mask: await canvasToBlob(maskCanvas),
+      size: naturalSize,
+    };
+  }, []);
+
+  return { exportAnnotatedImage, exportMask, exportImageWithAnnotations, resizeToSquare1024 };
 }
