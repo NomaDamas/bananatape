@@ -17,6 +17,7 @@ import { SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-i
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
+import { LIVE2D_DEFAULT_USER_PROMPT } from '@/lib/live2d/contract';
 import type { Live2DHiddenAreaNote } from '@/lib/live2d/contract';
 import type { Provider } from '@/types';
 
@@ -362,7 +363,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const buildSubmittedPrompt = useCallback((fallbackPrompt?: string) => {
-    const trimmedPrompt = prompt.trim() || fallbackPrompt?.trim() || '';
+    const trimmedPrompt = prompt.trim() || fallbackPrompt?.trim() || (live2dEnabled ? LIVE2D_DEFAULT_USER_PROMPT : '');
     const trimmedSystemPrompt = systemPrompt.trim();
     const trimmedDesignContext = designContext.trim();
 
@@ -379,7 +380,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     }
     sections.push(`User prompt:\n${trimmedPrompt}`);
     return sections.join('\n\n');
-  }, [designContext, prompt, systemPrompt]);
+  }, [designContext, live2dEnabled, prompt, systemPrompt]);
 
   const appendReferenceImages = useCallback((formData: FormData, fieldName: 'images' | 'referenceImages') => {
     referenceImages.forEach((reference, index) => {
@@ -401,7 +402,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   }, [addToast, provider, referenceImages.length]);
 
   const handleGenerate = useCallback(async () => {
-    const submittedPrompt = prompt.trim();
+    const submittedPrompt = prompt.trim() || (live2dEnabled ? LIVE2D_DEFAULT_USER_PROMPT : '');
     if (!submittedPrompt || isGenerating) return;
     if (!validateOpenAIReferenceCount()) return;
     setMode('generate');
@@ -438,7 +439,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
           imageDataUrl: data.imageDataUrl,
           assetId: data.assetId,
           assetUrl: data.assetUrl,
-          prompt,
+          prompt: prompt.trim() || LIVE2D_DEFAULT_USER_PROMPT,
           provider,
           type: 'generate',
         });
@@ -460,6 +461,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     buildSubmittedPrompt,
     clearPromptComposer,
     isGenerating,
+    live2dEnabled,
     prompt,
     provider,
     referenceImages.length,
@@ -542,6 +544,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     exportMask,
     hasAnnotations,
     isGenerating,
+    live2dEnabled,
     prompt,
     provider,
     resizeToSquare1024,

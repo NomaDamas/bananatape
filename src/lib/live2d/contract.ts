@@ -9,6 +9,13 @@ Separate these transparent-friendly parts with visible spacing: head base, face 
 Draw hidden areas that would be covered in the final character, including face under bangs, torso under arms, neck under head, eye areas under eyelids, and mouth interior.
 Do not claim automatic rigging or .moc3 generation.`;
 
+
+export const LIVE2D_DEFAULT_USER_PROMPT = `Use the attached reference image(s) to create a Live2D-ready part sheet for the same character.
+Preserve the character identity, palette, outfit, and face design from the references.
+Output one clean front-facing upper-body preview plus clearly separated transparent-friendly parts for every required Live2D layer.
+Include hidden/covered areas needed for rigging: face under bangs, torso under arms, neck under head, eyelid-covered eye areas, and mouth interior.
+Keep all parts spaced apart, unmerged, and easy to bbox annotate in BananaTape.`;
+
 export type Live2DAnnotationKind = 'bbox' | 'memo' | 'path';
 
 export interface Live2DNormalizedBBox {
