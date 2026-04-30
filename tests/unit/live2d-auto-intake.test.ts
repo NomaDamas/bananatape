@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIVE2D_REFERENCE_SHEET_PARTS, proposeReferenceSheetGridAnnotations } from '@/lib/live2d/auto-intake';
+import { createLive2DAutoIntake, LIVE2D_REFERENCE_SHEET_PARTS, proposeReferenceSheetGridAnnotations, shouldAutoIntakeLive2D } from '@/lib/live2d/auto-intake';
 
 describe('Live2D reference sheet auto-intake', () => {
   it('exposes the stable 26-part reference-sheet taxonomy', () => {
@@ -63,6 +63,21 @@ describe('Live2D reference sheet auto-intake', () => {
     });
     expect(annotations.every((annotation) => annotation.bbox && annotation.bbox.x >= 0.5 && annotation.bbox.x + annotation.bbox.width <= 1)).toBe(true);
     expect(annotations.every((annotation) => annotation.note?.includes('Review required'))).toBe(true);
+  });
+
+  it('wraps proposals in a review-required auto-intake result', () => {
+    const result = createLive2DAutoIntake({ imageWidth: 1536, imageHeight: 1024 });
+
+    expect(result.reviewRequired).toBe(true);
+    expect(result.annotations).toHaveLength(26);
+    expect(result.detectedParts).toContain('front_hair');
+    expect(result.scopeNote).toContain('does not create a rigged Cubism model');
+  });
+
+  it('detects Live2D-oriented prompts without requiring a separate user action', () => {
+    expect(shouldAutoIntakeLive2D('Create a Live2D reference sheet with separated parts', false)).toBe(true);
+    expect(shouldAutoIntakeLive2D('평범한 포스터 생성', false)).toBe(false);
+    expect(shouldAutoIntakeLive2D('anything', true)).toBe(true);
   });
 
   it('fails clearly for invalid image sizes instead of guessing', () => {

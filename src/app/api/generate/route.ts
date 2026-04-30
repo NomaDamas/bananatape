@@ -3,6 +3,8 @@ import { persistImageResult } from '@/lib/projects/asset-store';
 import { hasActiveProject, requireProjectSession } from '@/lib/projects/session';
 import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { editImage as openaiEdit, generateImage as openaiGenerate } from '../../../lib/providers/openai-provider';
+import { shouldAutoIntakeLive2D } from '@/lib/live2d/auto-intake';
+import { readProjectSettings, writeLive2DAutoIntakeManifest } from '@/lib/projects/metadata-store';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
 const OPENAI_MAX_INPUT_IMAGES = 16;
@@ -103,6 +105,28 @@ export async function POST(request: Request) {
       response.assetId = persisted.historyEntry.assetId;
       response.assetUrl = persisted.assetUrl;
       response.metadata = persisted.historyEntry;
+      try {
+        const settings = await readProjectSettings(projectSession.projectRoot);
+        if (shouldAutoIntakeLive2D(prompt, settings.live2d.enabled)) {
+          const autoIntake = await writeLive2DAutoIntakeManifest(projectSession.projectRoot, {
+            selectedHistoryEntryId: persisted.historyEntry.id,
+            imageWidth: 1536,
+            imageHeight: 1024,
+          });
+          response.live2dAutoIntake = {
+            annotationCount: autoIntake.annotationCount,
+            detectedParts: autoIntake.detectedParts,
+            reviewRequired: autoIntake.reviewRequired,
+            scopeNote: autoIntake.scopeNote,
+            message: `Live2D intake draft created: ${autoIntake.annotationCount} candidate part boxes. Review labels before export.`,
+          };
+        }
+      } catch (autoIntakeError) {
+        response.live2dAutoIntake = {
+          error: autoIntakeError instanceof Error ? autoIntakeError.message : 'Live2D auto-intake failed',
+          message: 'Image generated, but Live2D auto-intake failed. You can annotate boxes manually.',
+        };
+      }
     }
 
     return NextResponse.json(response);

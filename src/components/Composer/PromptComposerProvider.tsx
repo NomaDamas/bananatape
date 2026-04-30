@@ -408,7 +408,11 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         setBaseImage(data.assetUrl ?? data.imageDataUrl, { width: 0, height: 0 });
         setMode('edit');
         clearPromptComposer();
-        addToast('Image generated successfully', 'success');
+        if (data.live2dAutoIntake?.message) {
+          addToast(data.live2dAutoIntake.message, data.live2dAutoIntake.error ? 'error' : 'success');
+        } else {
+          addToast('Image generated successfully', 'success');
+        }
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Generation failed';

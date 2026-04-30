@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, open } from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { Provider } from '@/types';
+import { createLive2DAutoIntake } from '@/lib/live2d/auto-intake';
 import { buildLive2DManifest, buildLive2DSystemPrompt, type Live2DManifest } from '@/lib/live2d/contract';
 import { createEmptyHistory, createEmptyProjectSettings, HISTORY_SCHEMA_VERSION, isProjectHistory, normalizeProjectSettings, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectReferenceImage, type ProjectResultType, type ProjectSettings, type ProjectSettingsPatch } from './schema';
 import { ensureProjectDirectories, getHistoryPath, getLive2DManifestPath, getManifestPath } from './paths';
@@ -131,18 +132,26 @@ export async function enableLive2DMode(projectRoot: string): Promise<ProjectSett
   return normalizeProjectSettings(manifest.settings);
 }
 
+async function selectLive2DHistoryEntry(
+  projectRoot: string,
+  selectedHistoryEntryId: string | null | undefined,
+): Promise<{ manifest: ProjectManifest; settings: ProjectSettings; selectedEntry: ProjectHistoryEntry }> {
+  const [manifest, history] = await Promise.all([
+    readProjectManifest(projectRoot),
+    readProjectHistory(projectRoot),
+  ]);
+  const settings = normalizeProjectSettings(manifest.settings);
+  const selectedId = selectedHistoryEntryId ?? settings.live2d.selectedHistoryEntryId ?? history.entries[0]?.id;
+  const selectedEntry = history.entries.find((entry) => entry.id === selectedId);
+  if (!selectedEntry) {
+    throw new Error('No selected BananaTape history entry is available for Live2D export');
+  }
+  return { manifest, settings, selectedEntry };
+}
+
 export async function writeLive2DManifest(projectRoot: string, selectedHistoryEntryId?: string | null): Promise<Live2DManifest> {
   return withProjectLock(projectRoot, async () => {
-    const [manifest, history] = await Promise.all([
-      readProjectManifest(projectRoot),
-      readProjectHistory(projectRoot),
-    ]);
-    const settings = normalizeProjectSettings(manifest.settings);
-    const selectedId = selectedHistoryEntryId ?? settings.live2d.selectedHistoryEntryId ?? history.entries[0]?.id;
-    const selectedEntry = history.entries.find((entry) => entry.id === selectedId);
-    if (!selectedEntry) {
-      throw new Error('No selected BananaTape history entry is available for Live2D export');
-    }
+    const { manifest, settings, selectedEntry } = await selectLive2DHistoryEntry(projectRoot, selectedHistoryEntryId);
     const live2dManifest = buildLive2DManifest({ selectedEntry });
     await atomicWriteJson(getLive2DManifestPath(projectRoot), live2dManifest);
     await atomicWriteJson(getManifestPath(projectRoot), {
@@ -157,6 +166,46 @@ export async function writeLive2DManifest(projectRoot: string, selectedHistoryEn
       updatedAt: new Date().toISOString(),
     });
     return live2dManifest;
+  });
+}
+
+export async function writeLive2DAutoIntakeManifest(
+  projectRoot: string,
+  options: {
+    selectedHistoryEntryId?: string | null;
+    imageWidth: number;
+    imageHeight: number;
+  },
+): Promise<{ manifest: Live2DManifest; annotationCount: number; detectedParts: string[]; reviewRequired: true; scopeNote: string }> {
+  return withProjectLock(projectRoot, async () => {
+    const { manifest, settings, selectedEntry } = await selectLive2DHistoryEntry(projectRoot, options.selectedHistoryEntryId);
+    const intake = createLive2DAutoIntake({ imageWidth: options.imageWidth, imageHeight: options.imageHeight });
+    const live2dManifest = buildLive2DManifest({
+      selectedEntry,
+      annotations: intake.annotations,
+      hiddenAreaNotes: intake.annotations
+        .filter((annotation) => annotation.part && annotation.hiddenArea)
+        .map((annotation) => ({ part: annotation.part as string, note: annotation.hiddenArea as string })),
+    });
+    await atomicWriteJson(getLive2DManifestPath(projectRoot), live2dManifest);
+    await atomicWriteJson(getManifestPath(projectRoot), {
+      ...manifest,
+      settings: {
+        ...settings,
+        live2d: {
+          enabled: true,
+          selectedHistoryEntryId: selectedEntry.id,
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      manifest: live2dManifest,
+      annotationCount: intake.annotations.length,
+      detectedParts: intake.detectedParts,
+      reviewRequired: intake.reviewRequired,
+      scopeNote: intake.scopeNote,
+    };
   });
 }
 

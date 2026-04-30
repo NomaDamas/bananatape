@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dataUrlToBuffer, persistImageResult, readAsset } from '@/lib/projects/asset-store';
-import { appendProjectReference, createProject, enableLive2DMode, readProjectHistory, readProjectManifest, readProjectSettings, removeProjectReference, updateProjectSettings, writeLive2DManifest } from '@/lib/projects/metadata-store';
+import { appendProjectReference, createProject, enableLive2DMode, readProjectHistory, readProjectManifest, readProjectSettings, removeProjectReference, updateProjectSettings, writeLive2DAutoIntakeManifest, writeLive2DManifest } from '@/lib/projects/metadata-store';
 import { assertProjectRelativePath, resolveInsideProject } from '@/lib/projects/paths';
 import { assertValidAssetId, assertValidProjectId, slugifyProjectName } from '@/lib/projects/validate';
 
@@ -111,6 +111,39 @@ describe('project metadata and asset persistence', () => {
     });
 
     const manifestFile = JSON.parse(await readFile(path.join(projectRoot, 'live2d', 'manifest.json'), 'utf8'));
+    expect(manifestFile.selected.historyEntryId).toBe(persisted.historyEntry.id);
+    await expect(readProjectSettings(projectRoot)).resolves.toMatchObject({
+      live2d: { enabled: true, selectedHistoryEntryId: persisted.historyEntry.id },
+    });
+  });
+
+  it('writes Live2D auto-intake candidate annotations for the selected generated sheet', async () => {
+    const projectRoot = await tempProjectRoot();
+    await createProject(projectRoot, 'Live2D Auto Intake Test');
+
+    const persisted = await persistImageResult({
+      projectRoot,
+      imageDataUrl: PNG_1X1,
+      prompt: 'Live2D reference sheet with separated parts',
+      provider: 'god-tibo',
+      type: 'generate',
+    });
+
+    const result = await writeLive2DAutoIntakeManifest(projectRoot, {
+      selectedHistoryEntryId: persisted.historyEntry.id,
+      imageWidth: 1536,
+      imageHeight: 1024,
+    });
+
+    expect(result.reviewRequired).toBe(true);
+    expect(result.annotationCount).toBe(26);
+    expect(result.detectedParts).toContain('front_hair');
+    expect(result.manifest.annotations).toHaveLength(26);
+    expect(result.manifest.hiddenAreaNotes.length).toBeGreaterThan(0);
+    expect(result.scopeNote).toContain('does not create a rigged Cubism model');
+
+    const manifestFile = JSON.parse(await readFile(path.join(projectRoot, 'live2d', 'manifest.json'), 'utf8'));
+    expect(manifestFile.annotations).toHaveLength(26);
     expect(manifestFile.selected.historyEntryId).toBe(persisted.historyEntry.id);
     await expect(readProjectSettings(projectRoot)).resolves.toMatchObject({
       live2d: { enabled: true, selectedHistoryEntryId: persisted.historyEntry.id },

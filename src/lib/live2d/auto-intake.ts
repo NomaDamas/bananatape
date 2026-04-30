@@ -12,6 +12,13 @@ export interface ReferenceSheetGridOptions {
   imageHeight: number;
 }
 
+export interface Live2DAutoIntakeResult {
+  annotations: Live2DAnnotation[];
+  detectedParts: string[];
+  reviewRequired: true;
+  scopeNote: string;
+}
+
 export const LIVE2D_REFERENCE_SHEET_PARTS: readonly Live2DReferenceSheetPart[] = [
   { number: 1, part: 'head_base', label: '01 head base', hiddenArea: 'face under bangs and jaw overlap' },
   { number: 2, part: 'face_base', label: '02 face without hair/eyes/mouth', hiddenArea: 'face under bangs' },
@@ -59,6 +66,17 @@ function assertValidImageSize({ imageWidth, imageHeight }: ReferenceSheetGridOpt
   }
 }
 
+export function shouldAutoIntakeLive2D(prompt: string, live2dEnabled: boolean): boolean {
+  if (live2dEnabled) return true;
+  const normalized = prompt.toLowerCase();
+  return normalized.includes('live2d') && (
+    normalized.includes('part sheet')
+    || normalized.includes('reference sheet')
+    || normalized.includes('separated parts')
+    || normalized.includes('파츠')
+  );
+}
+
 export function proposeReferenceSheetGridAnnotations(options: ReferenceSheetGridOptions): Live2DAnnotation[] {
   assertValidImageSize(options);
 
@@ -87,4 +105,14 @@ export function proposeReferenceSheetGridAnnotations(options: ReferenceSheetGrid
       note: 'Deterministic Live2D reference-sheet candidate box. Review required before export or rigging.',
     } satisfies Live2DAnnotation;
   });
+}
+
+export function createLive2DAutoIntake(options: ReferenceSheetGridOptions): Live2DAutoIntakeResult {
+  const annotations = proposeReferenceSheetGridAnnotations(options);
+  return {
+    annotations,
+    detectedParts: annotations.map((annotation) => annotation.part).filter((part): part is string => Boolean(part)),
+    reviewRequired: true,
+    scopeNote: 'Auto-intake creates candidate Live2D part boxes only. Review is required; this does not create a rigged Cubism model or .moc3.',
+  };
 }
