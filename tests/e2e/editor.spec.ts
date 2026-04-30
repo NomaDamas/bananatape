@@ -786,6 +786,53 @@ test.describe('BananaTape Editor', () => {
     expect(parseFloat(panY!)).toBeGreaterThan(20);
   });
 
+  test('undo and redo restore completed pan drags', async ({ page, browserName }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('pan undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=pan undo test').first()).toBeVisible();
+
+    const wrapper = page.locator('[data-testid="transform-wrapper"]');
+    const canvas = page.locator('[data-testid="canvas-container"]');
+
+    await expect(wrapper).toHaveAttribute('data-pan-x', '0');
+
+    await canvas.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + 100;
+      const y = rect.top + 100;
+      el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, bubbles: true, pointerType: 'mouse', button: 0, buttons: 1, isPrimary: true, pointerId: 1 }));
+    });
+    await canvas.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + 100;
+      const y = rect.top + 100;
+      el.dispatchEvent(new PointerEvent('pointermove', { clientX: x + 100, clientY: y + 50, bubbles: true, pointerType: 'mouse', button: 0, buttons: 1, isPrimary: true, pointerId: 1 }));
+    });
+    await canvas.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + 100;
+      const y = rect.top + 100;
+      el.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 100, clientY: y + 50, bubbles: true, pointerType: 'mouse', button: 0, buttons: 0, isPrimary: true, pointerId: 1 }));
+    });
+
+    const movedPanX = await wrapper.getAttribute('data-pan-x');
+    const movedPanY = await wrapper.getAttribute('data-pan-y');
+    expect(parseFloat(movedPanX!)).toBeGreaterThan(50);
+    expect(parseFloat(movedPanY!)).toBeGreaterThan(20);
+    await expect(page.getByRole('button', { name: 'Undo' }).first()).toBeEnabled();
+
+    const modifier = browserName === 'webkit' ? 'Meta' : 'Control';
+    await page.keyboard.press(`${modifier}+Z`);
+    await expect(wrapper).toHaveAttribute('data-pan-x', '0');
+    await expect(wrapper).toHaveAttribute('data-pan-y', '0');
+    await expect(page.getByRole('button', { name: 'Redo' }).first()).toBeEnabled();
+
+    await page.keyboard.press(`${modifier}+Shift+Z`);
+    await expect(wrapper).toHaveAttribute('data-pan-x', movedPanX!);
+    await expect(wrapper).toHaveAttribute('data-pan-y', movedPanY!);
+  });
+
   test('spacebar temporarily enables panning', async ({ page }) => {
     const promptInput = getPromptInput(page);
     await promptInput.fill('space pan test');

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from 'react';
-import { useEditorStore } from '@/stores/useEditorStore';
+import { useEditorStore, useEditorTemporalStore } from '@/stores/useEditorStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,7 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Wand2, Pencil, Loader2, Download, ImagePlus, X } from 'lucide-react';
+import { Wand2, Pencil, Loader2, Download, ImagePlus, X, Undo2, Redo2 } from 'lucide-react';
 import { ToolPalette } from './ToolPalette';
 import { useDownload } from '@/hooks/useDownload';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -50,6 +50,10 @@ export function TopToolbar() {
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const canUndo = useEditorTemporalStore((s) => s.pastStates.length > 0);
+  const canRedo = useEditorTemporalStore((s) => s.futureStates.length > 0);
 
   const { downloadImage } = useDownload();
   const providers = getEnabledProviders();
@@ -69,6 +73,33 @@ export function TopToolbar() {
         <div className="w-px h-6 bg-neutral-200 dark:bg-neutral-800 mx-1" />
 
         <ToolPalette />
+
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            disabled={!canUndo}
+            onClick={undo}
+            aria-label="Undo"
+            title="Undo (Cmd/Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            disabled={!canRedo}
+            onClick={redo}
+            aria-label="Redo"
+            title="Redo (Cmd/Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </Button>
+        </div>
 
         <div className="w-px h-6 bg-neutral-200 dark:bg-neutral-800 mx-1" />
 

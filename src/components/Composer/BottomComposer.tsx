@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef } from 'react';
-import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X } from 'lucide-react';
+import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToolPalette } from '@/components/Toolbar/ToolPalette';
-import { useEditorStore } from '@/stores/useEditorStore';
+import { useEditorStore, useEditorTemporalStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { Provider } from '@/types';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
@@ -50,6 +50,10 @@ export function BottomComposer({
   const zoomIn = useEditorStore((s) => s.zoomIn);
   const zoomOut = useEditorStore((s) => s.zoomOut);
   const resetViewport = useEditorStore((s) => s.resetViewport);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const canUndo = useEditorTemporalStore((s) => s.pastStates.length > 0);
+  const canRedo = useEditorTemporalStore((s) => s.futureStates.length > 0);
 
   const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length;
   const canEdit = !!baseImage;
@@ -87,6 +91,13 @@ export function BottomComposer({
             <ToolPalette />
           </div>
           <div className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={undo} disabled={!canUndo} aria-label="Undo" title="Undo (Cmd/Ctrl+Z)">
+              <Undo2 className="h-3 w-3" />
+            </Button>
+            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title="Redo (Cmd/Ctrl+Shift+Z)">
+              <Redo2 className="h-3 w-3" />
+            </Button>
+            <div className="mx-1 h-4 w-px bg-white/10" />
             <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomOut} title="Zoom out">
               <Minus className="h-3 w-3" />
             </Button>

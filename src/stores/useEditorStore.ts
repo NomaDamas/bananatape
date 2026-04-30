@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { temporal } from 'zundo';
+import { temporal, type TemporalState } from 'zundo';
 import { devtools } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
+import { useStore } from 'zustand';
+import type { StoreApi } from 'zustand';
 import type { EditorState, BoundingBox, TextMemo, Tool, Provider, Mode, NormalizedPoint, ImageSize, StreamChunk } from './types';
 
 const MIN_ZOOM = 0.1;
@@ -29,11 +31,37 @@ interface EditorActions {
   setToolColor: (color: string) => void;
   setStrokeWidth: (width: number) => void;
   setZoom: (zoom: number) => void;
-  setPan: (panX: number, panY: number) => void;
+  setPan: (panX: number, panY: number, options?: { track?: boolean; historySnapshot?: Pick<EditorState, 'zoom' | 'panX' | 'panY'> }) => void;
+  setViewport: (viewport: { zoom?: number; panX?: number; panY?: number }, options?: { track?: boolean; historySnapshot?: Pick<EditorState, 'zoom' | 'panX' | 'panY'> }) => void;
+  undo: () => void;
+  redo: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
   resetViewport: () => void;
   setIsSpacePressed: (v: boolean) => void;
+}
+
+type UndoableEditorState = Pick<EditorState, 'paths' | 'boxes' | 'memos' | 'baseImage' | 'imageSize' | 'zoom' | 'panX' | 'panY'>;
+
+type EditorStore = EditorState & EditorActions;
+
+type EditorStoreWithTemporal = StoreApi<EditorStore> & {
+  temporal: StoreApi<TemporalState<UndoableEditorState>>;
+};
+
+const getTemporalStore = () => (useEditorStore as unknown as EditorStoreWithTemporal).temporal;
+const getTemporalState = () => getTemporalStore().getState();
+
+function withPausedHistory(update: () => void) {
+  const temporalState = getTemporalState();
+  const wasTracking = temporalState.isTracking;
+  if (wasTracking) temporalState.pause();
+  update();
+  if (wasTracking) temporalState.resume();
+}
+
+export function useEditorTemporalStore<T>(selector: (state: TemporalState<UndoableEditorState>) => T): T {
+  return useStore(getTemporalStore(), selector);
 }
 
 const initialState: EditorState = {
@@ -57,9 +85,9 @@ const initialState: EditorState = {
   isSpacePressed: false,
 };
 
-export const useEditorStore = create<EditorState & EditorActions>()(
-  temporal(
-    devtools((set) => ({
+export const useEditorStore = create<EditorStore>()(
+  temporal<EditorStore, [], [['zustand/devtools', never]], UndoableEditorState>(
+    devtools<EditorStore>((set) => ({
       ...initialState,
       setBaseImage: (url, size) => set({ baseImage: url, imageSize: size }),
       startPath: (point, tool) => set((state) => ({
@@ -108,7 +136,50 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       setToolColor: (color) => set({ toolColor: color }),
       setStrokeWidth: (width) => set({ strokeWidth: width }),
       setZoom: (zoom) => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) }),
-      setPan: (panX, panY) => set({ panX, panY }),
+      setPan: (panX, panY, options) => {
+        const update = () => set({ panX, panY });
+        if (options?.track === false) {
+          withPausedHistory(update);
+          return;
+        }
+        update();
+        if (options?.historySnapshot) {
+          const temporalStore = getTemporalStore();
+          temporalStore.setState((state) => ({
+            pastStates: [
+              ...state.pastStates.slice(0, -1),
+              {
+                ...state.pastStates.at(-1),
+                ...options.historySnapshot,
+              },
+            ],
+          }));
+        }
+      },
+      setViewport: ({ zoom, panX, panY }, options) => {
+        const update = () => set((state) => ({
+          zoom: zoom === undefined ? state.zoom : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)),
+          panX: panX === undefined ? state.panX : panX,
+          panY: panY === undefined ? state.panY : panY,
+        }));
+        if (options?.track === false) {
+          withPausedHistory(update);
+          return;
+        }
+        update();
+        if (options?.historySnapshot) {
+          const temporalStore = getTemporalStore();
+          temporalStore.setState((state) => ({
+            pastStates: [
+              ...state.pastStates.slice(0, -1),
+              {
+                ...state.pastStates.at(-1),
+                ...options.historySnapshot,
+              },
+            ],
+          }));
+        }
+      },
       zoomIn: () => set((state) => ({
         zoom: Math.min(MAX_ZOOM, state.zoom * ZOOM_STEP),
       })),
@@ -116,15 +187,20 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         zoom: Math.max(MIN_ZOOM, state.zoom / ZOOM_STEP),
       })),
       resetViewport: () => set({ zoom: 1, panX: 0, panY: 0 }),
-      setIsSpacePressed: (v) => set({ isSpacePressed: v }),
+      undo: () => getTemporalState().undo(),
+      redo: () => getTemporalState().redo(),
+      setIsSpacePressed: (v: boolean) => set({ isSpacePressed: v }),
     })),
     {
-      partialize: (state) => ({
+      partialize: (state): UndoableEditorState => ({
         paths: state.paths,
         boxes: state.boxes,
         memos: state.memos,
         baseImage: state.baseImage,
         imageSize: state.imageSize,
+        zoom: state.zoom,
+        panX: state.panX,
+        panY: state.panY,
       }),
     },
   ),
