@@ -82,6 +82,18 @@ describe('project metadata and asset persistence', () => {
   });
 
 
+  it('preserves system prompt when patching only Live2D settings', async () => {
+    const projectRoot = await tempProjectRoot();
+    await createProject(projectRoot, 'Live2D Settings Patch');
+    await updateProjectSettings(projectRoot, { systemPrompt: 'Keep my saved prompt.' });
+
+    const settings = await updateProjectSettings(projectRoot, { live2d: { enabled: true, selectedHistoryEntryId: 'entry-1' } });
+
+    expect(settings.systemPrompt).toBe('Keep my saved prompt.');
+    expect(settings.live2d).toEqual({ enabled: true, selectedHistoryEntryId: 'entry-1' });
+  });
+
+
   it('enables Live2D mode and writes a selected live2d manifest contract', async () => {
     const projectRoot = await tempProjectRoot();
     await createProject(projectRoot, 'Live2D Test');
