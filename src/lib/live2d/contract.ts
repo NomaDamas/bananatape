@@ -46,21 +46,47 @@ export interface Live2DManifest {
   hiddenAreaNotes: Live2DHiddenAreaNote[];
 }
 
+export interface Live2DPartLabel {
+  part: string;
+  label: string;
+}
+
 export interface Live2DProjectSettings {
   enabled: boolean;
   selectedHistoryEntryId?: string | null;
+  partLabels: Record<string, string>;
+  hiddenAreaNotes: Live2DHiddenAreaNote[];
 }
 
 export function createEmptyLive2DProjectSettings(): Live2DProjectSettings {
-  return { enabled: false, selectedHistoryEntryId: null };
+  return { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] };
 }
 
 export function normalizeLive2DProjectSettings(value: unknown): Live2DProjectSettings {
   if (!value || typeof value !== 'object') return createEmptyLive2DProjectSettings();
   const record = value as Record<string, unknown>;
+  const rawPartLabels = record.partLabels && typeof record.partLabels === 'object'
+    ? record.partLabels as Record<string, unknown>
+    : {};
+  const partLabels = Object.fromEntries(
+    Object.entries(rawPartLabels).filter((entry): entry is [string, string] => (
+      typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].trim().length > 0
+    )),
+  );
+  const hiddenAreaNotes = Array.isArray(record.hiddenAreaNotes)
+    ? record.hiddenAreaNotes.flatMap((note): Live2DHiddenAreaNote[] => {
+      if (!note || typeof note !== 'object') return [];
+      const candidate = note as Record<string, unknown>;
+      return typeof candidate.part === 'string' && typeof candidate.note === 'string' && candidate.note.trim()
+        ? [{ part: candidate.part, note: candidate.note }]
+        : [];
+    })
+    : [];
   return {
     enabled: record.enabled === true,
     selectedHistoryEntryId: typeof record.selectedHistoryEntryId === 'string' ? record.selectedHistoryEntryId : null,
+    partLabels,
+    hiddenAreaNotes,
   };
 }
 
@@ -71,11 +97,12 @@ export function buildLive2DSystemPrompt(existingSystemPrompt = ''): string {
   return `${trimmed}\n\n${LIVE2D_PROMPT_PRESET}`;
 }
 
-export function bboxToLive2DAnnotation(box: BoundingBox, index: number): Live2DAnnotation {
+export function bboxToLive2DAnnotation(box: BoundingBox, index: number, part?: string): Live2DAnnotation {
   return {
     id: box.id,
     kind: 'bbox',
-    label: `Live2D annotation ${index + 1}`,
+    label: part ? `${part} bbox` : `Live2D annotation ${index + 1}`,
+    ...(part ? { part } : {}),
     bbox: {
       x: box.x,
       y: box.y,

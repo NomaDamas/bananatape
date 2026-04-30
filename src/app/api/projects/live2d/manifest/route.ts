@@ -11,7 +11,15 @@ export async function POST(request: Request) {
     const selectedHistoryEntryId = typeof body.selectedHistoryEntryId === 'string'
       ? body.selectedHistoryEntryId
       : null;
-    const manifest = await writeLive2DManifest(session.projectRoot, selectedHistoryEntryId);
+    const boxes = Array.isArray(body.boxes) ? body.boxes : [];
+    const partLabels = body.partLabels && typeof body.partLabels === 'object' ? body.partLabels : {};
+    const hiddenAreaNotes = Array.isArray(body.hiddenAreaNotes) ? body.hiddenAreaNotes : [];
+    const manifest = await writeLive2DManifest(session.projectRoot, {
+      selectedHistoryEntryId,
+      boxes,
+      partLabels,
+      hiddenAreaNotes,
+    });
     return NextResponse.json({ success: true, manifest });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to write Live2D manifest';
@@ -40,6 +48,8 @@ export async function GET() {
     return NextResponse.json({
       live2d: settings.live2d,
       selectedHistoryEntryId: settings.live2d.selectedHistoryEntryId,
+      partLabels: settings.live2d.partLabels,
+      hiddenAreaNotes: settings.live2d.hiddenAreaNotes,
       historyCount: history.entries.length,
     });
   } catch (error) {

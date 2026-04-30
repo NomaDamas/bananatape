@@ -8,6 +8,8 @@ import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
 import { DesignContextViewer } from './DesignContextViewer';
+import { Live2DPanel } from './Live2DPanel';
+import type { Live2DHiddenAreaNote } from '@/lib/live2d/contract';
 
 interface LeftPanelProps {
   references: ReferenceImagePreview[];
@@ -18,6 +20,12 @@ interface LeftPanelProps {
   onSystemPromptChange: (value: string) => void;
   designContext: string;
   designContextFileName: string;
+  live2dEnabled: boolean;
+  onEnableLive2D: () => void | Promise<void>;
+  live2dPartLabels: Record<string, string>;
+  onLive2DPartLabelsChange: (labels: Record<string, string>) => void;
+  live2dHiddenAreaNotes: Live2DHiddenAreaNote[];
+  onLive2DHiddenAreaNotesChange: (notes: Live2DHiddenAreaNote[]) => void;
   onReplaceDesignContext: (file: File) => void | Promise<void>;
   onClearDesignContext: () => void | Promise<void>;
   className?: string;
@@ -39,6 +47,12 @@ export function LeftPanel({
   onSystemPromptChange,
   designContext,
   designContextFileName,
+  live2dEnabled,
+  onEnableLive2D,
+  live2dPartLabels,
+  onLive2DPartLabelsChange,
+  live2dHiddenAreaNotes,
+  onLive2DHiddenAreaNotesChange,
   onReplaceDesignContext,
   onClearDesignContext,
   className,
@@ -179,6 +193,16 @@ export function LeftPanel({
               Included with every prompt and kept until you edit or clear it.
             </p>
           </section>
+
+
+          <Live2DPanel
+            live2dEnabled={live2dEnabled}
+            onEnableLive2D={onEnableLive2D}
+            partLabels={live2dPartLabels}
+            onPartLabelsChange={onLive2DPartLabelsChange}
+            hiddenAreaNotes={live2dHiddenAreaNotes}
+            onHiddenAreaNotesChange={onLive2DHiddenAreaNotesChange}
+          />
 
           <section className="border-b border-[#1e1e1e] px-3 py-2">
             <div className="mb-2 flex items-center justify-between gap-2">
