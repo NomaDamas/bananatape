@@ -17,8 +17,9 @@ interface EditorActions {
   commitPath: () => void;
   addBox: (box: Omit<BoundingBox, 'id'>) => void;
   addMemo: (memo: Omit<TextMemo, 'id'>) => string;
-  updateMemo: (id: string, text: string) => void;
-  deleteMemo: (id: string) => void;
+  updateMemo: (id: string, text: string, options?: { track?: boolean }) => void;
+  commitMemoText: (id: string, text: string, options?: { historySnapshot?: Pick<EditorState, 'memos'> }) => void;
+  deleteMemo: (id: string, options?: { track?: boolean; historySnapshot?: Pick<EditorState, 'memos'> }) => void;
   setActiveTool: (tool: Tool) => void;
   setProvider: (provider: Provider) => void;
   setMode: (mode: Mode) => void;
@@ -51,6 +52,42 @@ type EditorStoreWithTemporal = StoreApi<EditorStore> & {
 
 const getTemporalStore = () => (useEditorStore as unknown as EditorStoreWithTemporal).temporal;
 const getTemporalState = () => getTemporalStore().getState();
+
+function getUndoableSnapshot(state: EditorStore, overrides: Partial<UndoableEditorState> = {}): UndoableEditorState {
+  return {
+    paths: state.paths,
+    boxes: state.boxes,
+    memos: state.memos,
+    baseImage: state.baseImage,
+    imageSize: state.imageSize,
+    zoom: state.zoom,
+    panX: state.panX,
+    panY: state.panY,
+    ...overrides,
+  };
+}
+
+function areUndoableStatesEqual(a: UndoableEditorState, b: UndoableEditorState) {
+  return a.paths === b.paths
+    && a.boxes === b.boxes
+    && a.memos === b.memos
+    && a.baseImage === b.baseImage
+    && a.imageSize === b.imageSize
+    && a.zoom === b.zoom
+    && a.panX === b.panX
+    && a.panY === b.panY;
+}
+
+function pushManualHistorySnapshot(snapshot: Partial<UndoableEditorState>) {
+  const current = getUndoableSnapshot(useEditorStore.getState());
+  const pastState = getUndoableSnapshot(useEditorStore.getState(), snapshot);
+  if (areUndoableStatesEqual(pastState, current)) return;
+
+  getTemporalStore().setState((state) => ({
+    pastStates: [...state.pastStates, pastState],
+    futureStates: [],
+  }));
+}
 
 function withPausedHistory(update: () => void) {
   const temporalState = getTemporalState();
@@ -118,12 +155,42 @@ export const useEditorStore = create<EditorStore>()(
         }));
         return id;
       },
-      updateMemo: (id, text) => set((state) => ({
-        memos: state.memos.map((m) => (m.id === id ? { ...m, text } : m)),
-      })),
-      deleteMemo: (id) => set((state) => ({
-        memos: state.memos.filter((m) => m.id !== id),
-      })),
+      updateMemo: (id, text, options) => {
+        const update = () => set((state) => ({
+          memos: state.memos.map((m) => (m.id === id ? { ...m, text } : m)),
+        }));
+        if (options?.track === false) {
+          withPausedHistory(update);
+          return;
+        }
+        update();
+      },
+      commitMemoText: (id, text, options) => {
+        const update = () => set((state) => ({
+          memos: state.memos.map((m) => (m.id === id ? { ...m, text } : m)),
+        }));
+        if (options?.historySnapshot) {
+          withPausedHistory(update);
+          pushManualHistorySnapshot(options.historySnapshot);
+          return;
+        }
+        update();
+      },
+      deleteMemo: (id, options) => {
+        const update = () => set((state) => ({
+          memos: state.memos.filter((m) => m.id !== id),
+        }));
+        if (options?.track === false) {
+          withPausedHistory(update);
+          return;
+        }
+        if (options?.historySnapshot) {
+          withPausedHistory(update);
+          pushManualHistorySnapshot(options.historySnapshot);
+          return;
+        }
+        update();
+      },
       setActiveTool: (tool) => set({ activeTool: tool }),
       setProvider: (provider) => set({ provider }),
       setMode: (mode) => set({ mode }),
@@ -192,16 +259,8 @@ export const useEditorStore = create<EditorStore>()(
       setIsSpacePressed: (v: boolean) => set({ isSpacePressed: v }),
     })),
     {
-      partialize: (state): UndoableEditorState => ({
-        paths: state.paths,
-        boxes: state.boxes,
-        memos: state.memos,
-        baseImage: state.baseImage,
-        imageSize: state.imageSize,
-        zoom: state.zoom,
-        panX: state.panX,
-        panY: state.panY,
-      }),
+      partialize: (state): UndoableEditorState => getUndoableSnapshot(state),
+      equality: areUndoableStatesEqual,
     },
   ),
 );

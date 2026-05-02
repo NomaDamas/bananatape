@@ -1046,6 +1046,34 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.up();
   });
 
+  test('undo and redo restore completed bounding boxes', async ({ page }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('box undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=box undo test').first()).toBeVisible();
+
+    await page.locator('button[title="Box (3)"]').click();
+    const canvas = page.locator('canvas').first();
+    await canvas.waitFor();
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    const clearAnnotationsButton = page.locator('button[title="Clear annotations"]').first();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.mouse.move(bounds.x + 50, bounds.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 200, bounds.y + 200, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(clearAnnotationsButton).toBeEnabled();
+    await page.getByRole('button', { name: 'Undo' }).last().click();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Redo' }).last().click();
+    await expect(clearAnnotationsButton).toBeEnabled();
+  });
+
   test('submits an annotated edit without an extra prompt', async ({ page }) => {
     await page.unroute('/api/edit');
     let uploadedPrompt = '';
