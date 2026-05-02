@@ -514,6 +514,7 @@ test.describe('BananaTape Editor', () => {
     });
 
     await page.reload();
+    await page.getByRole('button', { name: 'Live2D' }).click();
     await page.getByRole('button', { name: /Enable/i }).click();
 
     const promptInput = getPromptInput(page);
@@ -563,6 +564,7 @@ test.describe('BananaTape Editor', () => {
     });
 
     await page.reload();
+    await page.getByRole('button', { name: 'Live2D' }).click();
     const promptInput = getPromptInput(page);
     await promptInput.fill('live2d handoff image');
     await getGenerateButton(page).click();
