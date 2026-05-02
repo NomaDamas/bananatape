@@ -31,34 +31,15 @@ describe('useEditorStore undo/redo', () => {
     resetEditorStore();
   });
 
-  it('does not save transient pan moves in history', () => {
-    useEditorStore.getState().setPan(25, 40, { track: false });
-
-    expect(useEditorStore.getState()).toMatchObject({ panX: 25, panY: 40 });
-    expect(useEditorStore.temporal.getState().pastStates).toHaveLength(0);
-  });
-
-  it('undoes and redoes a committed pan as one action', () => {
-    useEditorStore.getState().setPan(25, 40, { track: false });
-    useEditorStore.getState().setPan(25, 40, { historySnapshot: { zoom: 1, panX: 0, panY: 0 } });
-
-    expect(useEditorStore.temporal.getState().pastStates).toHaveLength(1);
-
-    useEditorStore.getState().undo();
-    expect(useEditorStore.getState()).toMatchObject({ panX: 0, panY: 0 });
-
-    useEditorStore.getState().redo();
-    expect(useEditorStore.getState()).toMatchObject({ panX: 25, panY: 40 });
-  });
-
-  it('undoes and redoes zoom plus pan together for wheel zoom', () => {
+  it('does not save viewport operations in history', () => {
+    useEditorStore.getState().setPan(25, 40);
     useEditorStore.getState().setViewport({ zoom: 2, panX: -50, panY: -25 });
+    useEditorStore.getState().zoomIn();
+    useEditorStore.getState().zoomOut();
+    useEditorStore.getState().resetViewport();
 
-    useEditorStore.getState().undo();
     expect(useEditorStore.getState()).toMatchObject({ zoom: 1, panX: 0, panY: 0 });
-
-    useEditorStore.getState().redo();
-    expect(useEditorStore.getState()).toMatchObject({ zoom: 2, panX: -50, panY: -25 });
+    expect(useEditorStore.temporal.getState().pastStates).toHaveLength(0);
   });
   it('does not save non-undoable tool changes in history', () => {
     useEditorStore.getState().setActiveTool('box');
@@ -119,6 +100,37 @@ describe('useEditorStore undo/redo', () => {
 
     useEditorStore.getState().redo();
     expect(useEditorStore.getState().memos).toMatchObject([{ id, text: 'new' }]);
+  });
+
+  it('clears redo history after undo followed by a new action', () => {
+    useEditorStore.getState().addBox({
+      x: 0.1,
+      y: 0.1,
+      width: 0.2,
+      height: 0.2,
+      tool: 'box',
+      color: '#ef4444',
+      status: 'pending',
+    });
+    useEditorStore.getState().addBox({
+      x: 0.4,
+      y: 0.4,
+      width: 0.2,
+      height: 0.2,
+      tool: 'box',
+      color: '#ef4444',
+      status: 'pending',
+    });
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().boxes).toHaveLength(1);
+    expect(useEditorStore.temporal.getState().futureStates).toHaveLength(1);
+
+    useEditorStore.getState().addMemo({ x: 0.5, y: 0.5, text: 'new branch', color: '#fef08a' });
+
+    expect(useEditorStore.temporal.getState().futureStates).toHaveLength(0);
+    expect(useEditorStore.getState().boxes).toHaveLength(1);
+    expect(useEditorStore.getState().memos).toHaveLength(1);
   });
 
 });

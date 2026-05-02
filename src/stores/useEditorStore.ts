@@ -32,8 +32,8 @@ interface EditorActions {
   setToolColor: (color: string) => void;
   setStrokeWidth: (width: number) => void;
   setZoom: (zoom: number) => void;
-  setPan: (panX: number, panY: number, options?: { track?: boolean; historySnapshot?: Pick<EditorState, 'zoom' | 'panX' | 'panY'> }) => void;
-  setViewport: (viewport: { zoom?: number; panX?: number; panY?: number }, options?: { track?: boolean; historySnapshot?: Pick<EditorState, 'zoom' | 'panX' | 'panY'> }) => void;
+  setPan: (panX: number, panY: number) => void;
+  setViewport: (viewport: { zoom?: number; panX?: number; panY?: number }) => void;
   undo: () => void;
   redo: () => void;
   zoomIn: () => void;
@@ -42,7 +42,7 @@ interface EditorActions {
   setIsSpacePressed: (v: boolean) => void;
 }
 
-type UndoableEditorState = Pick<EditorState, 'paths' | 'boxes' | 'memos' | 'baseImage' | 'imageSize' | 'zoom' | 'panX' | 'panY'>;
+type UndoableEditorState = Pick<EditorState, 'paths' | 'boxes' | 'memos' | 'baseImage' | 'imageSize'>;
 
 type EditorStore = EditorState & EditorActions;
 
@@ -60,9 +60,6 @@ function getUndoableSnapshot(state: EditorStore, overrides: Partial<UndoableEdit
     memos: state.memos,
     baseImage: state.baseImage,
     imageSize: state.imageSize,
-    zoom: state.zoom,
-    panX: state.panX,
-    panY: state.panY,
     ...overrides,
   };
 }
@@ -72,10 +69,7 @@ function areUndoableStatesEqual(a: UndoableEditorState, b: UndoableEditorState) 
     && a.boxes === b.boxes
     && a.memos === b.memos
     && a.baseImage === b.baseImage
-    && a.imageSize === b.imageSize
-    && a.zoom === b.zoom
-    && a.panX === b.panX
-    && a.panY === b.panY;
+    && a.imageSize === b.imageSize;
 }
 
 function pushManualHistorySnapshot(snapshot: Partial<UndoableEditorState>) {
@@ -202,58 +196,20 @@ export const useEditorStore = create<EditorStore>()(
       setActiveMemoId: (id) => set({ activeMemoId: id }),
       setToolColor: (color) => set({ toolColor: color }),
       setStrokeWidth: (width) => set({ strokeWidth: width }),
-      setZoom: (zoom) => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) }),
-      setPan: (panX, panY, options) => {
-        const update = () => set({ panX, panY });
-        if (options?.track === false) {
-          withPausedHistory(update);
-          return;
-        }
-        update();
-        if (options?.historySnapshot) {
-          const temporalStore = getTemporalStore();
-          temporalStore.setState((state) => ({
-            pastStates: [
-              ...state.pastStates.slice(0, -1),
-              {
-                ...state.pastStates.at(-1),
-                ...options.historySnapshot,
-              },
-            ],
-          }));
-        }
-      },
-      setViewport: ({ zoom, panX, panY }, options) => {
-        const update = () => set((state) => ({
-          zoom: zoom === undefined ? state.zoom : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)),
-          panX: panX === undefined ? state.panX : panX,
-          panY: panY === undefined ? state.panY : panY,
-        }));
-        if (options?.track === false) {
-          withPausedHistory(update);
-          return;
-        }
-        update();
-        if (options?.historySnapshot) {
-          const temporalStore = getTemporalStore();
-          temporalStore.setState((state) => ({
-            pastStates: [
-              ...state.pastStates.slice(0, -1),
-              {
-                ...state.pastStates.at(-1),
-                ...options.historySnapshot,
-              },
-            ],
-          }));
-        }
-      },
-      zoomIn: () => set((state) => ({
+      setZoom: (zoom) => withPausedHistory(() => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) })),
+      setPan: (panX, panY) => withPausedHistory(() => set({ panX, panY })),
+      setViewport: ({ zoom, panX, panY }) => withPausedHistory(() => set((state) => ({
+        zoom: zoom === undefined ? state.zoom : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)),
+        panX: panX === undefined ? state.panX : panX,
+        panY: panY === undefined ? state.panY : panY,
+      }))),
+      zoomIn: () => withPausedHistory(() => set((state) => ({
         zoom: Math.min(MAX_ZOOM, state.zoom * ZOOM_STEP),
-      })),
-      zoomOut: () => set((state) => ({
+      }))),
+      zoomOut: () => withPausedHistory(() => set((state) => ({
         zoom: Math.max(MIN_ZOOM, state.zoom / ZOOM_STEP),
-      })),
-      resetViewport: () => set({ zoom: 1, panX: 0, panY: 0 }),
+      }))),
+      resetViewport: () => withPausedHistory(() => set({ zoom: 1, panX: 0, panY: 0 })),
       undo: () => getTemporalState().undo(),
       redo: () => getTemporalState().redo(),
       setIsSpacePressed: (v: boolean) => set({ isSpacePressed: v }),

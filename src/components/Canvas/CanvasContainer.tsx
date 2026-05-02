@@ -86,7 +86,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     e.preventDefault();
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
-    setPan(dragStartRef.current.panX + dx, dragStartRef.current.panY + dy, { track: false });
+    setPan(dragStartRef.current.panX + dx, dragStartRef.current.panY + dy);
   }, [isDragging, setPan]);
 
   const commitPanDrag = useCallback(() => {
@@ -96,13 +96,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     const state = useEditorStore.getState();
     if (state.panX === dragStartRef.current.panX && state.panY === dragStartRef.current.panY) return;
 
-    setPan(state.panX, state.panY, {
-      historySnapshot: {
-        zoom: state.zoom,
-        panX: dragStartRef.current.panX,
-        panY: dragStartRef.current.panY,
-      },
-    });
+    setPan(state.panX, state.panY);
   }, [isDragging, setPan]);
 
   const cursor = effectivePan
