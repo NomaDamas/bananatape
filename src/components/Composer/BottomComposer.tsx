@@ -23,6 +23,7 @@ interface BottomComposerProps {
   onRemoveReference: (id: string) => void;
   onGenerate: () => void | Promise<void>;
   onEdit: () => void | Promise<void>;
+  live2dEnabled?: boolean;
   className?: string;
 }
 
@@ -34,6 +35,7 @@ export function BottomComposer({
   onRemoveReference,
   onGenerate,
   onEdit,
+  live2dEnabled = false,
   className,
 }: BottomComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -64,7 +66,8 @@ export function BottomComposer({
       ? `Edit · ${annotationCount} region${annotationCount === 1 ? '' : 's'}`
       : 'Apply edit'
     : 'Generate';
-  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !prompt.trim());
+  const canSubmitGenerate = Boolean(prompt.trim()) || live2dEnabled;
+  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !canSubmitGenerate);
 
   const submitPrimary = () => {
     if (isPrimaryDisabled) return;
@@ -169,7 +172,7 @@ export function BottomComposer({
                     submitPrimary();
                   }
                 }}
-                placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : 'Describe the image you want to create…'}
+                placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : live2dEnabled ? 'Optional — Live2D prompt will be applied…' : 'Describe the image you want to create…'}
                 className="max-h-36 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-[#f5f5f5] placeholder:text-[#666] focus-visible:ring-0"
                 data-testid="bottom-prompt-input"
               />

@@ -544,7 +544,6 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     exportMask,
     hasAnnotations,
     isGenerating,
-    live2dEnabled,
     prompt,
     provider,
     resizeToSquare1024,

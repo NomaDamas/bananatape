@@ -88,7 +88,7 @@ export function Live2DPanel({
       </div>
 
       <p className="mb-2 text-[10px] leading-4 text-[#808080]">
-        Enable this, attach reference image(s), then Generate can run even with an empty prompt using the enforced Live2D part-sheet prompt. Use BananaTape boxes as Live2D part bboxes, then write <code className="rounded bg-[#1e1e1e] px-1 text-[#cfcfcf]">live2d/manifest.json</code> for WaifuGenerator.
+        Enable this, attach reference image(s), then Generate can run even with an empty prompt using the enforced Live2D part-sheet prompt. Use canvas boxes as Live2D part bboxes, then write <code className="rounded bg-[#1e1e1e] px-1 text-[#cfcfcf]">live2d/manifest.json</code> for WaifuGenerator.
       </p>
 
       <div className="mb-2 grid grid-cols-3 gap-1 text-center text-[10px]">

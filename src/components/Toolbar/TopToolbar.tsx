@@ -40,6 +40,7 @@ export function TopToolbar() {
     handleEdit,
     canEdit,
     hasReferenceImages,
+    live2dEnabled,
   } = usePromptComposer();
 
   const provider = useEditorStore((s) => s.provider);
@@ -59,6 +60,7 @@ export function TopToolbar() {
   const providers = getEnabledProviders();
   const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
   const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || hasAnnotations);
+  const canSubmitGenerate = Boolean(prompt.trim()) || live2dEnabled;
 
   const handleReferenceImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     void addReferenceFiles(Array.from(event.target.files ?? []));
@@ -195,7 +197,7 @@ export function TopToolbar() {
               size="sm"
               variant="default"
               className="h-8 gap-1.5"
-              disabled={isGenerating || !prompt.trim()}
+              disabled={isGenerating || !canSubmitGenerate}
               onClick={handleGenerate}
             >
               {isGenerating && mode === 'generate' ? (

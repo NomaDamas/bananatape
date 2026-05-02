@@ -464,6 +464,68 @@ test.describe('BananaTape Editor', () => {
   });
 
 
+  test('Live2D handoff can generate with the enforced prompt when user prompt is empty', async ({ page }) => {
+    let postedPrompt: string | null = null;
+    await page.unroute('/api/generate');
+    await page.route('/api/generate', async (route) => {
+      const request = route.request();
+      const payload = request.headers()['content-type']?.includes('application/json')
+        ? request.postDataJSON() as { prompt?: string }
+        : { prompt: request.postData() ?? '' };
+      postedPrompt = payload.prompt ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: FAKE_IMAGE_DATA_URL,
+          prompt: postedPrompt,
+          provider: 'god-tibo',
+        }),
+      });
+    });
+    await page.route('/api/projects/settings', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            systemPrompt: '',
+            referenceImages: [],
+            live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    });
+    await page.route('/api/projects/live2d/manifest', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          settings: {
+            systemPrompt: 'Create a Live2D-ready upper-body anime character part sheet.',
+            live2d: { enabled: true, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+          },
+        }),
+      });
+    });
+
+    await page.reload();
+    await page.getByRole('button', { name: /Enable/i }).click();
+
+    const promptInput = getPromptInput(page);
+    await expect(promptInput).toHaveValue('');
+    const generateButton = getGenerateButton(page);
+    await expect(generateButton).toBeEnabled();
+    await generateButton.click();
+
+    await expect.poll(() => postedPrompt).toContain('Live2D-ready part sheet');
+    await expect(page.getByAltText('Canvas base')).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
+  });
+
   test('Live2D panel enables handoff and writes bbox part labels into manifest', async ({ page }) => {
     let postedManifest: Record<string, unknown> | null = null;
     await page.route('/api/projects/settings', async (route) => {
@@ -762,14 +824,14 @@ test.describe('BananaTape Editor', () => {
       }
 
       const file = new File([bytes], 'pasted-reference.png', { type: 'image/png' });
-      const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
-      Object.defineProperty(pasteEvent, 'clipboardData', {
-        value: {
-          items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
-          files: [file],
-        },
-      });
-      document.dispatchEvent(pasteEvent);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      const target = document.querySelector('[data-testid=\"bottom-prompt-input\"]') ?? document;
+      target.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer,
+      }));
     }, RED_IMAGE_DATA_URL);
 
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();

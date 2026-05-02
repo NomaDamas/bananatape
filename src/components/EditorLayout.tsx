@@ -128,6 +128,7 @@ function StandaloneEditorShell() {
         onRemoveReference={removeReferenceImage}
         onGenerate={handleGenerate}
         onEdit={handleEdit}
+        live2dEnabled={live2dEnabled}
       />
       <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={!!baseImage} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
