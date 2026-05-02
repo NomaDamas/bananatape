@@ -1,4 +1,5 @@
 import type { Provider } from '@/types';
+import { createEmptyLive2DProjectSettings, normalizeLive2DProjectSettings, type Live2DProjectSettings } from '@/lib/live2d/contract';
 
 export const PROJECT_SCHEMA_VERSION = 1;
 export const HISTORY_SCHEMA_VERSION = 1;
@@ -26,6 +27,7 @@ export interface ProjectReferenceImage {
 export interface ProjectSettings {
   systemPrompt: string;
   referenceImages: ProjectReferenceImage[];
+  live2d: Live2DProjectSettings;
   // Locked markdown loaded from DESIGN.md upload. Replaced only via the
   // /api/projects/design-context endpoint; never written through PUT settings.
   // Optional so legacy project.json files round-trip unchanged.
@@ -36,7 +38,7 @@ export interface ProjectSettings {
 // Narrow on purpose: do not widen to Partial<ProjectSettings> or callers can
 // silently overwrite referenceImages or future read-only fields.
 export type ProjectSettingsPatch = Partial<
-  Pick<ProjectSettings, 'systemPrompt' | 'designContext' | 'designContextFileName'>
+  Pick<ProjectSettings, 'systemPrompt' | 'designContext' | 'designContextFileName' | 'live2d'>
 >;
 
 export interface ProjectHistoryEntry {
@@ -64,14 +66,15 @@ export interface PersistedImageResult {
 }
 
 export function createEmptyProjectSettings(): ProjectSettings {
-  return { systemPrompt: '', referenceImages: [] };
+  return { systemPrompt: '', referenceImages: [], live2d: createEmptyLive2DProjectSettings() };
 }
 
-export function normalizeProjectSettings(settings: ProjectManifest['settings']): ProjectSettings {
+export function normalizeProjectSettings(settings: Partial<ProjectSettings> | undefined): ProjectSettings {
   const normalized: ProjectSettings = {
     ...createEmptyProjectSettings(),
     ...(settings ?? {}),
     referenceImages: Array.isArray(settings?.referenceImages) ? settings.referenceImages : [],
+    live2d: normalizeLive2DProjectSettings(settings?.live2d),
   };
 
   if (typeof normalized.designContext !== 'string' || normalized.designContext.length === 0) {

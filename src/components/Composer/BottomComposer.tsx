@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from 'react';
-import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X } from 'lucide-react';
+import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +24,7 @@ interface BottomComposerProps {
   onRemoveReference: (id: string) => void;
   onGenerate: () => void | Promise<void>;
   onEdit: () => void | Promise<void>;
+  live2dEnabled?: boolean;
   className?: string;
 }
 
@@ -35,6 +36,7 @@ export function BottomComposer({
   onRemoveReference,
   onGenerate,
   onEdit,
+  live2dEnabled = false,
   className,
 }: BottomComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -51,6 +53,11 @@ export function BottomComposer({
   const zoomIn = useCanvasStore((s) => s.zoomIn);
   const zoomOut = useCanvasStore((s) => s.zoomOut);
   const resetViewport = useCanvasStore((s) => s.resetViewport);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const canUndo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.past.length ?? 0) > 0);
+  const canRedo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.future.length ?? 0) > 0);
+  const undo = useCanvasStore((s) => s.undoFocusedImage);
+  const redo = useCanvasStore((s) => s.redoFocusedImage);
   const parallelCount = useEditorStore((s) => s.parallelCount);
   const incrementParallelCount = useEditorStore((s) => s.incrementParallelCount);
   const decrementParallelCount = useEditorStore((s) => s.decrementParallelCount);
@@ -64,7 +71,8 @@ export function BottomComposer({
       ? `Edit · ${annotationCount} region${annotationCount === 1 ? '' : 's'}`
       : 'Apply edit'
     : 'Generate';
-  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !prompt.trim());
+  const canSubmitGenerate = Boolean(prompt.trim()) || live2dEnabled;
+  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !canSubmitGenerate);
 
   const submitPrimary = () => {
     if (isPrimaryDisabled) return;
@@ -91,6 +99,13 @@ export function BottomComposer({
             <ToolPalette />
           </div>
           <div className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={undo} disabled={!canUndo} aria-label="Undo" title={focusedImageIds.length === 1 ? "Undo selected image (Cmd/Ctrl+Z)" : "Select one image to undo"}>
+              <Undo2 className="h-3 w-3" />
+            </Button>
+            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title={focusedImageIds.length === 1 ? "Redo selected image (Cmd/Ctrl+Shift+Z)" : "Select one image to redo"}>
+              <Redo2 className="h-3 w-3" />
+            </Button>
+            <div className="mx-1 h-4 w-px bg-white/10" />
             <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomOut} title="Zoom out">
               <Minus className="h-3 w-3" />
             </Button>
@@ -162,7 +177,7 @@ export function BottomComposer({
                     submitPrimary();
                   }
                 }}
-                placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : 'Describe the image you want to create…'}
+                placeholder={shouldEdit && annotationCount > 0 ? 'Optional — annotations are enough to edit…' : shouldEdit ? 'Describe edits to apply…' : live2dEnabled ? 'Optional — Live2D prompt will be applied…' : 'Describe the image you want to create…'}
                 className="max-h-36 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-[#f5f5f5] placeholder:text-[#666] focus-visible:ring-0"
                 data-testid="bottom-prompt-input"
               />

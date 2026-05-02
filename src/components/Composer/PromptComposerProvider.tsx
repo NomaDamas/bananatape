@@ -21,6 +21,8 @@ import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
+import { LIVE2D_DEFAULT_USER_PROMPT } from '@/lib/live2d/contract';
+import type { Live2DHiddenAreaNote } from '@/lib/live2d/contract';
 import type { Provider } from '@/types';
 
 export interface ReferenceImage {
@@ -41,6 +43,12 @@ interface PromptComposerContextValue {
   setSystemPrompt: (prompt: string) => void;
   designContext: string;
   designContextFileName: string;
+  live2dEnabled: boolean;
+  live2dPartLabels: Record<string, string>;
+  live2dHiddenAreaNotes: Live2DHiddenAreaNote[];
+  enableLive2D: () => Promise<void>;
+  setLive2DPartLabels: (labels: Record<string, string>) => void;
+  setLive2DHiddenAreaNotes: (notes: Live2DHiddenAreaNote[]) => void;
   replaceDesignContext: (file: File) => Promise<void>;
   clearDesignContext: () => Promise<void>;
   addReferenceFiles: (files: File[], source?: ReferenceSource) => Promise<void>;
@@ -66,6 +74,9 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [designContext, setDesignContext] = useState('');
   const [designContextFileName, setDesignContextFileName] = useState('');
+  const [live2dEnabled, setLive2DEnabled] = useState(false);
+  const [live2dPartLabels, setLive2DPartLabels] = useState<Record<string, string>>({});
+  const [live2dHiddenAreaNotes, setLive2DHiddenAreaNotes] = useState<Live2DHiddenAreaNote[]>([]);
   const referenceImagesRef = useRef<ReferenceImage[]>([]);
   const didLoadProjectSettingsRef = useRef(false);
 
@@ -116,7 +127,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     const timeout = window.setTimeout(() => {
       const current = useCanvasStore.getState().images[focusedImageId];
       if (!current || current.prompt === prompt) return;
-      useCanvasStore.getState().updateImage(focusedImageId, { prompt });
+      useCanvasStore.getState().updateImage(focusedImageId, { prompt }, { track: false });
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [focusedImageIds, prompt]);
@@ -142,6 +153,9 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         setSystemPrompt(typeof settings.systemPrompt === 'string' ? settings.systemPrompt : '');
         setDesignContext(typeof settings.designContext === 'string' ? settings.designContext : '');
         setDesignContextFileName(typeof settings.designContextFileName === 'string' ? settings.designContextFileName : '');
+        setLive2DEnabled(settings.live2d?.enabled === true);
+        setLive2DPartLabels(settings.live2d?.partLabels && typeof settings.live2d.partLabels === 'object' ? settings.live2d.partLabels : {});
+        setLive2DHiddenAreaNotes(Array.isArray(settings.live2d?.hiddenAreaNotes) ? settings.live2d.hiddenAreaNotes : []);
 
         if (Array.isArray(settings.referenceImages)) {
           const persistedReferences = await Promise.all(settings.referenceImages.map(async (reference: {
@@ -302,6 +316,30 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     setPrompt('');
   }, []);
 
+  const enableLive2D = useCallback(async () => {
+    setLive2DEnabled(true);
+    try {
+      const response = await fetch('/api/projects/live2d/manifest', { method: 'PUT' });
+      if (!response.ok && response.status !== 404) {
+        const payload = await response.json().catch(() => ({}));
+        addToast(typeof payload?.error === 'string' ? payload.error : 'Could not enable Live2D mode', 'error');
+        return;
+      }
+      if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        if (payload?.settings) {
+          setSystemPrompt(typeof payload.settings.systemPrompt === 'string' ? payload.settings.systemPrompt : systemPrompt);
+          setLive2DEnabled(payload.settings.live2d?.enabled === true);
+          setLive2DPartLabels(payload.settings.live2d?.partLabels ?? {});
+          setLive2DHiddenAreaNotes(payload.settings.live2d?.hiddenAreaNotes ?? []);
+        }
+        addToast('Live2D handoff mode enabled', 'success');
+      }
+    } catch {
+      // No-project/dev mode keeps Live2D state in memory only.
+    }
+  }, [addToast, systemPrompt]);
+
   const replaceDesignContext = useCallback(async (file: File) => {
     const lowerName = file.name.toLowerCase();
     if (!lowerName.endsWith('.md') && !lowerName.endsWith('.markdown')) {
@@ -356,8 +394,13 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const buildSubmittedPrompt = useCallback(
-    (fallbackPrompt?: string) => buildPromptPure({ userPrompt: prompt, systemPrompt, designContext, fallbackPrompt }),
-    [designContext, prompt, systemPrompt],
+    (fallbackPrompt?: string) => buildPromptPure({
+      userPrompt: prompt,
+      systemPrompt,
+      designContext,
+      fallbackPrompt: fallbackPrompt ?? (live2dEnabled ? LIVE2D_DEFAULT_USER_PROMPT : undefined),
+    }),
+    [designContext, live2dEnabled, prompt, systemPrompt],
   );
 
   const appendReferenceImages = useCallback((formData: FormData, fieldName: 'images' | 'referenceImages') => {
@@ -380,7 +423,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   }, [addToast, provider, referenceImages.length]);
 
   const handleGenerate = useCallback(async () => {
-    const submittedPrompt = prompt.trim();
+    const submittedPrompt = prompt.trim() || (live2dEnabled ? LIVE2D_DEFAULT_USER_PROMPT : '');
     if (!submittedPrompt || isGenerating) return;
     if (!validateOpenAIReferenceCount()) return;
     setMode('generate');
@@ -402,6 +445,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       });
       startTransition(() => {
         setMode('edit');
+        clearPromptComposer();
       });
       addToast('Generation started', 'success');
     } catch (e) {
@@ -412,10 +456,12 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     }
   }, [
     addToast,
+    clearPromptComposer,
     designContext,
     isGenerating,
     parallelCount,
     parallelGenerate,
+    live2dEnabled,
     prompt,
     referenceImages,
     focusedImageIds,
@@ -519,6 +565,12 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     setSystemPrompt,
     designContext,
     designContextFileName,
+    live2dEnabled,
+    live2dPartLabels,
+    live2dHiddenAreaNotes,
+    enableLive2D,
+    setLive2DPartLabels,
+    setLive2DHiddenAreaNotes,
     replaceDesignContext,
     clearDesignContext,
     addReferenceFiles,
@@ -538,6 +590,10 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     clearReferenceImages,
     designContext,
     designContextFileName,
+    enableLive2D,
+    live2dEnabled,
+    live2dPartLabels,
+    live2dHiddenAreaNotes,
     handleEdit,
     handleGenerate,
     hasDesignContext,

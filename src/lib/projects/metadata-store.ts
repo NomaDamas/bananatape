@@ -1,9 +1,10 @@
 import { mkdir, readFile, rename, open } from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
-import type { Provider } from '@/types';
+import type { BoundingBox, Provider } from '@/types';
+import { bboxToLive2DAnnotation, buildLive2DManifest, buildLive2DSystemPrompt, type Live2DHiddenAreaNote, type Live2DManifest } from '@/lib/live2d/contract';
 import { createEmptyHistory, createEmptyProjectSettings, HISTORY_SCHEMA_VERSION, isProjectHistory, normalizeProjectSettings, PROJECT_SCHEMA_VERSION, type ProjectHistory, type ProjectHistoryEntry, type ProjectManifest, type ProjectReferenceImage, type ProjectResultType, type ProjectSettings, type ProjectSettingsPatch } from './schema';
-import { ensureProjectDirectories, getHistoryPath, getManifestPath } from './paths';
+import { ensureProjectDirectories, getHistoryPath, getLive2DManifestPath, getManifestPath } from './paths';
 import { withProjectLock } from './locks';
 import { sanitizeProjectName, slugifyProjectName } from './validate';
 
@@ -109,6 +110,70 @@ export async function clearProjectDesignContext(projectRoot: string): Promise<Pr
   return updateProjectSettings(projectRoot, {
     designContext: '',
     designContextFileName: '',
+  });
+}
+
+export async function enableLive2DMode(projectRoot: string): Promise<ProjectSettings> {
+  const manifest = await updateProjectManifest(projectRoot, (current) => {
+    const settings = normalizeProjectSettings(current.settings);
+    return {
+      ...current,
+      settings: {
+        ...settings,
+        systemPrompt: buildLive2DSystemPrompt(settings.systemPrompt),
+        live2d: {
+          ...settings.live2d,
+          enabled: true,
+        },
+      },
+    };
+  });
+  return normalizeProjectSettings(manifest.settings);
+}
+
+export interface WriteLive2DManifestOptions {
+  selectedHistoryEntryId?: string | null;
+  boxes?: BoundingBox[];
+  partLabels?: Record<string, string>;
+  hiddenAreaNotes?: Live2DHiddenAreaNote[];
+}
+
+export async function writeLive2DManifest(projectRoot: string, options: WriteLive2DManifestOptions | string | null = {}): Promise<Live2DManifest> {
+  return withProjectLock(projectRoot, async () => {
+    const [manifest, history] = await Promise.all([
+      readProjectManifest(projectRoot),
+      readProjectHistory(projectRoot),
+    ]);
+    const writeOptions: WriteLive2DManifestOptions = typeof options === 'string' || options === null
+      ? { selectedHistoryEntryId: options }
+      : options;
+    const settings = normalizeProjectSettings(manifest.settings);
+    const mergedPartLabels = { ...settings.live2d.partLabels, ...(writeOptions.partLabels ?? {}) };
+    const hiddenAreaNotes = writeOptions.hiddenAreaNotes ?? settings.live2d.hiddenAreaNotes;
+    const selectedId = writeOptions.selectedHistoryEntryId ?? settings.live2d.selectedHistoryEntryId ?? history.entries[0]?.id;
+    const selectedEntry = history.entries.find((entry) => entry.id === selectedId);
+    if (!selectedEntry) {
+      throw new Error('No selected BananaTape history entry is available for Live2D export');
+    }
+    const annotations = (writeOptions.boxes ?? []).map((box, index) => (
+      bboxToLive2DAnnotation(box, index, mergedPartLabels[box.id])
+    ));
+    const live2dManifest = buildLive2DManifest({ selectedEntry, annotations, hiddenAreaNotes });
+    await atomicWriteJson(getLive2DManifestPath(projectRoot), live2dManifest);
+    await atomicWriteJson(getManifestPath(projectRoot), {
+      ...manifest,
+      settings: {
+        ...settings,
+        live2d: {
+          enabled: true,
+          selectedHistoryEntryId: selectedEntry.id,
+          partLabels: mergedPartLabels,
+          hiddenAreaNotes,
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    });
+    return live2dManifest;
   });
 }
 

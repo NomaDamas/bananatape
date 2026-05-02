@@ -81,9 +81,30 @@ function ScopedDrawingLayer({ image }: { image: CanvasImage }) {
 function ScopedMemoOverlay({ image, isFocused }: { image: CanvasImage; isFocused: boolean }) {
   const activeMemoId = useEditorStore((s) => s.activeMemoId);
   const setActiveMemoId = useEditorStore((s) => s.setActiveMemoId);
+  const memoEditSnapshotsRef = useRef<Record<string, CanvasImage>>({});
+
+  const rememberMemoSnapshot = useCallback((id: string) => {
+    if (memoEditSnapshotsRef.current[id]) return;
+    const current = useCanvasStore.getState().images[image.id];
+    if (!current) return;
+    const memo = current.memos.find((item) => item.id === id);
+    if (!memo?.text.trim()) return;
+    memoEditSnapshotsRef.current[id] = current;
+  }, [image.id]);
 
   const handleBlur = useCallback((id: string, text: string) => {
-    if (!text.trim()) useCanvasStore.getState().removeMemoFromImage(image.id, id);
+    const snapshot = memoEditSnapshotsRef.current[id];
+    delete memoEditSnapshotsRef.current[id];
+
+    if (!text.trim()) {
+      useCanvasStore.getState().removeMemoFromImage(image.id, id, snapshot ? { historySnapshot: snapshot } : undefined);
+      setActiveMemoId(null);
+      return;
+    }
+
+    if (snapshot) {
+      useCanvasStore.getState().commitMemoTextOnImage(image.id, id, text, { historySnapshot: snapshot });
+    }
     setActiveMemoId(null);
   }, [image.id, setActiveMemoId]);
 
@@ -105,7 +126,8 @@ function ScopedMemoOverlay({ image, isFocused }: { image: CanvasImage; isFocused
                 rows={memoSize.rows}
                 style={{ minHeight: memoSize.height, fontSize: STICKY_MEMO_FONT_SIZE, lineHeight: `${STICKY_MEMO_LINE_HEIGHT}px` }}
                 placeholder="Write edit note..."
-                onChange={(event) => useCanvasStore.getState().updateMemoOnImage(image.id, memo.id, { text: event.target.value })}
+                onFocus={() => rememberMemoSnapshot(memo.id)}
+                onChange={(event) => useCanvasStore.getState().updateMemoOnImage(image.id, memo.id, { text: event.target.value }, { track: false })}
                 onBlur={(event) => handleBlur(memo.id, event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -209,7 +231,7 @@ export function CanvasImageItem({ image, isFocused, isVisible, onFocus, onDelete
 
       {isVisible && (image.status === 'ready' || image.status === 'streaming') && (
         <>
-          <img src={image.url} alt={image.prompt || 'Canvas image'} className="block select-none" style={{ width: size.width, height: size.height, maxWidth: 'none', maxHeight: 'none' }} decoding="async" loading="lazy" draggable={false} />
+          <img src={image.url} alt="Canvas base" className="block select-none" style={{ width: size.width, height: size.height, maxWidth: 'none', maxHeight: 'none' }} decoding="async" loading="lazy" draggable={false} />
           {isFocused && <ScopedDrawingLayer image={image} />}
           <ScopedMemoOverlay image={image} isFocused={isFocused} />
         </>

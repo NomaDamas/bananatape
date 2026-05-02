@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readProjectSettings, updateProjectSettings } from '@/lib/projects/metadata-store';
+import { normalizeLive2DProjectSettings } from '@/lib/live2d/contract';
 import { requireProjectSession } from '@/lib/projects/session';
 
 export const runtime = 'nodejs';
@@ -29,9 +30,11 @@ export async function PUT(request: Request) {
   try {
     const session = requireProjectSession();
     const body = await request.json();
-    const settings = await updateProjectSettings(session.projectRoot, {
-      systemPrompt: typeof body.systemPrompt === 'string' ? body.systemPrompt : '',
-    });
+    const patch = {
+      ...(typeof body.systemPrompt === 'string' ? { systemPrompt: body.systemPrompt } : {}),
+      ...(body.live2d ? { live2d: normalizeLive2DProjectSettings(body.live2d) } : {}),
+    };
+    const settings = await updateProjectSettings(session.projectRoot, patch);
     return NextResponse.json({
       ...settings,
       referenceImages: settings.referenceImages.map(referenceToClient),

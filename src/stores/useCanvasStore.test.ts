@@ -54,6 +54,7 @@ function resetStore(): void {
     images: {},
     imageOrder: [],
     focusedImageIds: [],
+    imageHistories: {},
     viewport: { panX: 0, panY: 0, zoom: 1, width: 0, height: 0 },
   });
   useCanvasStore.temporal.getState().clear();
@@ -179,6 +180,51 @@ describe('useCanvasStore', () => {
     expect(useCanvasStore.getState().images.a).toMatchObject({ paths: [], boxes: [], memos: [] });
   });
 
+
+  it('keeps undo and redo stacks isolated per image', () => {
+    useCanvasStore.getState().addImages([makeImage('a'), makeImage('b')]);
+    useCanvasStore.getState().addBoxToImage('a', box);
+    useCanvasStore.getState().addMemoToImage('b', memo);
+
+    useCanvasStore.getState().undoImage('a');
+
+    expect(useCanvasStore.getState().images.a.boxes).toEqual([]);
+    expect(useCanvasStore.getState().images.b.memos).toEqual([memo]);
+
+    useCanvasStore.getState().redoImage('a');
+    expect(useCanvasStore.getState().images.a.boxes).toEqual([box]);
+    expect(useCanvasStore.getState().images.b.memos).toEqual([memo]);
+  });
+
+  it('clears only the selected image redo branch after a new action', () => {
+    useCanvasStore.getState().addImages([makeImage('a'), makeImage('b')]);
+    useCanvasStore.getState().addBoxToImage('a', box);
+    useCanvasStore.getState().addMemoToImage('b', memo);
+    useCanvasStore.getState().undoImage('a');
+    useCanvasStore.getState().undoImage('b');
+
+    expect(useCanvasStore.getState().canRedoImage('a')).toBe(true);
+    expect(useCanvasStore.getState().canRedoImage('b')).toBe(true);
+
+    useCanvasStore.getState().addPathToImage('a', path);
+
+    expect(useCanvasStore.getState().canRedoImage('a')).toBe(false);
+    expect(useCanvasStore.getState().canRedoImage('b')).toBe(true);
+  });
+
+  it('batches memo typing into one undoable image event', () => {
+    useCanvasStore.getState().addImage(makeImage('a'));
+    useCanvasStore.getState().addMemoToImage('a', { ...memo, text: '' });
+    const afterAdd = useCanvasStore.getState().images.a;
+
+    useCanvasStore.getState().updateMemoOnImage('a', 'memo-1', { text: 'h' }, { track: false });
+    useCanvasStore.getState().updateMemoOnImage('a', 'memo-1', { text: 'hi' }, { track: false });
+    useCanvasStore.getState().commitMemoTextOnImage('a', 'memo-1', 'hi', { historySnapshot: afterAdd });
+
+    useCanvasStore.getState().undoImage('a');
+    expect(useCanvasStore.getState().images.a.memos).toEqual([{ ...memo, text: '' }]);
+  });
+
   it('setImageStatus does not push an undo entry', () => {
     useCanvasStore.getState().addImage(makeImage('a', 'pending'));
     const before = pastLength();
@@ -214,6 +260,7 @@ describe('useCanvasStore', () => {
     expect(useCanvasStore.getState().images).toEqual({});
     expect(useCanvasStore.getState().imageOrder).toEqual([]);
     expect(useCanvasStore.getState().focusedImageIds).toEqual([]);
+    expect(useCanvasStore.getState().imageHistories).toEqual({});
     expect(useCanvasStore.getState().viewport).toEqual({ panX: 0, panY: 0, zoom: 1, width: 0, height: 0 });
     expect(pastLength()).toBe(0);
     expect(useCanvasStore.temporal.getState().futureStates.length).toBe(0);

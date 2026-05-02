@@ -24,14 +24,24 @@ export function useKeyboardShortcuts() {
       if (isInput || state.activeMemoId || state.isSpacePressed) return;
 
       if (e.metaKey || e.ctrlKey) {
-        if (e.key === 'z') {
+        const key = e.key.toLowerCase();
+        const canvasState = useCanvasStore.getState();
+
+        if (key === 'z' && e.shiftKey) {
           e.preventDefault();
-          const canvasTemporal = useCanvasStore.temporal.getState();
-          if (e.shiftKey) {
-            canvasTemporal.redo();
-          } else {
-            canvasTemporal.undo();
-          }
+          canvasState.redoFocusedImage();
+          return;
+        }
+
+        if (key === 'z') {
+          e.preventDefault();
+          canvasState.undoFocusedImage();
+          return;
+        }
+
+        if (key === 'y') {
+          e.preventDefault();
+          canvasState.redoFocusedImage();
           return;
         }
       }
@@ -61,31 +71,31 @@ export function useKeyboardShortcuts() {
 
       if (e.key === '2') {
         e.preventDefault();
-        state.setActiveTool('move');
+        state.setActiveTool('pen');
         return;
       }
 
       if (e.key === '3') {
         e.preventDefault();
-        state.setActiveTool('pen');
+        state.setActiveTool('box');
         return;
       }
 
       if (e.key === '4') {
         e.preventDefault();
-        state.setActiveTool('box');
+        state.setActiveTool('arrow');
         return;
       }
 
       if (e.key === '5') {
         e.preventDefault();
-        state.setActiveTool('arrow');
+        state.setActiveTool('memo');
         return;
       }
 
       if (e.key === '6') {
         e.preventDefault();
-        state.setActiveTool('memo');
+        state.setActiveTool('move');
         return;
       }
 

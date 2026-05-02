@@ -258,7 +258,10 @@ export function useParallelGenerate(): UseParallelGenerateApi {
           size,
           assetId: data.assetId,
           status: 'ready',
-        });
+        }, { track: false });
+        if (useCanvasStore.getState().focusedImageIds.length === 0) {
+          useCanvasStore.getState().setFocusedImage(placeholder.id);
+        }
         useHistoryStore.getState().addEntry({
           imageId: placeholder.id,
           prompt: userPrompt,

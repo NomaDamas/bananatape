@@ -463,6 +463,140 @@ test.describe('BananaTape Editor', () => {
     ].sort());
   });
 
+
+  test('Live2D handoff can generate with the enforced prompt when user prompt is empty', async ({ page }) => {
+    let postedPrompt: string | null = null;
+    await page.unroute('/api/generate');
+    await page.route('/api/generate', async (route) => {
+      const request = route.request();
+      const payload = request.headers()['content-type']?.includes('application/json')
+        ? request.postDataJSON() as { prompt?: string }
+        : { prompt: request.postData() ?? '' };
+      postedPrompt = payload.prompt ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          imageDataUrl: FAKE_IMAGE_DATA_URL,
+          prompt: postedPrompt,
+          provider: 'god-tibo',
+        }),
+      });
+    });
+    await page.route('/api/projects/settings', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            systemPrompt: '',
+            referenceImages: [],
+            live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    });
+    await page.route('/api/projects/live2d/manifest', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          settings: {
+            systemPrompt: 'Create a Live2D-ready upper-body anime character part sheet.',
+            live2d: { enabled: true, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+          },
+        }),
+      });
+    });
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Live2D' }).click();
+    await page.getByRole('button', { name: /Enable/i }).click();
+
+    const promptInput = getPromptInput(page);
+    await expect(promptInput).toHaveValue('');
+    const generateButton = getGenerateButton(page);
+    await expect(generateButton).toBeEnabled();
+    await generateButton.click();
+
+    await expect.poll(() => postedPrompt).toContain('Live2D-ready part sheet');
+    await expect(page.getByAltText('Canvas base')).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
+  });
+
+  test('Live2D panel enables handoff and writes bbox part labels into manifest', async ({ page }) => {
+    let postedManifest: Record<string, unknown> | null = null;
+    await page.route('/api/projects/settings', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            systemPrompt: '',
+            referenceImages: [],
+            live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    });
+    await page.route('/api/projects/live2d/manifest', async (route) => {
+      if (route.request().method() === 'PUT') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            settings: {
+              systemPrompt: 'Create a Live2D-ready upper-body anime character part sheet.',
+              live2d: { enabled: true, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
+            },
+          }),
+        });
+        return;
+      }
+      postedManifest = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, manifest: {} }) });
+    });
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Live2D' }).click();
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('live2d handoff image');
+    await getGenerateButton(page).click();
+    await expect(page.getByAltText('Canvas base')).toHaveAttribute('src', FAKE_IMAGE_DATA_URL);
+
+    await page.getByRole('button', { name: /Enable/i }).click();
+    const panel = page.locator('[data-testid="live2d-panel"]');
+    await expect(panel).toContainText('enabled');
+
+    await page.locator('button[title="Box (3)"]').click();
+    const canvas = page.locator('[data-testid="canvas-container"]');
+    const rect = await canvas.boundingBox();
+    if (!rect) throw new Error('Canvas missing');
+    await page.mouse.move(rect.x + 80, rect.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(rect.x + 180, rect.y + 180);
+    await page.mouse.up();
+
+    await panel.locator('[data-slot="select-trigger"]').first().click();
+    await page.locator('[data-slot="select-item"]').filter({ hasText: 'Front hair / bangs' }).click();
+    await panel.getByRole('button', { name: /Hidden notes/i }).click();
+    await panel.getByRole('button', { name: /Write manifest/i }).click();
+
+    await expect.poll(() => postedManifest).not.toBeNull();
+    const manifestPayload = postedManifest as unknown as { partLabels: Record<string, string>; hiddenAreaNotes: Array<{ part: string }> };
+    expect(Object.keys(manifestPayload.partLabels).length).toBeGreaterThan(0);
+    expect(Object.values(manifestPayload.partLabels)).toContain('hair_front');
+    expect(manifestPayload.hiddenAreaNotes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: 'hair_front' }),
+    ]));
+  });
+
   test('export modal is honest about current-image PNG download support', async ({ page }) => {
     const exportButton = page.getByRole('button', { name: /export/i });
     await expect(exportButton).toBeDisabled();
@@ -692,14 +826,14 @@ test.describe('BananaTape Editor', () => {
       }
 
       const file = new File([bytes], 'pasted-reference.png', { type: 'image/png' });
-      const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
-      Object.defineProperty(pasteEvent, 'clipboardData', {
-        value: {
-          items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
-          files: [file],
-        },
-      });
-      document.dispatchEvent(pasteEvent);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      const target = document.querySelector('[data-testid=\"bottom-prompt-input\"]') ?? document;
+      target.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer,
+      }));
     }, RED_IMAGE_DATA_URL);
 
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
@@ -786,6 +920,34 @@ test.describe('BananaTape Editor', () => {
     expect(parseFloat(panY!)).toBeGreaterThan(20);
   });
 
+  test('undo and redo ignore completed pan drags', async ({ page, browserName }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('pan undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=pan undo test').first()).toBeVisible();
+
+    const wrapper = page.locator('[data-testid="transform-wrapper"]');
+    await expect(wrapper).toHaveAttribute('data-pan-x', '0');
+
+    const canvas = page.locator('[data-testid="canvas-container"]');
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    await page.mouse.move(bounds.x + 120, bounds.y + 120);
+    await page.mouse.down({ button: 'left' });
+    await page.mouse.move(bounds.x + 240, bounds.y + 170, { steps: browserName === 'chromium' ? 12 : 6 });
+    await page.mouse.up({ button: 'left' });
+
+    const movedPanX = await wrapper.getAttribute('data-pan-x');
+    const movedPanY = await wrapper.getAttribute('data-pan-y');
+    expect(parseFloat(movedPanX!)).toBeGreaterThan(50);
+    expect(parseFloat(movedPanY!)).toBeGreaterThan(20);
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(wrapper).toHaveAttribute('data-pan-x', movedPanX!);
+    await expect(wrapper).toHaveAttribute('data-pan-y', movedPanY!);
+  });
+
   test('spacebar temporarily enables panning', async ({ page }) => {
     const promptInput = getPromptInput(page);
     await promptInput.fill('space pan test');
@@ -863,6 +1025,34 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.down();
     await page.mouse.move(bounds.x + 200, bounds.y + 200, { steps: 10 });
     await page.mouse.up();
+  });
+
+  test('undo and redo restore completed bounding boxes', async ({ page }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('box undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=box undo test').first()).toBeVisible();
+
+    await page.locator('button[title="Box (3)"]').click();
+    const canvas = page.locator('canvas').first();
+    await canvas.waitFor();
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    const clearAnnotationsButton = page.locator('button[title="Clear annotations"]').first();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.mouse.move(bounds.x + 50, bounds.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 200, bounds.y + 200, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(clearAnnotationsButton).toBeEnabled();
+    await page.getByRole('button', { name: 'Undo' }).last().click();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Redo' }).last().click();
+    await expect(clearAnnotationsButton).toBeEnabled();
   });
 
   test('submits an annotated edit without an extra prompt', async ({ page }) => {

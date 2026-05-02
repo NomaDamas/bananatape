@@ -95,8 +95,9 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
   }, [isDragging, setViewport]);
 
   const handlePointerUp = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
-  }, []);
+  }, [isDragging]);
 
   const cursor = effectivePan
     ? (isDragging ? 'grabbing' : 'grab')
