@@ -17,6 +17,7 @@ import { useParallelGenerate } from '@/hooks/useParallelGenerate';
 import { normalizeReferenceFiles } from '@/lib/images/normalize-reference-files';
 import { SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
 import { buildSubmittedPrompt as buildPromptPure } from '@/lib/prompt/build';
+import { countFocusedAnnotations, hasBusyFocusedBranches, isEditableGenerationSource } from '@/lib/generation/branch-busy';
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useCanvasStore } from '@/stores/useCanvasStore';
@@ -101,14 +102,17 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const focusedImagePromptValue = useCanvasStore((s) =>
     s.focusedImageIds.length === 1 ? s.images[s.focusedImageIds[0]]?.prompt ?? '' : null,
   );
+  const focusedBranchGenerating = useCanvasStore((s) => hasBusyFocusedBranches(s.images, s.focusedImageIds));
+  const focusedReadyImageCount = useCanvasStore((s) => s.focusedImageIds.filter((id) => isEditableGenerationSource(s.images[id])).length);
+  const focusedAnnotationCount = useCanvasStore((s) => countFocusedAnnotations(s.images, s.focusedImageIds));
   const viewportPanX = useCanvasStore((s) => s.viewport.panX);
   const viewportPanY = useCanvasStore((s) => s.viewport.panY);
   const viewportZoom = useCanvasStore((s) => s.viewport.zoom);
 
-  const canEdit = !!baseImage;
+  const canEdit = !!baseImage || focusedReadyImageCount > 0;
   const hasReferenceImages = referenceImages.length > 0;
   const hasDesignContext = designContext.trim().length > 0;
-  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
+  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim()) || focusedAnnotationCount > 0;
 
   useEffect(() => {
     referenceImagesRef.current = referenceImages;
@@ -424,10 +428,10 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const handleGenerate = useCallback(async () => {
     const submittedPrompt = prompt.trim() || (live2dEnabled ? LIVE2D_DEFAULT_USER_PROMPT : '');
-    if (!submittedPrompt || isGenerating) return;
+    if (!submittedPrompt) return;
+    if (focusedImageIds.length > 0 && focusedBranchGenerating) return;
     if (!validateOpenAIReferenceCount()) return;
     setMode('generate');
-    setIsGenerating(true);
 
     try {
       const rootOrigin = {
@@ -451,21 +455,18 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Generation failed';
       addToast(message, 'error');
-    } finally {
-      setIsGenerating(false);
     }
   }, [
     addToast,
     clearPromptComposer,
     designContext,
-    isGenerating,
+    focusedBranchGenerating,
     parallelCount,
     parallelGenerate,
     live2dEnabled,
     prompt,
     referenceImages,
     focusedImageIds,
-    setIsGenerating,
     setMode,
     systemPrompt,
     validateOpenAIReferenceCount,
@@ -476,9 +477,33 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const handleEdit = useCallback(async () => {
     const submittedPrompt = prompt.trim() || (hasAnnotations ? ANNOTATION_ONLY_EDIT_PROMPT : '');
-    if (!baseImage || !submittedPrompt || isGenerating) return;
+    if (!submittedPrompt) return;
     if (!validateOpenAIReferenceCount(EDIT_FLOW_RESERVED_IMAGES)) return;
     setMode('edit');
+
+    if (focusedImageIds.length > 0) {
+      if (focusedBranchGenerating) return;
+      try {
+        await parallelGenerate.generate({
+          count: parallelCount,
+          prompt: submittedPrompt,
+          systemPrompt,
+          designContext,
+          referenceImages: referenceImages.map((reference) => ({ file: reference.file, id: reference.id })),
+          parentIds: focusedImageIds,
+        });
+        startTransition(() => {
+          clearPromptComposer();
+        });
+        addToast('Generation started', 'success');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Edit failed';
+        addToast(message, 'error');
+      }
+      return;
+    }
+
+    if (!baseImage || isGenerating) return;
     setIsGenerating(true);
 
     try {
@@ -545,15 +570,22 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     clearPromptComposer,
     exportAnnotatedImage,
     exportMask,
+    designContext,
+    focusedBranchGenerating,
+    focusedImageIds,
     hasAnnotations,
     isGenerating,
+    parallelCount,
+    parallelGenerate,
     prompt,
     provider,
+    referenceImages,
     resizeToSquare1024,
     selectedHistoryId,
     setBaseImage,
     setIsGenerating,
     setMode,
+    systemPrompt,
     validateOpenAIReferenceCount,
   ]);
 

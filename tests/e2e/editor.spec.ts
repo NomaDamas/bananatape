@@ -142,8 +142,6 @@ test.describe('BananaTape Editor', () => {
     await expect(getPromptInput(page)).toBeVisible();
     await expect(page.locator('[data-testid="bottom-provider-select"]')).toContainText(/codex|OpenAI/);
     await expect(page.locator('button[title="Attach reference image"], button[aria-label*="reference" i]').first()).toBeVisible();
-    await expect(page.locator('button[title="Zoom in"]').first()).toBeVisible();
-    await expect(page.locator('button[title="Zoom out"]').first()).toBeVisible();
   });
 
   test('shows active CLI project name in the top bar', async ({ page }) => {
@@ -847,23 +845,6 @@ test.describe('BananaTape Editor', () => {
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
-  });
-
-  test('zoom buttons change viewport zoom', async ({ page }) => {
-    const promptInput = getPromptInput(page);
-    await promptInput.fill('zoom test');
-    await getGenerateButton(page).click();
-    await expect(page.locator('text=zoom test').first()).toBeVisible();
-
-    const wrapper = page.locator('[data-testid="transform-wrapper"]');
-    await expect(wrapper).toHaveAttribute('data-zoom', '1');
-
-    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom in"]').last().click();
-    const zoomAfterIn = await wrapper.getAttribute('data-zoom');
-    expect(parseFloat(zoomAfterIn!)).toBeGreaterThan(1);
-
-    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom out"]').last().click();
-    await expect(wrapper).toHaveAttribute('data-zoom', '1');
   });
 
   test('mouse wheel zooms canvas', async ({ page }) => {

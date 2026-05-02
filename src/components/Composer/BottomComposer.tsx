@@ -9,6 +9,7 @@ import { ToolPalette } from '@/components/Toolbar/ToolPalette';
 import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
+import { countFocusedAnnotations, hasBusyFocusedBranches, isEditableGenerationSource } from '@/lib/generation/branch-busy';
 import type { Provider } from '@/types';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
 
@@ -42,18 +43,16 @@ export function BottomComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const provider = useEditorStore((s) => s.provider);
   const setProvider = useEditorStore((s) => s.setProvider);
-  const isGenerating = useEditorStore((s) => s.isGenerating);
   const mode = useEditorStore((s) => s.mode);
   const setMode = useEditorStore((s) => s.setMode);
   const baseImage = useEditorStore((s) => s.baseImage);
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
-  const zoom = useCanvasStore((s) => s.viewport.zoom);
-  const zoomIn = useCanvasStore((s) => s.zoomIn);
-  const zoomOut = useCanvasStore((s) => s.zoomOut);
-  const resetViewport = useCanvasStore((s) => s.resetViewport);
   const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const focusedBranchGenerating = useCanvasStore((s) => hasBusyFocusedBranches(s.images, s.focusedImageIds));
+  const focusedReadyImageCount = useCanvasStore((s) => s.focusedImageIds.filter((id) => isEditableGenerationSource(s.images[id])).length);
+  const focusedAnnotationCount = useCanvasStore((s) => countFocusedAnnotations(s.images, s.focusedImageIds));
   const canUndo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.past.length ?? 0) > 0);
   const canRedo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.future.length ?? 0) > 0);
   const undo = useCanvasStore((s) => s.undoFocusedImage);
@@ -62,8 +61,8 @@ export function BottomComposer({
   const incrementParallelCount = useEditorStore((s) => s.incrementParallelCount);
   const decrementParallelCount = useEditorStore((s) => s.decrementParallelCount);
 
-  const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length;
-  const canEdit = !!baseImage;
+  const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length + focusedAnnotationCount;
+  const canEdit = !!baseImage || focusedReadyImageCount > 0;
   const shouldEdit = canEdit && (mode === 'edit' || annotationCount > 0);
   const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || annotationCount > 0);
   const primaryLabel = shouldEdit
@@ -72,7 +71,7 @@ export function BottomComposer({
       : 'Apply edit'
     : 'Generate';
   const canSubmitGenerate = Boolean(prompt.trim()) || live2dEnabled;
-  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !canSubmitGenerate);
+  const isPrimaryDisabled = focusedBranchGenerating || (shouldEdit ? !canSubmitEdit : !canSubmitGenerate);
 
   const submitPrimary = () => {
     if (isPrimaryDisabled) return;
@@ -104,16 +103,6 @@ export function BottomComposer({
             </Button>
             <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title={focusedImageIds.length === 1 ? "Redo selected image (Cmd/Ctrl+Shift+Z)" : "Select one image to redo"}>
               <Redo2 className="h-3 w-3" />
-            </Button>
-            <div className="mx-1 h-4 w-px bg-white/10" />
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomOut} title="Zoom out">
-              <Minus className="h-3 w-3" />
-            </Button>
-            <button type="button" className="min-w-12 rounded px-2 text-center text-[11px] text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={resetViewport} title="Reset viewport">
-              {Math.round(zoom * 100)}%
-            </button>
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomIn} title="Zoom in">
-              <Plus className="h-3 w-3" />
             </Button>
           </div>
         </div>
@@ -156,7 +145,7 @@ export function BottomComposer({
                 size="icon"
                 variant={references.length > 0 ? 'secondary' : 'ghost'}
                 className="relative h-10 w-10 shrink-0 rounded-lg text-[#b3b3b3] hover:bg-white/10 hover:text-white"
-                disabled={isGenerating}
+                disabled={focusedBranchGenerating}
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach reference image"
               >
@@ -249,7 +238,7 @@ export function BottomComposer({
                 onClick={submitPrimary}
                 data-testid="bottom-primary-action"
               >
-                {isGenerating ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Wand2 className="h-4 w-4 shrink-0" />}
+                {focusedBranchGenerating ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Wand2 className="h-4 w-4 shrink-0" />}
                 <span className="truncate">{primaryLabel}</span>
               </Button>
             </div>

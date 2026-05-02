@@ -3,7 +3,7 @@
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useCanvasStore } from '@/stores/useCanvasStore';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight, Hand, MousePointer2, Pen, Square, StickyNote, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowUpRight, Hand, MousePointer2, Pen, Square, StickyNote, Trash2 } from 'lucide-react';
 
 const tools = [
   { id: 'pan' as const, icon: Hand, label: 'Pan', shortcut: '1' },
@@ -18,8 +18,6 @@ export function ToolPalette() {
   const activeTool = useEditorStore((s) => s.activeTool);
   const setActiveTool = useEditorStore((s) => s.setActiveTool);
   const clearEditorAnnotations = useEditorStore((s) => s.clearAnnotations);
-  const zoomIn = useEditorStore((s) => s.zoomIn);
-  const zoomOut = useEditorStore((s) => s.zoomOut);
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
@@ -57,28 +55,6 @@ export function ToolPalette() {
           </Button>
         );
       })}
-
-      <div className="mx-1 h-5 w-px shrink-0 bg-neutral-200 dark:bg-neutral-800" />
-
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8 shrink-0"
-        onClick={zoomIn}
-        title="Zoom in"
-      >
-        <ZoomIn className="w-4 h-4" />
-      </Button>
-
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8 shrink-0"
-        onClick={zoomOut}
-        title="Zoom out"
-      >
-        <ZoomOut className="w-4 h-4" />
-      </Button>
 
       <div className="mx-1 h-5 w-px shrink-0 bg-neutral-200 dark:bg-neutral-800" />
 
