@@ -20,13 +20,24 @@ export function useKeyboardShortcuts() {
       if (isInput || state.activeMemoId || state.isSpacePressed) return;
 
       if (e.metaKey || e.ctrlKey) {
-        if (e.key === 'z') {
+        const key = e.key.toLowerCase();
+        const temporalState = useEditorStore.temporal.getState();
+
+        if (key === 'z' && e.shiftKey) {
           e.preventDefault();
-          if (e.shiftKey) {
-            if ('redo' in state && typeof state.redo === 'function') state.redo();
-          } else {
-            if ('undo' in state && typeof state.undo === 'function') state.undo();
-          }
+          temporalState.redo();
+          return;
+        }
+
+        if (key === 'z') {
+          e.preventDefault();
+          temporalState.undo();
+          return;
+        }
+
+        if (key === 'y') {
+          e.preventDefault();
+          temporalState.redo();
           return;
         }
       }

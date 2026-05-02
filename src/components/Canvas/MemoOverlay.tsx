@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useEditorStore } from '@/stores/useEditorStore';
 import {
   estimateStickyMemoSize,
@@ -16,17 +16,41 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
   const memos = useEditorStore((s) => s.memos);
   const activeMemoId = useEditorStore((s) => s.activeMemoId);
   const updateMemo = useEditorStore((s) => s.updateMemo);
+  const commitMemoText = useEditorStore((s) => s.commitMemoText);
   const setActiveMemoId = useEditorStore((s) => s.setActiveMemoId);
   const deleteMemo = useEditorStore((s) => s.deleteMemo);
+  const editStartSnapshotsRef = useRef(new Map<string, typeof memos>());
+
+  const handleFocus = useCallback((id: string) => {
+    if (!editStartSnapshotsRef.current.has(id)) {
+      editStartSnapshotsRef.current.set(id, useEditorStore.getState().memos);
+    }
+    setActiveMemoId(id);
+  }, [setActiveMemoId]);
 
   const handleBlur = useCallback(
     (id: string, text: string) => {
+      const startMemos = editStartSnapshotsRef.current.get(id);
+      editStartSnapshotsRef.current.delete(id);
+      const initialMemo = startMemos?.find((memo) => memo.id === id);
+      const shouldCommitAsEdit = !!initialMemo && initialMemo.text.length > 0 && initialMemo.text !== text;
+
       if (!text.trim()) {
-        deleteMemo(id);
+        if (shouldCommitAsEdit && startMemos) {
+          deleteMemo(id, { historySnapshot: { memos: startMemos } });
+        } else {
+          deleteMemo(id, { track: false });
+        }
+        setActiveMemoId(null);
+        return;
+      }
+
+      if (shouldCommitAsEdit && startMemos) {
+        commitMemoText(id, text, { historySnapshot: { memos: startMemos } });
       }
       setActiveMemoId(null);
     },
-    [deleteMemo, setActiveMemoId]
+    [commitMemoText, deleteMemo, setActiveMemoId]
   );
 
   if (!imageSize.width) return null;
@@ -74,7 +98,8 @@ export function MemoOverlay({ imageSize }: MemoOverlayProps) {
                   lineHeight: `${STICKY_MEMO_LINE_HEIGHT}px`,
                 }}
                 placeholder="Write edit note..."
-                onChange={(e) => updateMemo(memo.id, e.target.value)}
+                onFocus={() => handleFocus(memo.id)}
+                onChange={(e) => updateMemo(memo.id, e.target.value, { track: false })}
                 onBlur={(e) => handleBlur(memo.id, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {

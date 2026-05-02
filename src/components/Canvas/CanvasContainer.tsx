@@ -27,7 +27,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
   const zoom = useEditorStore((s) => s.zoom);
   const panX = useEditorStore((s) => s.panX);
   const panY = useEditorStore((s) => s.panY);
-  const setZoom = useEditorStore((s) => s.setZoom);
+  const setViewport = useEditorStore((s) => s.setViewport);
   const setPan = useEditorStore((s) => s.setPan);
   const activeTool = useEditorStore((s) => s.activeTool);
   const isSpacePressed = useEditorStore((s) => s.isSpacePressed);
@@ -66,9 +66,8 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     const newPanX = mouseX - imageX * newZoom;
     const newPanY = mouseY - imageY * newZoom;
 
-    setZoom(newZoom);
-    setPan(newPanX, newPanY);
-  }, [containerRect, zoom, panX, panY, setZoom, setPan]);
+    setViewport({ zoom: newZoom, panX: newPanX, panY: newPanY });
+  }, [containerRect, zoom, panX, panY, setViewport]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!effectivePan) return;
@@ -90,9 +89,15 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     setPan(dragStartRef.current.panX + dx, dragStartRef.current.panY + dy);
   }, [isDragging, setPan]);
 
-  const handlePointerUp = useCallback(() => {
+  const commitPanDrag = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
-  }, []);
+
+    const state = useEditorStore.getState();
+    if (state.panX === dragStartRef.current.panX && state.panY === dragStartRef.current.panY) return;
+
+    setPan(state.panX, state.panY);
+  }, [isDragging, setPan]);
 
   const cursor = effectivePan
     ? (isDragging ? 'grabbing' : 'grab')
@@ -107,8 +112,8 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      onPointerUp={commitPanDrag}
+      onPointerLeave={commitPanDrag}
       className={`relative overflow-hidden bg-[#1e1e1e] text-neutral-200 ${className || ''}`}
       style={{ cursor, touchAction: 'none' }}
     >
