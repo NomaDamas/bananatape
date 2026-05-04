@@ -27,7 +27,6 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
     prompt: options.prompt,
     n: 1,
     size: options.size ?? '1024x1024',
-    response_format: 'b64_json',
   });
 
   const b64 = response.data?.[0]?.b64_json;
@@ -48,7 +47,6 @@ export async function editImage(options: EditImageOptions): Promise<string> {
     model: 'gpt-image-2',
     n: 1,
     size: '1024x1024',
-    response_format: 'b64_json',
   });
 
   const b64 = response.data?.[0]?.b64_json;
