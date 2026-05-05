@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { ConcreteOutputSize } from '@/lib/generation/output-size';
 
 function getOpenAI(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -10,7 +11,7 @@ function getOpenAI(): OpenAI {
 
 export interface GenerateImageOptions {
   prompt: string;
-  size?: '1024x1024' | '1024x1536' | '1536x1024';
+  size?: ConcreteOutputSize;
   quality?: 'low' | 'medium' | 'high' | 'auto';
 }
 
@@ -18,15 +19,18 @@ export interface EditImageOptions {
   images: File[];
   maskImage?: File;
   prompt: string;
+  size?: ConcreteOutputSize;
 }
 
 export async function generateImage(options: GenerateImageOptions): Promise<string> {
   const openai = getOpenAI();
+  const size = (options.size ?? '1024x1024') as Parameters<typeof openai.images.generate>[0]['size'];
   const response = await openai.images.generate({
     model: 'gpt-image-2',
     prompt: options.prompt,
     n: 1,
-    size: options.size ?? '1024x1024',
+    size,
+    ...(options.quality ? { quality: options.quality } : {}),
   });
 
   const b64 = response.data?.[0]?.b64_json;
@@ -39,6 +43,7 @@ export async function generateImage(options: GenerateImageOptions): Promise<stri
 
 export async function editImage(options: EditImageOptions): Promise<string> {
   const openai = getOpenAI();
+  const size = (options.size ?? '1024x1024') as Parameters<typeof openai.images.edit>[0]['size'];
 
   const response = await openai.images.edit({
     image: options.images,
@@ -46,7 +51,7 @@ export async function editImage(options: EditImageOptions): Promise<string> {
     prompt: options.prompt,
     model: 'gpt-image-2',
     n: 1,
-    size: '1024x1024',
+    size,
   });
 
   const b64 = response.data?.[0]?.b64_json;
