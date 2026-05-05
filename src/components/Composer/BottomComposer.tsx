@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToolPalette } from '@/components/Toolbar/ToolPalette';
+import { OutputSizePicker } from '@/components/Composer/OutputSizePicker';
 import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
@@ -173,6 +174,7 @@ export function BottomComposer({
             </div>
 
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:shrink-0">
+              <OutputSizePicker />
               <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
                 <SelectTrigger className="h-10 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[150px]" data-testid="bottom-provider-select">
                   <span className="truncate">{formatProviderLabel(provider)}</span>
