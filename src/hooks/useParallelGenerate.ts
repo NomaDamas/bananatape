@@ -248,25 +248,20 @@ export function useParallelGenerate(): UseParallelGenerateApi {
           endpoint = '/api/edit';
           formData.append('parentId', placeholder.parentId);
           const exported = await exportImageWithAnnotations(placeholder.parentId);
-          const shouldResize = placeholder.provider === 'openai';
           const resolvedSize = resolveOutputSize(input.outputSize, exported.size);
           const { width, height } = outputSizeToDims(resolvedSize);
-          const original = shouldResize ? await resizeToSize(exported.original, width, height) : exported.original;
-          const annotated = shouldResize ? await resizeToSize(exported.annotated, width, height) : exported.annotated;
-          const mask = shouldResize ? await resizeToSize(exported.mask, width, height) : exported.mask;
+          const original = await resizeToSize(exported.original, width, height);
+          const annotated = await resizeToSize(exported.annotated, width, height);
+          const mask = await resizeToSize(exported.mask, width, height);
           formData.append('images', original, 'original.png');
           formData.append('images', annotated, 'annotated.png');
           appendEditImages(formData, referenceImages);
           formData.append('maskImage', mask, 'mask.png');
-          if (placeholder.provider === 'openai') {
-            formData.append('size', resolvedSize);
-          }
+          formData.append('size', resolvedSize);
         } else {
           appendReferenceImages(formData, referenceImages);
-          if (placeholder.provider === 'openai') {
-            const resolvedSize = resolveOutputSize(input.outputSize, null);
-            formData.append('size', resolvedSize);
-          }
+          const resolvedSize = resolveOutputSize(input.outputSize, null);
+          formData.append('size', resolvedSize);
         }
 
         const response = await fetch(endpoint, { method: 'POST', body: formData, signal: handle.signal });

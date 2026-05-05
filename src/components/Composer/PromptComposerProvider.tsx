@@ -532,20 +532,16 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         : null;
       const resolvedSize = outputSize === 'auto' ? resolveAutoSize(baseDims) : outputSize;
 
-      if (provider === 'openai') {
-        const { width, height } = outputSizeToDims(resolvedSize);
-        originalBlob = await resizeToSize(originalBlob, width, height);
-        resizedAnnotated = await resizeToSize(annotatedBlob, width, height);
-        resizedMask = await resizeToSize(maskBlob, width, height);
-      }
+      const { width, height } = outputSizeToDims(resolvedSize);
+      originalBlob = await resizeToSize(originalBlob, width, height);
+      resizedAnnotated = await resizeToSize(annotatedBlob, width, height);
+      resizedMask = await resizeToSize(maskBlob, width, height);
 
       formData.append('images', originalBlob, 'original.png');
       formData.append('images', resizedAnnotated, 'annotated.png');
       appendReferenceImages(formData, 'images');
       formData.append('maskImage', resizedMask, 'mask.png');
-      if (provider === 'openai') {
-        formData.append('size', resolvedSize);
-      }
+      formData.append('size', resolvedSize);
 
       const res = await fetch('/api/edit', {
         method: 'POST',
