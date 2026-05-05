@@ -7,8 +7,8 @@ export function useCanvasDownload() {
   const { exportImageWithAnnotations } = useCanvasExport();
 
   const downloadCanvasImage = useCallback(async (imageId: string) => {
-    const { annotated } = await exportImageWithAnnotations(imageId);
-    const url = URL.createObjectURL(annotated);
+    const { original } = await exportImageWithAnnotations(imageId);
+    const url = URL.createObjectURL(original);
     const link = document.createElement('a');
     link.href = url;
     link.download = `bananatape-${imageId.slice(0, 8)}-${Date.now()}.png`;

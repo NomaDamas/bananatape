@@ -44,7 +44,7 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
         <DialogHeader>
           <DialogTitle className="text-white">Export focused images</DialogTitle>
           <DialogDescription className="text-[#999]">
-            Download annotated PNGs for images currently focused on the canvas.
+            Download clean PNGs (annotations excluded) for images currently focused on the canvas.
           </DialogDescription>
         </DialogHeader>
 
@@ -55,7 +55,7 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
                 <FileImage className="h-6 w-6" />
               </div>
               <p className="text-sm font-medium text-white">Focus an image on the canvas to export it</p>
-              <p className="mt-1 text-xs text-[#999]">Click an image, then export its annotated PNG.</p>
+              <p className="mt-1 text-xs text-[#999]">Click an image, then export its PNG without annotations.</p>
             </div>
           )}
 
