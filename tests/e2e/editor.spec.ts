@@ -595,7 +595,7 @@ test.describe('BananaTape Editor', () => {
     ]));
   });
 
-  test('export modal is honest about current-image PNG download support', async ({ page }) => {
+  test('export modal advertises PNG-only, annotation-stripped downloads for the focused image', async ({ page }) => {
     const exportButton = page.getByRole('button', { name: /export/i });
     await expect(exportButton).toBeDisabled();
 
@@ -609,13 +609,13 @@ test.describe('BananaTape Editor', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText('PNG · current image')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Download PNG/i })).toBeEnabled();
+    await expect(dialog.getByText(/annotations excluded/i)).toBeVisible();
+    await expect(dialog.getByText(/^PNG · [a-z0-9]+$/i)).toBeVisible();
+    await expect(dialog.getByText('Focus an image on the canvas to export it')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /^Download PNG$/i })).toBeEnabled();
 
-    const unsupportedEnabledActions = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
-    for (let i = 0; i < await unsupportedEnabledActions.count(); i += 1) {
-      await expect(unsupportedEnabledActions.nth(i)).toBeDisabled();
-    }
+    const unsupportedFormats = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
+    await expect(unsupportedFormats).toHaveCount(0);
   });
 
   test('pan is the default active tool', async ({ page }) => {
