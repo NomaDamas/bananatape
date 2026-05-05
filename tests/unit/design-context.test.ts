@@ -21,7 +21,7 @@ async function tempProjectRoot() {
 describe('design context schema', () => {
   it('omits designContext fields from empty settings so legacy project.json still round-trips', () => {
     const empty = createEmptyProjectSettings();
-    expect(empty).toEqual({ systemPrompt: '', referenceImages: [], live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] } });
+    expect(empty).toEqual({ systemPrompt: '', referenceImages: [] });
     expect('designContext' in empty).toBe(false);
     expect('designContextFileName' in empty).toBe(false);
   });
@@ -33,7 +33,7 @@ describe('design context schema', () => {
       designContext: '',
       designContextFileName: '',
     });
-    expect(normalized).toEqual({ systemPrompt: '', referenceImages: [], live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] } });
+    expect(normalized).toEqual({ systemPrompt: '', referenceImages: [] });
   });
 
   it('preserves non-empty designContext fields during normalization', () => {
@@ -46,7 +46,6 @@ describe('design context schema', () => {
     expect(normalized).toEqual({
       systemPrompt: '',
       referenceImages: [],
-      live2d: { enabled: false, selectedHistoryEntryId: null, partLabels: {}, hiddenAreaNotes: [] },
       designContext: '# Title\n- one',
       designContextFileName: 'DESIGN.md',
     });

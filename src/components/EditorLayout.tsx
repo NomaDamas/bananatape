@@ -99,12 +99,6 @@ function StandaloneEditorShell() {
     setSystemPrompt,
     designContext,
     designContextFileName,
-    live2dEnabled,
-    live2dPartLabels,
-    live2dHiddenAreaNotes,
-    enableLive2D,
-    setLive2DPartLabels,
-    setLive2DHiddenAreaNotes,
     replaceDesignContext,
     clearDesignContext,
     addReferenceFiles,
@@ -136,12 +130,6 @@ function StandaloneEditorShell() {
           onSystemPromptChange={setSystemPrompt}
           designContext={designContext}
           designContextFileName={designContextFileName}
-          live2dEnabled={live2dEnabled}
-          onEnableLive2D={enableLive2D}
-          live2dPartLabels={live2dPartLabels}
-          onLive2DPartLabelsChange={setLive2DPartLabels}
-          live2dHiddenAreaNotes={live2dHiddenAreaNotes}
-          onLive2DHiddenAreaNotesChange={setLive2DHiddenAreaNotes}
           onReplaceDesignContext={replaceDesignContext}
           onClearDesignContext={clearDesignContext}
         />
@@ -158,7 +146,6 @@ function StandaloneEditorShell() {
         onRemoveReference={removeReferenceImage}
         onGenerate={handleGenerate}
         onEdit={handleEdit}
-        live2dEnabled={live2dEnabled}
       />
       <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={focusedImageIds.length > 0} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
