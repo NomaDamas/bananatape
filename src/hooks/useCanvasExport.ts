@@ -41,26 +41,30 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
-async function resizeToSquare1024(blob: Blob): Promise<Blob> {
+async function resizeToSize(blob: Blob, width: number, height: number): Promise<Blob> {
   const img = await loadImageFromBlob(blob);
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get canvas context');
 
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 1024, 1024);
+  ctx.fillRect(0, 0, width, height);
 
-  const scale = Math.max(1024 / img.naturalWidth, 1024 / img.naturalHeight);
+  const scale = Math.max(width / img.naturalWidth, height / img.naturalHeight);
   const scaledWidth = img.naturalWidth * scale;
   const scaledHeight = img.naturalHeight * scale;
-  const offsetX = (1024 - scaledWidth) / 2;
-  const offsetY = (1024 - scaledHeight) / 2;
+  const offsetX = (width - scaledWidth) / 2;
+  const offsetY = (height - scaledHeight) / 2;
 
   ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
 
   return canvasToBlob(canvas, 'image/png');
+}
+
+async function resizeToSquare1024(blob: Blob): Promise<Blob> {
+  return resizeToSize(blob, 1024, 1024);
 }
 
 export function useCanvasExport() {
@@ -143,5 +147,5 @@ export function useCanvasExport() {
     };
   }, []);
 
-  return { exportAnnotatedImage, exportMask, exportImageWithAnnotations, resizeToSquare1024 };
+  return { exportAnnotatedImage, exportMask, exportImageWithAnnotations, resizeToSquare1024, resizeToSize };
 }
