@@ -21,7 +21,7 @@ export function OutputSizePicker() {
   return (
     <Select value={outputSize} onValueChange={(value) => setOutputSize(value as OutputSize)}>
       <SelectTrigger
-        className="h-10 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[120px]"
+        className="h-8 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[120px]"
         data-testid="bottom-output-size-select"
         title="Output size — Auto matches the source image's aspect ratio"
       >

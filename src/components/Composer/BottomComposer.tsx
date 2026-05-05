@@ -98,13 +98,27 @@ export function BottomComposer({
           <div className="max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
             <ToolPalette />
           </div>
-          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={undo} disabled={!canUndo} aria-label="Undo" title={focusedImageIds.length === 1 ? "Undo selected image (Cmd/Ctrl+Z)" : "Select one image to undo"}>
-              <Undo2 className="h-3 w-3" />
-            </Button>
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title={focusedImageIds.length === 1 ? "Redo selected image (Cmd/Ctrl+Shift+Z)" : "Select one image to redo"}>
-              <Redo2 className="h-3 w-3" />
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+              <OutputSizePicker />
+              <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
+                <SelectTrigger className="h-8 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[120px]" data-testid="bottom-provider-select">
+                  <span className="truncate">{formatProviderLabel(provider)}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="god-tibo">codex</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+              <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={undo} disabled={!canUndo} aria-label="Undo" title={focusedImageIds.length === 1 ? "Undo selected image (Cmd/Ctrl+Z)" : "Select one image to undo"}>
+                <Undo2 className="h-3 w-3" />
+              </Button>
+              <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title={focusedImageIds.length === 1 ? "Redo selected image (Cmd/Ctrl+Shift+Z)" : "Select one image to redo"}>
+                <Redo2 className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -174,17 +188,6 @@ export function BottomComposer({
             </div>
 
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:shrink-0">
-              <OutputSizePicker />
-              <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
-                <SelectTrigger className="h-10 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[150px]" data-testid="bottom-provider-select">
-                  <span className="truncate">{formatProviderLabel(provider)}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="god-tibo">codex</SelectItem>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                </SelectContent>
-              </Select>
-
               <div
                 role="spinbutton"
                 tabIndex={0}
