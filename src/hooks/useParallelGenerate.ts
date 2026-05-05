@@ -22,7 +22,6 @@ import {
 } from '@/types/canvas';
 import {
   type ConcreteOutputSize,
-  outputSizeToDims,
   resolveAutoSize,
   type OutputSize,
 } from '@/lib/generation/output-size';
@@ -202,7 +201,7 @@ function resolveOutputSize(
 
 export function useParallelGenerate(): UseParallelGenerateApi {
   const activeImageIdsRef = useRef<Set<string>>(new Set());
-  const { exportImageWithAnnotations, resizeToSize } = useCanvasExport();
+  const { exportImageWithAnnotations } = useCanvasExport();
 
   const generate = useCallback(async (input: ParallelGenerateInput) => {
     const count = clampCount(input.count);
@@ -248,15 +247,11 @@ export function useParallelGenerate(): UseParallelGenerateApi {
           endpoint = '/api/edit';
           formData.append('parentId', placeholder.parentId);
           const exported = await exportImageWithAnnotations(placeholder.parentId);
-          const resolvedSize = resolveOutputSize(input.outputSize, exported.size);
-          const { width, height } = outputSizeToDims(resolvedSize);
-          const original = await resizeToSize(exported.original, width, height);
-          const annotated = await resizeToSize(exported.annotated, width, height);
-          const mask = await resizeToSize(exported.mask, width, height);
-          formData.append('images', original, 'original.png');
-          formData.append('images', annotated, 'annotated.png');
+          formData.append('images', exported.original, 'original.png');
+          formData.append('images', exported.annotated, 'annotated.png');
           appendEditImages(formData, referenceImages);
-          formData.append('maskImage', mask, 'mask.png');
+          formData.append('maskImage', exported.mask, 'mask.png');
+          const resolvedSize = resolveOutputSize(input.outputSize, exported.size);
           formData.append('size', resolvedSize);
         } else {
           appendReferenceImages(formData, referenceImages);
@@ -306,7 +301,7 @@ export function useParallelGenerate(): UseParallelGenerateApi {
     });
 
     await Promise.allSettled(fanOut);
-  }, [exportImageWithAnnotations, resizeToSize]);
+  }, [exportImageWithAnnotations]);
 
   const cancel = useCallback((imageId: string) => {
     abortGeneration(imageId);

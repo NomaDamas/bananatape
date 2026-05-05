@@ -18,8 +18,6 @@ import type { UseParallelGenerateApi } from './useParallelGenerate';
 
 const canvasExportMocks = vi.hoisted(() => ({
   exportImageWithAnnotations: vi.fn(),
-  resizeToSquare1024: vi.fn(),
-  resizeToSize: vi.fn(),
 }));
 
 vi.mock('@/hooks/useCanvasExport', () => ({
@@ -201,11 +199,7 @@ beforeEach(() => {
   useHistoryStore.getState().clearHistory();
   useEditorStore.getState().setProvider('openai');
   canvasExportMocks.exportImageWithAnnotations.mockReset();
-  canvasExportMocks.resizeToSquare1024.mockReset();
-  canvasExportMocks.resizeToSize.mockReset();
   canvasExportMocks.exportImageWithAnnotations.mockImplementation((imageId: string) => Promise.resolve(defaultExportBlobs(imageId)));
-  canvasExportMocks.resizeToSquare1024.mockImplementation((blob: Blob) => Promise.resolve(blob));
-  canvasExportMocks.resizeToSize.mockImplementation((blob: Blob) => Promise.resolve(blob));
   mockImageConstructor();
 });
 
@@ -279,7 +273,7 @@ describe('useParallelGenerate', () => {
     await generatePromise;
   });
 
-  it('sends one selected parent through /api/edit for every requested child', async () => {
+  it('forwards parent original/annotated/mask blobs to /api/edit verbatim without resizing', async () => {
     const { calls } = createFetchMock();
     const parent = makeParent('p1', { x: 100, y: 200 });
     useCanvasStore.getState().addImages([parent]);
@@ -297,18 +291,29 @@ describe('useParallelGenerate', () => {
     expect(calls.map((call) => call.input)).toEqual(['/api/edit', '/api/edit']);
     expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenCalledTimes(2);
     expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenNthCalledWith(1, 'p1');
-    expect(canvasExportMocks.resizeToSize).toHaveBeenCalledTimes(6);
 
-    calls.forEach((call) => {
-      const body = call.init?.body;
-      expect(body).toBeInstanceOf(FormData);
-      const formData = body as FormData;
-      expect(formData.get('parentId')).toBe('p1');
-      expect(formData.getAll('images')).toHaveLength(3);
-      expect(formData.get('maskImage')).toBeInstanceOf(File);
-      expect(formData.get('provider')).toBe('openai');
-      expect(formData.get('size')).toBeTruthy();
-    });
+    await Promise.all(
+      calls.map(async (call) => {
+        const body = call.init?.body;
+        expect(body).toBeInstanceOf(FormData);
+        const formData = body as FormData;
+        expect(formData.get('parentId')).toBe('p1');
+
+        const images = formData.getAll('images');
+        expect(images).toHaveLength(3);
+
+        const [originalAsSent, annotatedAsSent] = images as File[];
+        await expect(originalAsSent.text()).resolves.toBe('p1-original');
+        await expect(annotatedAsSent.text()).resolves.toBe('p1-annotated');
+
+        const maskAsSent = formData.get('maskImage') as File | null;
+        expect(maskAsSent).toBeInstanceOf(File);
+        await expect((maskAsSent as File).text()).resolves.toBe('p1-mask');
+
+        expect(formData.get('provider')).toBe('openai');
+        expect(formData.get('size')).toBeTruthy();
+      }),
+    );
 
     resolveSuccesses(calls);
     await generatePromise;

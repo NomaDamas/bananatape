@@ -25,7 +25,7 @@ import { useHistoryStore } from '@/stores/useHistoryStore';
 import { LIVE2D_DEFAULT_USER_PROMPT } from '@/lib/live2d/contract';
 import type { Live2DHiddenAreaNote } from '@/lib/live2d/contract';
 import type { Provider } from '@/types';
-import { outputSizeToDims, resolveAutoSize } from '@/lib/generation/output-size';
+import { resolveAutoSize } from '@/lib/generation/output-size';
 
 export interface ReferenceImage {
   id: string;
@@ -97,7 +97,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const addEntry = useHistoryStore((s) => s.addEntry);
   const selectedHistoryId = useHistoryStore((s) => s.selectedId);
-  const { exportAnnotatedImage, exportMask, resizeToSize } = useCanvasExport();
+  const { exportAnnotatedImage, exportMask } = useCanvasExport();
   const parallelGenerate = useParallelGenerate();
   const { addToast } = useToast();
   const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
@@ -522,9 +522,7 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       formData.append('provider', provider);
       if (selectedHistoryId) formData.append('parentId', selectedHistoryId);
 
-      let originalBlob = await fetch(baseImage).then((r) => r.blob());
-      let resizedAnnotated = annotatedBlob;
-      let resizedMask = maskBlob;
+      const originalBlob = await fetch(baseImage).then((r) => r.blob());
 
       const imageSize = useEditorStore.getState().imageSize;
       const baseDims = imageSize.width > 0 && imageSize.height > 0
@@ -532,15 +530,10 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
         : null;
       const resolvedSize = outputSize === 'auto' ? resolveAutoSize(baseDims) : outputSize;
 
-      const { width, height } = outputSizeToDims(resolvedSize);
-      originalBlob = await resizeToSize(originalBlob, width, height);
-      resizedAnnotated = await resizeToSize(annotatedBlob, width, height);
-      resizedMask = await resizeToSize(maskBlob, width, height);
-
       formData.append('images', originalBlob, 'original.png');
-      formData.append('images', resizedAnnotated, 'annotated.png');
+      formData.append('images', annotatedBlob, 'annotated.png');
       appendReferenceImages(formData, 'images');
-      formData.append('maskImage', resizedMask, 'mask.png');
+      formData.append('maskImage', maskBlob, 'mask.png');
       formData.append('size', resolvedSize);
 
       const res = await fetch('/api/edit', {
@@ -596,7 +589,6 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     prompt,
     provider,
     referenceImages,
-    resizeToSize,
     selectedHistoryId,
     setBaseImage,
     setIsGenerating,
