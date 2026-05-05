@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { useStore } from 'zustand';
 import type { StoreApi } from 'zustand';
 import type { EditorState, BoundingBox, TextMemo, Tool, Provider, Mode, NormalizedPoint, ImageSize, StreamChunk } from './types';
+import type { OutputSize } from '../lib/generation/output-size';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
@@ -43,6 +44,7 @@ interface EditorActions {
   setParallelCount: (count: number) => void;
   incrementParallelCount: () => void;
   decrementParallelCount: () => void;
+  setOutputSize: (size: OutputSize) => void;
 }
 
 type UndoableEditorState = Pick<EditorState, 'paths' | 'boxes' | 'memos' | 'baseImage' | 'imageSize'>;
@@ -118,6 +120,7 @@ const initialState: EditorState = {
   panY: 0,
   isSpacePressed: false,
   parallelCount: 1,
+  outputSize: 'auto',
 };
 
 function clampParallelCount(count: number): number {
@@ -225,6 +228,7 @@ export const useEditorStore = create<EditorStore>()(
       setParallelCount: (count) => set({ parallelCount: clampParallelCount(count) }),
       incrementParallelCount: () => set((state) => ({ parallelCount: clampParallelCount(state.parallelCount + 1) })),
       decrementParallelCount: () => set((state) => ({ parallelCount: clampParallelCount(state.parallelCount - 1) })),
+      setOutputSize: (size) => set({ outputSize: size }),
     })),
     {
       partialize: (state): UndoableEditorState => getUndoableSnapshot(state),
