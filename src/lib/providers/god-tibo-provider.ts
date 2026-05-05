@@ -28,6 +28,7 @@ export interface GenerateImageOptions {
   prompt: string;
   model?: string;
   images?: string[];
+  size?: string;
   fetchImpl?: typeof fetch;
   readFileImpl?: typeof readFile;
 }
@@ -289,7 +290,11 @@ async function requestImageGeneration(
           content,
         },
       ],
-      tools: [{ type: 'image_generation', output_format: 'png' }],
+      tools: [{
+        type: 'image_generation',
+        output_format: 'png',
+        ...(options.size ? { size: options.size } : {}),
+      }],
       tool_choice: toolChoiceMode === 'required' ? { type: 'image_generation' } : 'auto',
       parallel_tool_calls: false,
       reasoning: null,
