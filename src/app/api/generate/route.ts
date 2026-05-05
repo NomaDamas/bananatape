@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { persistImageResult } from '@/lib/projects/asset-store';
 import { hasActiveProject, requireProjectSession } from '@/lib/projects/session';
 import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
+import { parseConcreteOutputSize } from '@/lib/generation/output-size';
 import { editImage as openaiEdit, generateImage as openaiGenerate } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
@@ -22,20 +23,28 @@ async function parseGenerateRequest(request: Request) {
 
   if (contentType.includes('multipart/form-data')) {
     const formData = await request.formData();
+    const hasSize = formData.has('size');
+    const sizeRaw = formData.get('size');
     return {
       prompt: formData.get('prompt'),
       provider: formData.get('provider'),
-      size: formData.get('size'),
+      size: parseConcreteOutputSize(sizeRaw),
+      sizeRaw,
+      hasSize,
       quality: formData.get('quality'),
       referenceImages: formData.getAll('referenceImages').filter(isFile),
     };
   }
 
   const body = await request.json();
+  const hasSize = Object.prototype.hasOwnProperty.call(body, 'size');
+  const sizeRaw = hasSize ? body.size : null;
   return {
     prompt: body.prompt,
     provider: body.provider,
-    size: body.size,
+    size: parseConcreteOutputSize(sizeRaw),
+    sizeRaw,
+    hasSize,
     quality: body.quality,
     referenceImages: [] as File[],
   };
@@ -44,11 +53,25 @@ async function parseGenerateRequest(request: Request) {
 export async function POST(request: Request) {
   try {
     const projectSession = hasActiveProject() ? requireProjectSession() : null;
-    const { prompt, provider, size, quality, referenceImages } = await parseGenerateRequest(request);
+    const { prompt, provider, size, sizeRaw, hasSize, quality, referenceImages } = await parseGenerateRequest(request);
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return NextResponse.json(
         { error: 'Prompt is required' },
+        { status: 400 },
+      );
+    }
+
+    if (typeof sizeRaw === 'string' && sizeRaw === 'auto') {
+      return NextResponse.json(
+        { error: "Resolve 'auto' on the client before submitting." },
+        { status: 400 },
+      );
+    }
+
+    if (hasSize && size === null) {
+      return NextResponse.json(
+        { error: 'Invalid size. Allowed: 1024x1024, 1536x1024, 1024x1536, 2048x2048, 2048x1152, 3840x2160, 2160x3840.' },
         { status: 400 },
       );
     }
@@ -79,9 +102,10 @@ export async function POST(request: Request) {
       imageDataUrl = await openaiEdit({
         images: referenceImages,
         prompt,
+        size: size ?? undefined,
       });
     } else {
-      imageDataUrl = await openaiGenerate({ prompt, size, quality });
+      imageDataUrl = await openaiGenerate({ prompt, size: size ?? undefined, quality });
     }
 
     const response: Record<string, unknown> = {

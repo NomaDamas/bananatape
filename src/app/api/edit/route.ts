@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { persistImageResult } from '@/lib/projects/asset-store';
 import { hasActiveProject, requireProjectSession } from '@/lib/projects/session';
 import { isSupportedReferenceImageType, SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
+import { parseConcreteOutputSize } from '@/lib/generation/output-size';
 import { editImage } from '../../../lib/providers/openai-provider';
 import { generateImage as godTiboGenerate } from '../../../lib/providers/god-tibo-provider';
 
@@ -32,6 +33,20 @@ export async function POST(request: Request) {
     const parentId = formData.get('parentId');
     const images = formData.getAll('images').filter(isFile);
     const maskImage = formData.get('maskImage');
+    const sizeRaw = formData.get('size');
+    if (typeof sizeRaw === 'string' && sizeRaw === 'auto') {
+      return NextResponse.json(
+        { error: "Resolve 'auto' on the client before submitting." },
+        { status: 400 },
+      );
+    }
+    const size = parseConcreteOutputSize(sizeRaw);
+    if (sizeRaw !== null && size === null) {
+      return NextResponse.json(
+        { error: 'Invalid size. Allowed: 1024x1024, 1536x1024, 1024x1536, 2048x2048, 2048x1152, 3840x2160, 2160x3840.' },
+        { status: 400 },
+      );
+    }
 
     if (typeof prompt !== 'string') {
       return NextResponse.json(
@@ -119,6 +134,7 @@ export async function POST(request: Request) {
       images,
       maskImage,
       prompt: submittedPrompt,
+      size: size ?? undefined,
     });
 
     const response: Record<string, unknown> = {
