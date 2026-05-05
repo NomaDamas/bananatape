@@ -19,6 +19,7 @@ import type { UseParallelGenerateApi } from './useParallelGenerate';
 const canvasExportMocks = vi.hoisted(() => ({
   exportImageWithAnnotations: vi.fn(),
   resizeToSquare1024: vi.fn(),
+  resizeToSize: vi.fn(),
 }));
 
 vi.mock('@/hooks/useCanvasExport', () => ({
@@ -201,8 +202,10 @@ beforeEach(() => {
   useEditorStore.getState().setProvider('openai');
   canvasExportMocks.exportImageWithAnnotations.mockReset();
   canvasExportMocks.resizeToSquare1024.mockReset();
+  canvasExportMocks.resizeToSize.mockReset();
   canvasExportMocks.exportImageWithAnnotations.mockImplementation((imageId: string) => Promise.resolve(defaultExportBlobs(imageId)));
   canvasExportMocks.resizeToSquare1024.mockImplementation((blob: Blob) => Promise.resolve(blob));
+  canvasExportMocks.resizeToSize.mockImplementation((blob: Blob) => Promise.resolve(blob));
   mockImageConstructor();
 });
 
@@ -294,7 +297,7 @@ describe('useParallelGenerate', () => {
     expect(calls.map((call) => call.input)).toEqual(['/api/edit', '/api/edit']);
     expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenCalledTimes(2);
     expect(canvasExportMocks.exportImageWithAnnotations).toHaveBeenNthCalledWith(1, 'p1');
-    expect(canvasExportMocks.resizeToSquare1024).toHaveBeenCalledTimes(6);
+    expect(canvasExportMocks.resizeToSize).toHaveBeenCalledTimes(6);
 
     calls.forEach((call) => {
       const body = call.init?.body;
@@ -304,6 +307,7 @@ describe('useParallelGenerate', () => {
       expect(formData.getAll('images')).toHaveLength(3);
       expect(formData.get('maskImage')).toBeInstanceOf(File);
       expect(formData.get('provider')).toBe('openai');
+      expect(formData.get('size')).toBeTruthy();
     });
 
     resolveSuccesses(calls);

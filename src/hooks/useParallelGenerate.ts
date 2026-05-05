@@ -20,6 +20,12 @@ import {
   PARENT_CHILD_VERTICAL_GAP,
   SIBLING_HORIZONTAL_GAP,
 } from '@/types/canvas';
+import {
+  type ConcreteOutputSize,
+  outputSizeToDims,
+  resolveAutoSize,
+  type OutputSize,
+} from '@/lib/generation/output-size';
 
 export interface ParallelGenerateInput {
   count: number;
@@ -29,6 +35,7 @@ export interface ParallelGenerateInput {
   referenceImages?: { file: File; id: string }[];
   parentIds?: string[];
   rootOrigin?: { x: number; y: number };
+  outputSize?: OutputSize;
 }
 
 export interface ParallelEditInput extends ParallelGenerateInput {
@@ -183,9 +190,19 @@ function appendEditImages(formData: FormData, referenceImages: { file: File; id:
   });
 }
 
+function resolveOutputSize(
+  outputSize: OutputSize | undefined,
+  parentDims: { width: number; height: number } | null,
+): ConcreteOutputSize {
+  if (!outputSize || outputSize === 'auto') {
+    return resolveAutoSize(parentDims);
+  }
+  return outputSize;
+}
+
 export function useParallelGenerate(): UseParallelGenerateApi {
   const activeImageIdsRef = useRef<Set<string>>(new Set());
-  const { exportImageWithAnnotations, resizeToSquare1024 } = useCanvasExport();
+  const { exportImageWithAnnotations, resizeToSize } = useCanvasExport();
 
   const generate = useCallback(async (input: ParallelGenerateInput) => {
     const count = clampCount(input.count);
@@ -232,15 +249,24 @@ export function useParallelGenerate(): UseParallelGenerateApi {
           formData.append('parentId', placeholder.parentId);
           const exported = await exportImageWithAnnotations(placeholder.parentId);
           const shouldResize = placeholder.provider === 'openai';
-          const original = shouldResize ? await resizeToSquare1024(exported.original) : exported.original;
-          const annotated = shouldResize ? await resizeToSquare1024(exported.annotated) : exported.annotated;
-          const mask = shouldResize ? await resizeToSquare1024(exported.mask) : exported.mask;
+          const resolvedSize = resolveOutputSize(input.outputSize, exported.size);
+          const { width, height } = outputSizeToDims(resolvedSize);
+          const original = shouldResize ? await resizeToSize(exported.original, width, height) : exported.original;
+          const annotated = shouldResize ? await resizeToSize(exported.annotated, width, height) : exported.annotated;
+          const mask = shouldResize ? await resizeToSize(exported.mask, width, height) : exported.mask;
           formData.append('images', original, 'original.png');
           formData.append('images', annotated, 'annotated.png');
           appendEditImages(formData, referenceImages);
           formData.append('maskImage', mask, 'mask.png');
+          if (placeholder.provider === 'openai') {
+            formData.append('size', resolvedSize);
+          }
         } else {
           appendReferenceImages(formData, referenceImages);
+          if (placeholder.provider === 'openai') {
+            const resolvedSize = resolveOutputSize(input.outputSize, null);
+            formData.append('size', resolvedSize);
+          }
         }
 
         const response = await fetch(endpoint, { method: 'POST', body: formData, signal: handle.signal });
@@ -285,7 +311,7 @@ export function useParallelGenerate(): UseParallelGenerateApi {
     });
 
     await Promise.allSettled(fanOut);
-  }, [exportImageWithAnnotations, resizeToSquare1024]);
+  }, [exportImageWithAnnotations, resizeToSize]);
 
   const cancel = useCallback((imageId: string) => {
     abortGeneration(imageId);
