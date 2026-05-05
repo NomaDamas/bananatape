@@ -89,6 +89,7 @@ export async function POST(request: Request) {
       imageDataUrl = await godTiboGenerate({
         prompt: submittedPrompt,
         images: imageDataUrls,
+        ...(size ? { size } : {}),
       });
 
       const response: Record<string, unknown> = {

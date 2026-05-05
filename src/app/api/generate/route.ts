@@ -97,6 +97,7 @@ export async function POST(request: Request) {
       imageDataUrl = await godTiboGenerate({
         prompt,
         images: imageDataUrls.length > 0 ? imageDataUrls : undefined,
+        ...(typeof size === 'string' && size ? { size } : {}),
       });
     } else if (referenceImages.length > 0) {
       imageDataUrl = await openaiEdit({
