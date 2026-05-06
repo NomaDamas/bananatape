@@ -2,9 +2,10 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { ImageIcon, Loader2, Sparkles } from 'lucide-react';
-import { ImageCanvas } from './ImageCanvas';
-import { DrawingLayer } from './DrawingLayer';
-import { MemoOverlay } from './MemoOverlay';
+import { CanvasMultiContainer } from './CanvasMultiContainer';
+import { useDeleteToast } from '@/hooks/useDeleteToast';
+import { useParallelGenerate } from '@/hooks/useParallelGenerate';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 
 interface CanvasContainerProps {
@@ -21,24 +22,28 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
-  const imageSize = useEditorStore((s) => s.imageSize);
-  const baseImage = useEditorStore((s) => s.baseImage);
   const isGenerating = useEditorStore((s) => s.isGenerating);
-  const zoom = useEditorStore((s) => s.zoom);
-  const panX = useEditorStore((s) => s.panX);
-  const panY = useEditorStore((s) => s.panY);
-  const setZoom = useEditorStore((s) => s.setZoom);
-  const setPan = useEditorStore((s) => s.setPan);
   const activeTool = useEditorStore((s) => s.activeTool);
   const isSpacePressed = useEditorStore((s) => s.isSpacePressed);
+  const imageOrderLength = useCanvasStore((s) => s.imageOrder.length);
+  const panX = useCanvasStore((s) => s.viewport.panX);
+  const panY = useCanvasStore((s) => s.viewport.panY);
+  const zoom = useCanvasStore((s) => s.viewport.zoom);
+  const setViewport = useCanvasStore((s) => s.setViewport);
+  const setFocusedImages = useCanvasStore((s) => s.setFocusedImages);
+  const deleteImage = useCanvasStore((s) => s.deleteImage);
+  const { generate, cancel } = useParallelGenerate();
+  const showDeleteToast = useDeleteToast();
 
   const effectivePan = isSpacePressed || activeTool === 'pan';
 
   const updateRect = useCallback(() => {
     if (containerRef.current) {
-      setContainerRect(containerRef.current.getBoundingClientRect());
+      const rect = containerRef.current.getBoundingClientRect();
+      setContainerRect(rect);
+      setViewport({ width: rect.width, height: rect.height });
     }
-  }, []);
+  }, [setViewport]);
 
   useEffect(() => {
     updateRect();
@@ -66,9 +71,8 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     const newPanX = mouseX - imageX * newZoom;
     const newPanY = mouseY - imageY * newZoom;
 
-    setZoom(newZoom);
-    setPan(newPanX, newPanY);
-  }, [containerRect, zoom, panX, panY, setZoom, setPan]);
+    setViewport({ zoom: newZoom, panX: newPanX, panY: newPanY });
+  }, [containerRect, zoom, panX, panY, setViewport]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!effectivePan) return;
@@ -87,18 +91,35 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
     e.preventDefault();
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
-    setPan(dragStartRef.current.panX + dx, dragStartRef.current.panY + dy);
-  }, [isDragging, setPan]);
+    setViewport({ panX: dragStartRef.current.panX + dx, panY: dragStartRef.current.panY + dy });
+  }, [isDragging, setViewport]);
 
   const handlePointerUp = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
-  }, []);
+  }, [isDragging]);
 
   const cursor = effectivePan
     ? (isDragging ? 'grabbing' : 'grab')
     : 'default';
 
-  const hasImage = !!baseImage;
+  const hasImage = imageOrderLength > 0;
+
+  const handleDeleteImage = useCallback((id: string) => {
+    cancel(id);
+    const exists = Boolean(useCanvasStore.getState().images[id]);
+    if (exists) {
+      deleteImage(id);
+      showDeleteToast(1);
+    }
+  }, [cancel, deleteImage, showDeleteToast]);
+
+  const handleRetryImage = useCallback((id: string) => {
+    const image = useCanvasStore.getState().images[id];
+    if (!image) return;
+    deleteImage(id);
+    void generate({ count: 1, prompt: image.prompt, parentIds: image.parentId ? [image.parentId] : [] });
+  }, [deleteImage, generate]);
 
   return (
     <div
@@ -109,6 +130,9 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) setFocusedImages([], false);
+      }}
       className={`relative overflow-hidden bg-[#1e1e1e] text-neutral-200 ${className || ''}`}
       style={{ cursor, touchAction: 'none' }}
     >
@@ -124,28 +148,22 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
           data-zoom={zoom}
           data-pan-x={panX}
           data-pan-y={panY}
-          className="relative inline-block bg-white shadow-[0_12px_40px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.05)]"
+          className="relative h-[1px] w-[1px]"
           style={{
             transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
             transformOrigin: '0 0',
             willChange: 'transform',
           }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setFocusedImages([], false);
+          }}
         >
           <div className="absolute -top-7 left-0 flex items-center gap-1.5 whitespace-nowrap text-[10.5px] font-medium tracking-tight text-neutral-300">
             <ImageIcon className="h-3.5 w-3.5 text-[#0d99ff]" />
-            Canvas frame
-            {imageSize.width > 0 && imageSize.height > 0 && (
-              <span className="font-mono text-[10px] text-neutral-500">
-                {imageSize.width} × {imageSize.height}
-              </span>
-            )}
+            Infinite canvas
+            <span className="font-mono text-[10px] text-neutral-500">{imageOrderLength} image{imageOrderLength === 1 ? '' : 's'}</span>
           </div>
-          <ImageCanvas />
-          <DrawingLayer
-            containerRef={containerRef}
-            imageSize={imageSize}
-          />
-          <MemoOverlay imageSize={imageSize} />
+          <CanvasMultiContainer onDeleteImage={handleDeleteImage} onRetryImage={handleRetryImage} />
         </div>
       )}
 
@@ -167,7 +185,7 @@ export function CanvasContainer({ className }: CanvasContainerProps) {
       )}
 
       {isGenerating && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#1e1e1e]/60 backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-1/2 top-4 z-50 flex -translate-x-1/2 items-center justify-center">
           <div className="flex items-center gap-4 rounded-[10px] border border-neutral-700 bg-[#2c2c2c] px-6 py-4 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
             <Loader2 className="h-6 w-6 animate-spin text-[#0d99ff]" />
             <div>

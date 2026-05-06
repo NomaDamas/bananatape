@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
+import type { CanvasImage } from '@/types/canvas';
 import { CanvasContainer } from './Canvas/CanvasContainer';
 import { PromptComposerProvider, usePromptComposer } from './Composer/PromptComposerProvider';
 import { BottomComposer } from './Composer/BottomComposer';
@@ -28,6 +30,9 @@ function StandaloneEditorShell() {
   const { toasts, removeToast } = useToast();
   const baseImage = useEditorStore((s) => s.baseImage);
   const setBaseImage = useEditorStore((s) => s.setBaseImage);
+  const canvasImageCount = useCanvasStore((s) => s.imageOrder.length);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const hydrateCanvas = useCanvasStore((s) => s.hydrate);
   const hydrateEntries = useHistoryStore((s) => s.hydrateEntries);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [projectName, setProjectName] = useState('Untitled design');
@@ -61,6 +66,31 @@ function StandaloneEditorShell() {
     return () => { cancelled = true; };
   }, [hydrateEntries, setBaseImage]);
 
+  useEffect(() => {
+    if (!baseImage || canvasImageCount > 0) return;
+    const editor = useEditorStore.getState();
+    const id = crypto.randomUUID();
+    const rootImage: CanvasImage = {
+      id,
+      url: baseImage,
+      size: editor.imageSize.width > 0 && editor.imageSize.height > 0
+        ? editor.imageSize
+        : { width: 1024, height: 1024 },
+      position: { x: 0, y: 0 },
+      parentId: null,
+      generationIndex: 0,
+      prompt: '',
+      provider: 'openai',
+      type: 'generate',
+      createdAt: Date.now(),
+      paths: editor.paths,
+      boxes: editor.boxes,
+      memos: editor.memos,
+      status: 'ready',
+    };
+    hydrateCanvas({ [id]: rootImage }, [id], [id]);
+  }, [baseImage, canvasImageCount, hydrateCanvas]);
+
   const {
     prompt,
     setPrompt,
@@ -89,7 +119,7 @@ function StandaloneEditorShell() {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-[#1e1e1e] text-[#e6e6e6]">
-      <TopBar canExport={!!baseImage} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
+      <TopBar canExport={focusedImageIds.length > 0} onExportClick={() => setIsExportOpen(true)} projectName={projectName} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <LeftPanel
           references={referencePreviews}
@@ -117,7 +147,7 @@ function StandaloneEditorShell() {
         onGenerate={handleGenerate}
         onEdit={handleEdit}
       />
-      <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={!!baseImage} />
+      <ExportModal open={isExportOpen} onOpenChange={setIsExportOpen} canExport={focusedImageIds.length > 0} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );

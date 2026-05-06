@@ -16,11 +16,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Wand2, Pencil, Loader2, Download, ImagePlus, X } from 'lucide-react';
+import { Wand2, Pencil, Loader2, Download, ImagePlus, X, Undo2, Redo2 } from 'lucide-react';
 import { ToolPalette } from './ToolPalette';
 import { useDownload } from '@/hooks/useDownload';
 import { BrandLogo } from '@/components/BrandLogo';
 import { getEnabledProviders, usePromptComposer } from '@/components/Composer/PromptComposerProvider';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import type { Provider } from '@/types';
 
 function formatProviderLabel(provider: Provider) {
@@ -50,11 +51,17 @@ export function TopToolbar() {
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const canUndo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.past.length ?? 0) > 0);
+  const canRedo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.future.length ?? 0) > 0);
+  const undo = useCanvasStore((s) => s.undoFocusedImage);
+  const redo = useCanvasStore((s) => s.redoFocusedImage);
 
   const { downloadImage } = useDownload();
   const providers = getEnabledProviders();
   const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
   const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || hasAnnotations);
+  const canSubmitGenerate = Boolean(prompt.trim());
 
   const handleReferenceImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     void addReferenceFiles(Array.from(event.target.files ?? []));
@@ -69,6 +76,33 @@ export function TopToolbar() {
         <div className="w-px h-6 bg-neutral-200 dark:bg-neutral-800 mx-1" />
 
         <ToolPalette />
+
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            disabled={!canUndo}
+            onClick={undo}
+            aria-label="Undo"
+            title="Undo (Cmd/Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            disabled={!canRedo}
+            onClick={redo}
+            aria-label="Redo"
+            title="Redo (Cmd/Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </Button>
+        </div>
 
         <div className="w-px h-6 bg-neutral-200 dark:bg-neutral-800 mx-1" />
 
@@ -164,7 +198,7 @@ export function TopToolbar() {
               size="sm"
               variant="default"
               className="h-8 gap-1.5"
-              disabled={isGenerating || !prompt.trim()}
+              disabled={isGenerating || !canSubmitGenerate}
               onClick={handleGenerate}
             >
               {isGenerating && mode === 'generate' ? (
@@ -206,7 +240,7 @@ export function TopToolbar() {
           size="sm"
           variant="ghost"
           className="h-8 w-8 px-0"
-          disabled={!baseImage}
+          disabled={focusedImageIds.length === 0}
           onClick={downloadImage}
           title="Download image"
         >

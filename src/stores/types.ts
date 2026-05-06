@@ -9,6 +9,7 @@ import type {
   ImageSize,
   NormalizedPoint,
 } from '../types';
+import type { OutputSize } from '../lib/generation/output-size';
 
 export type {
   DrawingPath,
@@ -41,6 +42,8 @@ export interface EditorState {
   panX: number;
   panY: number;
   isSpacePressed: boolean;
+  parallelCount: number;
+  outputSize: OutputSize;
 }
 
 export interface HistoryEntry {
@@ -53,5 +56,5 @@ export interface HistoryEntry {
   type: 'generate' | 'edit';
   timestamp: number;
   parentId?: string | null;
+  imageId?: string | null;
 }
-

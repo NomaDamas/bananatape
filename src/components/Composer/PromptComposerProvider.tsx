@@ -10,14 +10,20 @@ import {
   useMemo,
   useRef,
   useState,
+  startTransition,
 } from 'react';
 import { useCanvasExport } from '@/hooks/useCanvasExport';
+import { useParallelGenerate } from '@/hooks/useParallelGenerate';
 import { normalizeReferenceFiles } from '@/lib/images/normalize-reference-files';
 import { SUPPORTED_REFERENCE_IMAGE_FORMAT_LABEL } from '@/lib/images/reference-image-formats';
+import { buildSubmittedPrompt as buildPromptPure } from '@/lib/prompt/build';
+import { countFocusedAnnotations, hasBusyFocusedBranches, isEditableGenerationSource } from '@/lib/generation/branch-busy';
 import { useToast } from '@/hooks/useToast';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import type { Provider } from '@/types';
+import { resolveAutoSize } from '@/lib/generation/output-size';
 
 export interface ReferenceImage {
   id: string;
@@ -66,6 +72,8 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
   const didLoadProjectSettingsRef = useRef(false);
 
   const provider = useEditorStore((s) => s.provider);
+  const parallelCount = useEditorStore((s) => s.parallelCount);
+  const outputSize = useEditorStore((s) => s.outputSize);
   const setMode = useEditorStore((s) => s.setMode);
   const isGenerating = useEditorStore((s) => s.isGenerating);
   const setIsGenerating = useEditorStore((s) => s.setIsGenerating);
@@ -78,17 +86,46 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const addEntry = useHistoryStore((s) => s.addEntry);
   const selectedHistoryId = useHistoryStore((s) => s.selectedId);
-  const { exportAnnotatedImage, exportMask, resizeToSquare1024 } = useCanvasExport();
+  const { exportAnnotatedImage, exportMask } = useCanvasExport();
+  const parallelGenerate = useParallelGenerate();
   const { addToast } = useToast();
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const focusedImagePromptValue = useCanvasStore((s) =>
+    s.focusedImageIds.length === 1 ? s.images[s.focusedImageIds[0]]?.prompt ?? '' : null,
+  );
+  const focusedBranchGenerating = useCanvasStore((s) => hasBusyFocusedBranches(s.images, s.focusedImageIds));
+  const focusedReadyImageCount = useCanvasStore((s) => s.focusedImageIds.filter((id) => isEditableGenerationSource(s.images[id])).length);
+  const focusedAnnotationCount = useCanvasStore((s) => countFocusedAnnotations(s.images, s.focusedImageIds));
+  const viewportPanX = useCanvasStore((s) => s.viewport.panX);
+  const viewportPanY = useCanvasStore((s) => s.viewport.panY);
+  const viewportZoom = useCanvasStore((s) => s.viewport.zoom);
 
-  const canEdit = !!baseImage;
+  const canEdit = !!baseImage || focusedReadyImageCount > 0;
   const hasReferenceImages = referenceImages.length > 0;
   const hasDesignContext = designContext.trim().length > 0;
-  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim());
+  const hasAnnotations = paths.length > 0 || boxes.length > 0 || memos.some((memo) => memo.text.trim()) || focusedAnnotationCount > 0;
 
   useEffect(() => {
     referenceImagesRef.current = referenceImages;
   }, [referenceImages]);
+
+  useEffect(() => {
+    if (focusedImagePromptValue === null) return;
+    startTransition(() => {
+      setPrompt((current) => (current === focusedImagePromptValue ? current : focusedImagePromptValue));
+    });
+  }, [focusedImageIds, focusedImagePromptValue]);
+
+  useEffect(() => {
+    if (focusedImageIds.length !== 1) return;
+    const focusedImageId = focusedImageIds[0];
+    const timeout = window.setTimeout(() => {
+      const current = useCanvasStore.getState().images[focusedImageId];
+      if (!current || current.prompt === prompt) return;
+      useCanvasStore.getState().updateImage(focusedImageId, { prompt }, { track: false });
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [focusedImageIds, prompt]);
 
   useEffect(() => {
     return () => {
@@ -324,25 +361,15 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const buildSubmittedPrompt = useCallback((fallbackPrompt?: string) => {
-    const trimmedPrompt = prompt.trim() || fallbackPrompt?.trim() || '';
-    const trimmedSystemPrompt = systemPrompt.trim();
-    const trimmedDesignContext = designContext.trim();
-
-    if (!trimmedSystemPrompt && !trimmedDesignContext) {
-      return trimmedPrompt;
-    }
-
-    const sections: string[] = [];
-    if (trimmedDesignContext) {
-      sections.push(`Design context:\n${trimmedDesignContext}`);
-    }
-    if (trimmedSystemPrompt) {
-      sections.push(`System prompt:\n${trimmedSystemPrompt}`);
-    }
-    sections.push(`User prompt:\n${trimmedPrompt}`);
-    return sections.join('\n\n');
-  }, [designContext, prompt, systemPrompt]);
+  const buildSubmittedPrompt = useCallback(
+    (fallbackPrompt?: string) => buildPromptPure({
+      userPrompt: prompt,
+      systemPrompt,
+      designContext,
+      fallbackPrompt,
+    }),
+    [designContext, prompt, systemPrompt],
+  );
 
   const appendReferenceImages = useCallback((formData: FormData, fieldName: 'images' | 'referenceImages') => {
     referenceImages.forEach((reference, index) => {
@@ -365,78 +392,84 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
 
   const handleGenerate = useCallback(async () => {
     const submittedPrompt = prompt.trim();
-    if (!submittedPrompt || isGenerating) return;
+    if (!submittedPrompt) return;
+    if (focusedImageIds.length > 0 && focusedBranchGenerating) return;
     if (!validateOpenAIReferenceCount()) return;
     setMode('generate');
-    setIsGenerating(true);
 
     try {
-      const request = referenceImages.length > 0
-        ? (() => {
-            const formData = new FormData();
-            formData.append('prompt', buildSubmittedPrompt());
-            formData.append('provider', provider);
-            appendReferenceImages(formData, 'referenceImages');
-            return fetch('/api/generate', {
-              method: 'POST',
-              body: formData,
-            });
-          })()
-        : fetch('/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: buildSubmittedPrompt(), provider }),
-          });
-
-      const res = await request;
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        addToast(data.error || 'Generation failed', 'error');
-        return;
-      }
-      if (data.imageDataUrl) {
-        addEntry({
-          id: data.metadata?.id,
-          timestamp: data.metadata?.timestamp,
-          imageDataUrl: data.imageDataUrl,
-          assetId: data.assetId,
-          assetUrl: data.assetUrl,
-          prompt,
-          provider,
-          type: 'generate',
-        });
-        setBaseImage(data.assetUrl ?? data.imageDataUrl, { width: 0, height: 0 });
+      const rootOrigin = {
+        x: (-viewportPanX + 96) / viewportZoom,
+        y: (-viewportPanY + 96) / viewportZoom,
+      };
+      await parallelGenerate.generate({
+        count: parallelCount,
+        prompt: submittedPrompt,
+        systemPrompt,
+        designContext,
+        referenceImages: referenceImages.map((reference) => ({ file: reference.file, id: reference.id })),
+        parentIds: focusedImageIds,
+        rootOrigin,
+        outputSize,
+      });
+      startTransition(() => {
         setMode('edit');
         clearPromptComposer();
-        addToast('Image generated successfully', 'success');
-      }
+      });
+      addToast('Generation started', 'success');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Generation failed';
       addToast(message, 'error');
-    } finally {
-      setIsGenerating(false);
     }
   }, [
-    addEntry,
     addToast,
-    appendReferenceImages,
-    buildSubmittedPrompt,
     clearPromptComposer,
-    isGenerating,
+    designContext,
+    focusedBranchGenerating,
+    parallelCount,
+    parallelGenerate,
     prompt,
-    provider,
-    referenceImages.length,
-    setBaseImage,
-    setIsGenerating,
+    referenceImages,
+    focusedImageIds,
+    outputSize,
     setMode,
+    systemPrompt,
     validateOpenAIReferenceCount,
+    viewportPanX,
+    viewportPanY,
+    viewportZoom,
   ]);
 
   const handleEdit = useCallback(async () => {
     const submittedPrompt = prompt.trim() || (hasAnnotations ? ANNOTATION_ONLY_EDIT_PROMPT : '');
-    if (!baseImage || !submittedPrompt || isGenerating) return;
+    if (!submittedPrompt) return;
     if (!validateOpenAIReferenceCount(EDIT_FLOW_RESERVED_IMAGES)) return;
     setMode('edit');
+
+    if (focusedImageIds.length > 0) {
+      if (focusedBranchGenerating) return;
+      try {
+        await parallelGenerate.generate({
+          count: parallelCount,
+          prompt: submittedPrompt,
+          systemPrompt,
+          designContext,
+          referenceImages: referenceImages.map((reference) => ({ file: reference.file, id: reference.id })),
+          parentIds: focusedImageIds,
+          outputSize,
+        });
+        startTransition(() => {
+          clearPromptComposer();
+        });
+        addToast('Generation started', 'success');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Edit failed';
+        addToast(message, 'error');
+      }
+      return;
+    }
+
+    if (!baseImage || isGenerating) return;
     setIsGenerating(true);
 
     try {
@@ -450,16 +483,19 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
       formData.append('provider', provider);
       if (selectedHistoryId) formData.append('parentId', selectedHistoryId);
 
-      let originalBlob = await fetch(baseImage).then((r) => r.blob());
+      const originalBlob = await fetch(baseImage).then((r) => r.blob());
 
-      if (provider === 'openai') {
-        originalBlob = await resizeToSquare1024(originalBlob);
-      }
+      const imageSize = useEditorStore.getState().imageSize;
+      const baseDims = imageSize.width > 0 && imageSize.height > 0
+        ? imageSize
+        : null;
+      const resolvedSize = outputSize === 'auto' ? resolveAutoSize(baseDims) : outputSize;
 
       formData.append('images', originalBlob, 'original.png');
       formData.append('images', annotatedBlob, 'annotated.png');
       appendReferenceImages(formData, 'images');
       formData.append('maskImage', maskBlob, 'mask.png');
+      formData.append('size', resolvedSize);
 
       const res = await fetch('/api/edit', {
         method: 'POST',
@@ -503,15 +539,22 @@ export function PromptComposerProvider({ children }: { children: ReactNode }) {
     clearPromptComposer,
     exportAnnotatedImage,
     exportMask,
+    designContext,
+    focusedBranchGenerating,
+    focusedImageIds,
     hasAnnotations,
     isGenerating,
+    outputSize,
+    parallelCount,
+    parallelGenerate,
     prompt,
     provider,
-    resizeToSquare1024,
+    referenceImages,
     selectedHistoryId,
     setBaseImage,
     setIsGenerating,
     setMode,
+    systemPrompt,
     validateOpenAIReferenceCount,
   ]);
 

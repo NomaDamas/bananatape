@@ -142,8 +142,6 @@ test.describe('BananaTape Editor', () => {
     await expect(getPromptInput(page)).toBeVisible();
     await expect(page.locator('[data-testid="bottom-provider-select"]')).toContainText(/codex|OpenAI/);
     await expect(page.locator('button[title="Attach reference image"], button[aria-label*="reference" i]').first()).toBeVisible();
-    await expect(page.locator('button[title="Zoom in"]').first()).toBeVisible();
-    await expect(page.locator('button[title="Zoom out"]').first()).toBeVisible();
   });
 
   test('shows active CLI project name in the top bar', async ({ page }) => {
@@ -463,7 +461,8 @@ test.describe('BananaTape Editor', () => {
     ].sort());
   });
 
-  test('export modal is honest about current-image PNG download support', async ({ page }) => {
+
+  test('export modal advertises PNG-only, annotation-stripped downloads for the focused image', async ({ page }) => {
     const exportButton = page.getByRole('button', { name: /export/i });
     await expect(exportButton).toBeDisabled();
 
@@ -477,13 +476,13 @@ test.describe('BananaTape Editor', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText('PNG · current image')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Download PNG/i })).toBeEnabled();
+    await expect(dialog.getByText(/annotations excluded/i)).toBeVisible();
+    await expect(dialog.getByText(/^PNG · [a-z0-9]+$/i)).toBeVisible();
+    await expect(dialog.getByText('Focus an image on the canvas to export it')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /^Download PNG$/i })).toBeEnabled();
 
-    const unsupportedEnabledActions = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
-    for (let i = 0; i < await unsupportedEnabledActions.count(); i += 1) {
-      await expect(unsupportedEnabledActions.nth(i)).toBeDisabled();
-    }
+    const unsupportedFormats = dialog.getByRole('button', { name: /JPG|JPEG|WebP|SVG|copy link|share/i });
+    await expect(unsupportedFormats).toHaveCount(0);
   });
 
   test('pan is the default active tool', async ({ page }) => {
@@ -692,14 +691,14 @@ test.describe('BananaTape Editor', () => {
       }
 
       const file = new File([bytes], 'pasted-reference.png', { type: 'image/png' });
-      const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
-      Object.defineProperty(pasteEvent, 'clipboardData', {
-        value: {
-          items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
-          files: [file],
-        },
-      });
-      document.dispatchEvent(pasteEvent);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      const target = document.querySelector('[data-testid=\"bottom-prompt-input\"]') ?? document;
+      target.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer,
+      }));
     }, RED_IMAGE_DATA_URL);
 
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
@@ -713,23 +712,6 @@ test.describe('BananaTape Editor', () => {
     expect(uploadedReferences[0].toString('base64')).toBe(dataUrlToBase64Payload(RED_IMAGE_DATA_URL));
     await expect(promptInput).toHaveValue('');
     await expect(page.locator('[data-testid="composer-reference-list"]')).toBeVisible();
-  });
-
-  test('zoom buttons change viewport zoom', async ({ page }) => {
-    const promptInput = getPromptInput(page);
-    await promptInput.fill('zoom test');
-    await getGenerateButton(page).click();
-    await expect(page.locator('text=zoom test').first()).toBeVisible();
-
-    const wrapper = page.locator('[data-testid="transform-wrapper"]');
-    await expect(wrapper).toHaveAttribute('data-zoom', '1');
-
-    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom in"]').last().click();
-    const zoomAfterIn = await wrapper.getAttribute('data-zoom');
-    expect(parseFloat(zoomAfterIn!)).toBeGreaterThan(1);
-
-    await page.locator('[data-testid="standalone-bottom-composer"] button[title="Zoom out"]').last().click();
-    await expect(wrapper).toHaveAttribute('data-zoom', '1');
   });
 
   test('mouse wheel zooms canvas', async ({ page }) => {
@@ -784,6 +766,34 @@ test.describe('BananaTape Editor', () => {
     const panY = await wrapper.getAttribute('data-pan-y');
     expect(parseFloat(panX!)).toBeGreaterThan(50);
     expect(parseFloat(panY!)).toBeGreaterThan(20);
+  });
+
+  test('undo and redo ignore completed pan drags', async ({ page, browserName }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('pan undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=pan undo test').first()).toBeVisible();
+
+    const wrapper = page.locator('[data-testid="transform-wrapper"]');
+    await expect(wrapper).toHaveAttribute('data-pan-x', '0');
+
+    const canvas = page.locator('[data-testid="canvas-container"]');
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    await page.mouse.move(bounds.x + 120, bounds.y + 120);
+    await page.mouse.down({ button: 'left' });
+    await page.mouse.move(bounds.x + 240, bounds.y + 170, { steps: browserName === 'chromium' ? 12 : 6 });
+    await page.mouse.up({ button: 'left' });
+
+    const movedPanX = await wrapper.getAttribute('data-pan-x');
+    const movedPanY = await wrapper.getAttribute('data-pan-y');
+    expect(parseFloat(movedPanX!)).toBeGreaterThan(50);
+    expect(parseFloat(movedPanY!)).toBeGreaterThan(20);
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(wrapper).toHaveAttribute('data-pan-x', movedPanX!);
+    await expect(wrapper).toHaveAttribute('data-pan-y', movedPanY!);
   });
 
   test('spacebar temporarily enables panning', async ({ page }) => {
@@ -863,6 +873,34 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.down();
     await page.mouse.move(bounds.x + 200, bounds.y + 200, { steps: 10 });
     await page.mouse.up();
+  });
+
+  test('undo and redo restore completed bounding boxes', async ({ page }) => {
+    const promptInput = getPromptInput(page);
+    await promptInput.fill('box undo test');
+    await getGenerateButton(page).click();
+    await expect(page.locator('text=box undo test').first()).toBeVisible();
+
+    await page.locator('button[title="Box (3)"]').click();
+    const canvas = page.locator('canvas').first();
+    await canvas.waitFor();
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Canvas not found');
+
+    const clearAnnotationsButton = page.locator('button[title="Clear annotations"]').first();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.mouse.move(bounds.x + 50, bounds.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + 200, bounds.y + 200, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(clearAnnotationsButton).toBeEnabled();
+    await page.getByRole('button', { name: 'Undo' }).last().click();
+    await expect(clearAnnotationsButton).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Redo' }).last().click();
+    await expect(clearAnnotationsButton).toBeEnabled();
   });
 
   test('submits an annotated edit without an extra prompt', async ({ page }) => {

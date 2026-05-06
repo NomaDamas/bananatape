@@ -81,6 +81,7 @@ describe('project metadata and asset persistence', () => {
     });
   });
 
+
   it('decodes data URLs and persists assets plus history metadata without embedding image data', async () => {
     const projectRoot = await tempProjectRoot();
     await createProject(projectRoot, 'Asset Test');

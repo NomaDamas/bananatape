@@ -1,13 +1,16 @@
 "use client";
 
 import { useRef } from 'react';
-import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X } from 'lucide-react';
+import { ImagePlus, Loader2, Minus, Plus, Wand2, Pencil, X, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToolPalette } from '@/components/Toolbar/ToolPalette';
+import { OutputSizePicker } from '@/components/Composer/OutputSizePicker';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
+import { countFocusedAnnotations, hasBusyFocusedBranches, isEditableGenerationSource } from '@/lib/generation/branch-busy';
 import type { Provider } from '@/types';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
 
@@ -39,20 +42,26 @@ export function BottomComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const provider = useEditorStore((s) => s.provider);
   const setProvider = useEditorStore((s) => s.setProvider);
-  const isGenerating = useEditorStore((s) => s.isGenerating);
   const mode = useEditorStore((s) => s.mode);
   const setMode = useEditorStore((s) => s.setMode);
   const baseImage = useEditorStore((s) => s.baseImage);
   const paths = useEditorStore((s) => s.paths);
   const boxes = useEditorStore((s) => s.boxes);
   const memos = useEditorStore((s) => s.memos);
-  const zoom = useEditorStore((s) => s.zoom);
-  const zoomIn = useEditorStore((s) => s.zoomIn);
-  const zoomOut = useEditorStore((s) => s.zoomOut);
-  const resetViewport = useEditorStore((s) => s.resetViewport);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const focusedBranchGenerating = useCanvasStore((s) => hasBusyFocusedBranches(s.images, s.focusedImageIds));
+  const focusedReadyImageCount = useCanvasStore((s) => s.focusedImageIds.filter((id) => isEditableGenerationSource(s.images[id])).length);
+  const focusedAnnotationCount = useCanvasStore((s) => countFocusedAnnotations(s.images, s.focusedImageIds));
+  const canUndo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.past.length ?? 0) > 0);
+  const canRedo = useCanvasStore((s) => s.focusedImageIds.length === 1 && (s.imageHistories[s.focusedImageIds[0]]?.future.length ?? 0) > 0);
+  const undo = useCanvasStore((s) => s.undoFocusedImage);
+  const redo = useCanvasStore((s) => s.redoFocusedImage);
+  const parallelCount = useEditorStore((s) => s.parallelCount);
+  const incrementParallelCount = useEditorStore((s) => s.incrementParallelCount);
+  const decrementParallelCount = useEditorStore((s) => s.decrementParallelCount);
 
-  const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length;
-  const canEdit = !!baseImage;
+  const annotationCount = paths.length + boxes.length + memos.filter((memo) => memo.text.trim()).length + focusedAnnotationCount;
+  const canEdit = !!baseImage || focusedReadyImageCount > 0;
   const shouldEdit = canEdit && (mode === 'edit' || annotationCount > 0);
   const canSubmitEdit = canEdit && (Boolean(prompt.trim()) || annotationCount > 0);
   const primaryLabel = shouldEdit
@@ -60,7 +69,8 @@ export function BottomComposer({
       ? `Edit · ${annotationCount} region${annotationCount === 1 ? '' : 's'}`
       : 'Apply edit'
     : 'Generate';
-  const isPrimaryDisabled = isGenerating || (shouldEdit ? !canSubmitEdit : !prompt.trim());
+  const canSubmitGenerate = Boolean(prompt.trim());
+  const isPrimaryDisabled = focusedBranchGenerating || (shouldEdit ? !canSubmitEdit : !canSubmitGenerate);
 
   const submitPrimary = () => {
     if (isPrimaryDisabled) return;
@@ -86,16 +96,27 @@ export function BottomComposer({
           <div className="max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
             <ToolPalette />
           </div>
-          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomOut} title="Zoom out">
-              <Minus className="h-3 w-3" />
-            </Button>
-            <button type="button" className="min-w-12 rounded px-2 text-center text-[11px] text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={resetViewport} title="Reset viewport">
-              {Math.round(zoom * 100)}%
-            </button>
-            <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={zoomIn} title="Zoom in">
-              <Plus className="h-3 w-3" />
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+              <OutputSizePicker />
+              <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
+                <SelectTrigger className="h-8 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[120px]" data-testid="bottom-provider-select">
+                  <span className="truncate">{formatProviderLabel(provider)}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="god-tibo">codex</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#1e1e1e] p-1">
+              <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={undo} disabled={!canUndo} aria-label="Undo" title={focusedImageIds.length === 1 ? "Undo selected image (Cmd/Ctrl+Z)" : "Select one image to undo"}>
+                <Undo2 className="h-3 w-3" />
+              </Button>
+              <Button type="button" size="icon-xs" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={redo} disabled={!canRedo} aria-label="Redo" title={focusedImageIds.length === 1 ? "Redo selected image (Cmd/Ctrl+Shift+Z)" : "Select one image to redo"}>
+                <Redo2 className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -137,7 +158,7 @@ export function BottomComposer({
                 size="icon"
                 variant={references.length > 0 ? 'secondary' : 'ghost'}
                 className="relative h-10 w-10 shrink-0 rounded-lg text-[#b3b3b3] hover:bg-white/10 hover:text-white"
-                disabled={isGenerating}
+                disabled={focusedBranchGenerating}
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach reference image"
               >
@@ -165,15 +186,52 @@ export function BottomComposer({
             </div>
 
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:shrink-0">
-              <Select value={provider} onValueChange={(value) => setProvider(value as Provider)}>
-                <SelectTrigger className="h-10 min-w-0 border-white/10 bg-[#2c2c2c] text-xs text-[#e6e6e6] sm:w-[150px]" data-testid="bottom-provider-select">
-                  <span className="truncate">{formatProviderLabel(provider)}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="god-tibo">codex</SelectItem>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                </SelectContent>
-              </Select>
+              <div
+                role="spinbutton"
+                tabIndex={0}
+                aria-label="Parallel generations"
+                aria-valuemin={1}
+                aria-valuenow={parallelCount}
+                aria-valuetext={`${parallelCount} parallel generation${parallelCount === 1 ? '' : 's'}`}
+                title="Parallel generations"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    incrementParallelCount();
+                  } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    decrementParallelCount();
+                  }
+                }}
+                className="flex h-10 items-center gap-1 rounded-lg border border-white/10 bg-[#2c2c2c] px-1.5 text-xs text-neutral-300 outline-none focus-visible:ring-1 focus-visible:ring-[#0d99ff]"
+                data-testid="parallel-count-stepper"
+              >
+                <button
+                  type="button"
+                  aria-label="Decrease parallel count"
+                  onClick={decrementParallelCount}
+                  disabled={parallelCount <= 1}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  data-testid="parallel-count-decrement"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <span
+                  className="min-w-[1.25rem] text-center font-mono text-sm font-semibold tabular-nums text-white"
+                  data-testid="parallel-count-value"
+                >
+                  {parallelCount}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase parallel count"
+                  onClick={incrementParallelCount}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+                  data-testid="parallel-count-increment"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               <Button
                 type="button"
@@ -183,7 +241,7 @@ export function BottomComposer({
                 onClick={submitPrimary}
                 data-testid="bottom-primary-action"
               >
-                {isGenerating ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Wand2 className="h-4 w-4 shrink-0" />}
+                {focusedBranchGenerating ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : shouldEdit ? <Pencil className="h-4 w-4 shrink-0" /> : <Wand2 className="h-4 w-4 shrink-0" />}
                 <span className="truncate">{primaryLabel}</span>
               </Button>
             </div>

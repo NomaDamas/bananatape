@@ -1,4 +1,4 @@
-export type Tool = 'pan' | 'pen' | 'box' | 'arrow' | 'memo';
+export type Tool = 'pan' | 'move' | 'pen' | 'box' | 'arrow' | 'memo';
 export type Provider = 'openai' | 'god-tibo';
 export type Mode = 'generate' | 'edit';
 export type AnnotationStatus = 'pending' | 'review' | 'accepted';
@@ -56,3 +56,5 @@ export interface EditOptions {
   maskImage: Blob;
   prompt: string;
 }
+
+export * from './canvas';

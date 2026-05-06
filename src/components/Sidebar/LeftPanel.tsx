@@ -180,6 +180,7 @@ export function LeftPanel({
             </p>
           </section>
 
+
           <section className="border-b border-[#1e1e1e] px-3 py-2">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#999]">

@@ -13,7 +13,7 @@ export function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all animate-in slide-in-from-bottom-2 ${
+          className={`flex items-center gap-3 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all animate-in slide-in-from-bottom-2 ${
             toast.type === 'error'
               ? 'bg-red-600 text-white'
               : toast.type === 'success'
@@ -22,7 +22,20 @@ export function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
           }`}
           onClick={() => removeToast(toast.id)}
         >
-          {toast.message}
+          <span>{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              className="rounded border border-current/30 px-2 py-0.5 text-xs font-semibold hover:bg-white/15"
+              onClick={(event) => {
+                event.stopPropagation();
+                toast.action?.onClick();
+                removeToast(toast.id);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

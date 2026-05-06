@@ -175,6 +175,74 @@ describe('god-tibo-provider', () => {
     ]);
   });
 
+  it('forwards size into the image_generation tool config when provided', async () => {
+    const mockReadFile = vi.fn().mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),
+    );
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        makeSseBody([
+          {
+            type: 'response.output_item.done',
+            item: { type: 'image_generation_call', result: 'sized64' },
+          },
+        ]),
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'text/event-stream' : null),
+      },
+    });
+
+    await generateImage({
+      prompt: 'a sunset',
+      size: '1536x1024',
+      readFileImpl: mockReadFile,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.tools).toEqual([{
+      type: 'image_generation',
+      output_format: 'png',
+      size: '1536x1024',
+    }]);
+  });
+
+  it('omits size from tool config when not provided (back-compat)', async () => {
+    const mockReadFile = vi.fn().mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),
+    );
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        makeSseBody([
+          {
+            type: 'response.output_item.done',
+            item: { type: 'image_generation_call', result: 'plain64' },
+          },
+        ]),
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'text/event-stream' : null),
+      },
+    });
+
+    await generateImage({
+      prompt: 'a sunset',
+      readFileImpl: mockReadFile,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.tools).toEqual([{ type: 'image_generation', output_format: 'png' }]);
+    expect('size' in body.tools[0]).toBe(false);
+  });
+
   it('retries with required image generation when auto does not return an image', async () => {
     const mockReadFile = vi.fn().mockResolvedValue(
       JSON.stringify({ tokens: { access_token: 'tok', account_id: 'acc' } }),

@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect } from 'react';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { useDeleteToast } from './useDeleteToast';
 
 export function useKeyboardShortcuts() {
+  const showDeleteToast = useDeleteToast();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -20,13 +24,24 @@ export function useKeyboardShortcuts() {
       if (isInput || state.activeMemoId || state.isSpacePressed) return;
 
       if (e.metaKey || e.ctrlKey) {
-        if (e.key === 'z') {
+        const key = e.key.toLowerCase();
+        const canvasState = useCanvasStore.getState();
+
+        if (key === 'z' && e.shiftKey) {
           e.preventDefault();
-          if (e.shiftKey) {
-            if ('redo' in state && typeof state.redo === 'function') state.redo();
-          } else {
-            if ('undo' in state && typeof state.undo === 'function') state.undo();
-          }
+          canvasState.redoFocusedImage();
+          return;
+        }
+
+        if (key === 'z') {
+          e.preventDefault();
+          canvasState.undoFocusedImage();
+          return;
+        }
+
+        if (key === 'y') {
+          e.preventDefault();
+          canvasState.redoFocusedImage();
           return;
         }
       }
@@ -34,6 +49,17 @@ export function useKeyboardShortcuts() {
       if (e.key === 'Escape') {
         e.preventDefault();
         state.setActiveTool('pan');
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const canvasState = useCanvasStore.getState();
+        if (canvasState.focusedImageIds.length > 0) {
+          e.preventDefault();
+          const count = canvasState.focusedImageIds.length;
+          canvasState.deleteImages(canvasState.focusedImageIds);
+          showDeleteToast(count);
+        }
         return;
       }
 
@@ -67,6 +93,12 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (e.key === '6') {
+        e.preventDefault();
+        state.setActiveTool('move');
+        return;
+      }
+
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -81,5 +113,5 @@ export function useKeyboardShortcuts() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [showDeleteToast]);
 }

@@ -1,21 +1,18 @@
 "use client";
 
 import { useCallback } from 'react';
-import { useEditorStore } from '@/stores/useEditorStore';
+import { useCanvasStore } from '@/stores/useCanvasStore';
+import { useCanvasDownload } from './useCanvasDownload';
 
 export function useDownload() {
-  const baseImage = useEditorStore((s) => s.baseImage);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const { downloadCanvasImage } = useCanvasDownload();
 
   const downloadImage = useCallback(() => {
-    if (!baseImage) return;
-
-    const link = document.createElement('a');
-    link.href = baseImage;
-    link.download = `bananatape-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [baseImage]);
+    const imageId = focusedImageIds[0];
+    if (!imageId) return;
+    void downloadCanvasImage(imageId);
+  }, [downloadCanvasImage, focusedImageIds]);
 
   return { downloadImage };
 }

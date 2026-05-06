@@ -29,9 +29,10 @@ export async function PUT(request: Request) {
   try {
     const session = requireProjectSession();
     const body = await request.json();
-    const settings = await updateProjectSettings(session.projectRoot, {
-      systemPrompt: typeof body.systemPrompt === 'string' ? body.systemPrompt : '',
-    });
+    const patch = {
+      ...(typeof body.systemPrompt === 'string' ? { systemPrompt: body.systemPrompt } : {}),
+    };
+    const settings = await updateProjectSettings(session.projectRoot, patch);
     return NextResponse.json({
       ...settings,
       referenceImages: settings.referenceImages.map(referenceToClient),

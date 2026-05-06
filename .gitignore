@@ -46,3 +46,8 @@ next-env.d.ts
 
 # local agent/runtime state
 /.omx/
+/.sisyphus/
+/.playwright-mcp/
+
+# ad-hoc QA screenshots
+/btape-*.png

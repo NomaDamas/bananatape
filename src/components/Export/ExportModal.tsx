@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileImage, Info } from 'lucide-react';
+import { Download, FileImage, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,7 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useDownload } from '@/hooks/useDownload';
+import { useCanvasDownload } from '@/hooks/useCanvasDownload';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 
 interface ExportModalProps {
   open: boolean;
@@ -19,48 +20,68 @@ interface ExportModalProps {
 }
 
 export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps) {
-  const { downloadImage } = useDownload();
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const images = useCanvasStore((s) => s.images);
+  const { downloadCanvasImage } = useCanvasDownload();
+  const focusedImages = focusedImageIds.map((id) => images[id]).filter((image) => image !== undefined);
 
-  const handleDownload = () => {
+  const handleDownload = (imageId: string) => {
     if (!canExport) return;
-    downloadImage();
-    onOpenChange(false);
+    void downloadCanvasImage(imageId);
+  };
+
+  const handleDownloadAll = async () => {
+    if (!canExport) return;
+    for (const image of focusedImages) {
+      await downloadCanvasImage(image.id);
+      await new Promise((resolve) => { window.setTimeout(resolve, 200); });
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border border-white/10 bg-[#252525] text-[#e6e6e6] sm:max-w-md" data-testid="export-modal">
         <DialogHeader>
-          <DialogTitle className="text-white">Export image</DialogTitle>
+          <DialogTitle className="text-white">Export focused images</DialogTitle>
           <DialogDescription className="text-[#999]">
-            Download the current BananaTape image using the implemented PNG export path.
+            Download clean PNGs (annotations excluded) for images currently focused on the canvas.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-xl border border-[#0d99ff]/50 bg-[#0d99ff]/10 p-3 text-left"
-            disabled={!canExport}
-            onClick={handleDownload}
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0d99ff] text-white">
-              <FileImage className="h-5 w-5" />
+          {focusedImages.length === 0 && (
+            <div className="rounded-xl border border-white/10 bg-[#1e1e1e] p-6 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04] text-neutral-500">
+                <FileImage className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium text-white">Focus an image on the canvas to export it</p>
+              <p className="mt-1 text-xs text-[#999]">Click an image, then export its PNG without annotations.</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white">PNG · current image</p>
-              <p className="text-xs text-[#999]">Uses the existing download behavior for the active image.</p>
-            </div>
-            <Download className="h-4 w-4 text-[#b3b3b3]" />
-          </button>
+          )}
 
-          <div className="rounded-xl border border-white/10 bg-[#1e1e1e] p-3">
-            <div className="flex items-start gap-2 text-xs text-[#999]">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#fbbf24]" />
-              <p>
-                JPG, WebP, SVG, scale controls, copy links, and sharing are omitted until real implementations exist.
-              </p>
-            </div>
+          {focusedImages.length > 1 && (
+            <Button type="button" className="w-full bg-[#0d99ff] text-white hover:bg-[#0b85df]" onClick={() => void handleDownloadAll()}>
+              <Images className="h-4 w-4" />
+              Download all ({focusedImages.length})
+            </Button>
+          )}
+
+          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {focusedImages.map((image) => (
+              <div key={image.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1e1e1e] p-2.5">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black">
+                  <img src={image.url} alt={image.prompt || 'Focused image'} className="h-full w-full object-cover" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">PNG · {image.id.slice(0, 8)}</p>
+                  <p className="line-clamp-2 text-xs leading-5 text-[#999]">{image.prompt || 'No prompt'}</p>
+                </div>
+                <Button type="button" size="sm" variant="secondary" onClick={() => handleDownload(image.id)}>
+                  <Download className="h-4 w-4" />
+                  PNG
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -68,9 +89,9 @@ export function ExportModal({ open, onOpenChange, canExport }: ExportModalProps)
           <Button type="button" variant="ghost" className="text-[#b3b3b3] hover:bg-white/10 hover:text-white" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" className="bg-[#0d99ff] text-white hover:bg-[#0b85df]" disabled={!canExport} onClick={handleDownload}>
+          <Button type="button" className="bg-[#0d99ff] text-white hover:bg-[#0b85df]" disabled={!canExport || focusedImages.length === 0} onClick={() => focusedImages[0] && handleDownload(focusedImages[0].id)}>
             <Download className="h-4 w-4" />
-            Download PNG
+            Download PNG{focusedImages.length > 1 ? ' (first)' : ''}
           </Button>
         </DialogFooter>
       </DialogContent>
