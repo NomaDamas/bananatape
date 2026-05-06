@@ -30,7 +30,7 @@ export function OutputSizePicker() {
           <span className="truncate">{formatTriggerLabel(outputSize)}</span>
         </span>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent side="top" sideOffset={6} alignItemWithTrigger={false}>
         <SelectGroup>
           <SelectLabel>Auto</SelectLabel>
           <SelectItem value="auto">
