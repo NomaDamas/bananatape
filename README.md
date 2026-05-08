@@ -93,14 +93,18 @@ If the auth file is missing or expired, the `codex` provider will fail until Cod
 
 ### Magic Layer segmentation (SAM3 on macOS)
 
-Magic Layer calls a local SAM3-compatible segmentation command when `BANANATAPE_SAM3_COMMAND` is set. The command should accept an input image path and output a JSON file containing `segments`, each with a `bbox` and optional `maskDataUrl` PNG data URL. Use `{input}` and `{output}` placeholders when your wrapper needs flags:
+Magic Layer calls a local SAM3-compatible segmentation command when `BANANATAPE_SAM3_COMMAND` is set. BananaTape includes a wrapper at `scripts/sam3-magic-layer.py` that adapts Meta's official `facebookresearch/sam3` Python API to the JSON contract used by the editor.
+
+> Note: the official SAM 3 setup currently expects a separate Python/SAM 3 environment. Install and validate SAM 3 outside BananaTape first; the npm package does not bundle model weights or Python dependencies.
+
+Example wrapper setup after SAM 3 works locally:
 
 ```bash
-export BANANATAPE_SAM3_COMMAND="python3 /path/to/sam3_segment.py --input {input} --output {output}"
+export BANANATAPE_SAM3_COMMAND="python3 /path/to/bananatape/scripts/sam3-magic-layer.py --prompts text,logo,person,product,object --input {input} --output {output}"
 bananatape launch logo-explorations
 ```
 
-Expected output shape:
+The command may also be any custom script that accepts an input image path and writes a JSON file containing `segments`, each with a `bbox` and optional full-image `maskDataUrl` PNG data URL:
 
 ```json
 {
