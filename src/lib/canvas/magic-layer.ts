@@ -43,8 +43,48 @@ function rectMask(bounds: { width: number; height: number }): string {
   return canvas.toDataURL('image/png');
 }
 
-async function cropCutout(base: HTMLImageElement, maskDataUrl: string, bounds: { x: number; y: number; width: number; height: number }, imageSize: { width: number; height: number }): Promise<string> {
-  const mask = await loadImage(maskDataUrl);
+function normalizeMaskToAlpha(mask: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = mask.naturalWidth;
+  canvas.height = mask.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.drawImage(mask, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  for (let index = 0; index < data.length; index += 4) {
+    const luminance = Math.max(data[index], data[index + 1], data[index + 2]);
+    const originalAlpha = data[index + 3];
+    const alpha = originalAlpha < 255 ? originalAlpha : luminance;
+    data[index] = 255;
+    data[index + 1] = 255;
+    data[index + 2] = 255;
+    data[index + 3] = alpha;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+function drawMaskCrop(
+  ctx: CanvasRenderingContext2D,
+  mask: HTMLCanvasElement,
+  bounds: { x: number; y: number; width: number; height: number },
+  imageSize: { width: number; height: number },
+) {
+  if (mask.width === imageSize.width && mask.height === imageSize.height) {
+    ctx.drawImage(mask, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
+  } else {
+    ctx.drawImage(mask, 0, 0, bounds.width, bounds.height);
+  }
+}
+
+async function cropCutout(
+  base: HTMLImageElement,
+  mask: HTMLCanvasElement,
+  bounds: { x: number; y: number; width: number; height: number },
+  imageSize: { width: number; height: number },
+): Promise<string> {
   const canvas = document.createElement('canvas');
   canvas.width = bounds.width;
   canvas.height = bounds.height;
@@ -53,21 +93,33 @@ async function cropCutout(base: HTMLImageElement, maskDataUrl: string, bounds: {
 
   ctx.drawImage(base, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
   ctx.globalCompositeOperation = 'destination-in';
-  if (mask.naturalWidth === imageSize.width && mask.naturalHeight === imageSize.height) {
-    ctx.drawImage(mask, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
-  } else {
-    ctx.drawImage(mask, 0, 0, bounds.width, bounds.height);
-  }
+  drawMaskCrop(ctx, mask, bounds, imageSize);
   ctx.globalCompositeOperation = 'source-over';
   return canvas.toDataURL('image/png');
 }
 
-function fillRemovedRegion(ctx: CanvasRenderingContext2D, bounds: { x: number; y: number; width: number; height: number }, imageSize: { width: number; height: number }) {
+function fillRemovedRegion(
+  ctx: CanvasRenderingContext2D,
+  mask: HTMLCanvasElement,
+  bounds: { x: number; y: number; width: number; height: number },
+  imageSize: { width: number; height: number },
+) {
   const sampleX = Math.max(0, Math.min(imageSize.width - 1, bounds.x - 1));
   const sampleY = Math.max(0, Math.min(imageSize.height - 1, bounds.y + Math.floor(bounds.height / 2)));
   const pixel = ctx.getImageData(sampleX, sampleY, 1, 1).data;
-  ctx.fillStyle = `rgb(${pixel[0]} ${pixel[1]} ${pixel[2]})`;
-  ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+  const patch = document.createElement('canvas');
+  patch.width = bounds.width;
+  patch.height = bounds.height;
+  const patchCtx = patch.getContext('2d');
+  if (!patchCtx) return;
+  patchCtx.fillStyle = `rgb(${pixel[0]} ${pixel[1]} ${pixel[2]})`;
+  patchCtx.fillRect(0, 0, bounds.width, bounds.height);
+  patchCtx.globalCompositeOperation = 'destination-in';
+  drawMaskCrop(patchCtx, mask, bounds, imageSize);
+  patchCtx.globalCompositeOperation = 'source-over';
+
+  ctx.drawImage(patch, bounds.x, bounds.y);
 }
 
 export async function buildMagicLayerComposite({ imageUrl, imageSize, segments }: BuildMagicLayersOptions): Promise<{ baseUrl: string; layers: MagicLayer[] }> {
@@ -83,9 +135,10 @@ export async function buildMagicLayerComposite({ imageUrl, imageSize, segments }
   for (const [index, segment] of segments.entries()) {
     const bounds = clampBounds(segment.bbox, imageSize);
     const maskDataUrl = segment.maskDataUrl || rectMask(bounds);
-    const cutoutDataUrl = await cropCutout(base, maskDataUrl, bounds, imageSize);
+    const mask = normalizeMaskToAlpha(await loadImage(maskDataUrl));
+    const cutoutDataUrl = await cropCutout(base, mask, bounds, imageSize);
     if (!cutoutDataUrl) continue;
-    fillRemovedRegion(baseCtx, bounds, imageSize);
+    fillRemovedRegion(baseCtx, mask, bounds, imageSize);
     layers.push({
       id: segment.id || `magic-layer-${index + 1}`,
       name: segment.label || `Layer ${index + 1}`,

@@ -38,12 +38,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", dest="output_path", help="Output JSON path.")
     parser.add_argument(
         "--prompts",
-        default="text,logo,person,animal,plant,product,object,foreground,subject,frame,table",
-        help="Comma-separated SAM 3 concept prompts to try.",
+        default="person,animal,cat,dog,bird,plant,flower,tree,food,product,bottle,cup,chair,table,car,building,text,logo",
+        help="Comma-separated SAM 3 concept prompts to try. Specific nouns work much better than generic 'object'.",
     )
-    parser.add_argument("--score-threshold", type=float, default=0.35, help="Minimum SAM 3 score to keep.")
+    parser.add_argument("--score-threshold", type=float, default=0.25, help="Minimum SAM 3 score to keep after model inference.")
     parser.add_argument("--max-segments", type=int, default=24, help="Maximum number of segments to emit.")
-    parser.add_argument("--confidence-threshold", type=float, default=0.3, help="Sam3Processor confidence threshold.")
+    parser.add_argument("--confidence-threshold", type=float, default=0.2, help="Sam3Processor confidence threshold before post-filtering.")
+    parser.add_argument("--min-area-ratio", type=float, default=0.002, help="Drop masks smaller than this fraction of the image.")
+    parser.add_argument("--max-area-ratio", type=float, default=0.75, help="Drop masks larger than this fraction of the image.")
+    parser.add_argument("--nms-iou", type=float, default=0.72, help="Drop lower-scoring boxes with IoU above this value.")
     parser.add_argument("--debug", action="store_true", help="Print debug info to stderr.")
     return parser.parse_args()
 
@@ -86,7 +89,59 @@ def score_at(scores, index: int) -> float:
     return float(arr.flat[index])
 
 
-def iter_prompt_segments(processor, state, prompt: str, threshold: float, image_size: tuple[int, int], log) -> Iterable[dict]:
+def binary_mask(mask_array) -> np.ndarray:
+    arr = to_numpy(mask_array)
+    while arr.ndim > 2:
+        arr = arr.squeeze(axis=0) if arr.shape[0] == 1 else arr[0]
+    return arr > 0
+
+
+def mask_bbox(mask_array, fallback_box) -> dict[str, float]:
+    mask = binary_mask(mask_array)
+    ys, xs = np.nonzero(mask)
+    if xs.size == 0 or ys.size == 0:
+        return box_to_xywh(fallback_box)
+    x1 = float(xs.min())
+    y1 = float(ys.min())
+    x2 = float(xs.max() + 1)
+    y2 = float(ys.max() + 1)
+    return {"x": x1, "y": y1, "width": max(1.0, x2 - x1), "height": max(1.0, y2 - y1)}
+
+
+def area_ratio(box: dict[str, float], image_size: tuple[int, int]) -> float:
+    target_w, target_h = image_size
+    return (box["width"] * box["height"]) / max(1.0, float(target_w * target_h))
+
+
+def iou(a: dict[str, float], b: dict[str, float]) -> float:
+    ax2 = a["x"] + a["width"]
+    ay2 = a["y"] + a["height"]
+    bx2 = b["x"] + b["width"]
+    by2 = b["y"] + b["height"]
+    ix1 = max(a["x"], b["x"])
+    iy1 = max(a["y"], b["y"])
+    ix2 = min(ax2, bx2)
+    iy2 = min(ay2, by2)
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if inter <= 0:
+        return 0.0
+    union = a["width"] * a["height"] + b["width"] * b["height"] - inter
+    return inter / max(union, 1e-6)
+
+
+def dedupe_segments(segments: list[dict], nms_iou: float, max_segments: int) -> list[dict]:
+    ordered = sorted(segments, key=lambda s: (float(s.get("score", 0)), s["bbox"]["width"] * s["bbox"]["height"]), reverse=True)
+    kept: list[dict] = []
+    for segment in ordered:
+        if any(iou(segment["bbox"], existing["bbox"]) >= nms_iou for existing in kept):
+            continue
+        kept.append(segment)
+        if len(kept) >= max_segments:
+            break
+    return kept
+
+
+def iter_prompt_segments(processor, state, prompt: str, threshold: float, image_size: tuple[int, int], min_area_ratio: float, max_area_ratio: float, log) -> Iterable[dict]:
     output = processor.set_text_prompt(prompt=prompt, state=state)
     masks = output.get("masks")
     boxes = output.get("boxes")
@@ -111,11 +166,16 @@ def iter_prompt_segments(processor, state, prompt: str, threshold: float, image_
         try:
             box = boxes_np[index]
             mask = masks_np[index]
+            bbox = mask_bbox(mask, box)
+            ratio = area_ratio(bbox, image_size)
+            if ratio < min_area_ratio or ratio > max_area_ratio:
+                log(f"  - skip idx={index} area_ratio={ratio:.4f} outside [{min_area_ratio}, {max_area_ratio}]")
+                continue
             yield {
                 "id": f"{prompt.replace(' ', '-')}-{index + 1}",
                 "label": prompt,
                 "score": score,
-                "bbox": box_to_xywh(box),
+                "bbox": bbox,
                 "maskDataUrl": mask_to_data_url(mask, target_w, target_h),
             }
         except Exception as exc:
@@ -152,23 +212,25 @@ def main() -> int:
     state = processor.set_image(image)
     log(f"set_image done in {time.time()-t1:.2f}s")
 
-    seen: set[tuple[int, int, int, int]] = set()
-    segments: list[dict] = []
+    candidates: list[dict] = []
     prompts = [p.strip() for p in args.prompts.split(",") if p.strip()]
     log(f"prompts: {prompts}")
 
     for prompt in prompts:
-        for segment in iter_prompt_segments(processor, state, prompt, args.score_threshold, (target_w, target_h), log):
-            box = segment["bbox"]
-            key = (round(box["x"]), round(box["y"]), round(box["width"]), round(box["height"]))
-            if key in seen:
-                continue
-            seen.add(key)
-            segments.append(segment)
-            if len(segments) >= args.max_segments:
-                break
-        if len(segments) >= args.max_segments:
-            break
+        for segment in iter_prompt_segments(
+            processor,
+            state,
+            prompt,
+            args.score_threshold,
+            (target_w, target_h),
+            args.min_area_ratio,
+            args.max_area_ratio,
+            log,
+        ):
+            candidates.append(segment)
+
+    segments = dedupe_segments(candidates, args.nms_iou, args.max_segments)
+    log(f"kept {len(segments)} of {len(candidates)} candidate(s) after NMS")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
