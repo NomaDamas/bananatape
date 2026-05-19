@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EyeOff, Loader2, RefreshCw, X } from 'lucide-react';
+import { EyeOff, Loader2, RefreshCw, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { useCanvasDrawingPerImage } from '@/hooks/useCanvasDrawingPerImage';
 import { useImageDrag } from '@/hooks/useImageDrag';
+import { hasMagicLayerChanges } from '@/lib/canvas/magic-layer-changes';
+import { useMagicLayerApply } from '@/hooks/useMagicLayerApply';
 import {
   ACTIVE_BOX_STROKE_WIDTH,
   createCanvasMapper,
@@ -153,6 +155,22 @@ function MagicLayerOverlay({ image, enabled }: { image: CanvasImage; enabled: bo
   const dragStartRef = useRef<{ layerId: string; pointerId: number; clientX: number; clientY: number; startX: number; startY: number } | null>(null);
   const layers = image.magicLayers ?? [];
 
+  const { apply } = useMagicLayerApply();
+  const [isApplying, setIsApplying] = useState(false);
+  const changesPending = hasMagicLayerChanges(image);
+  const canApply = enabled && changesPending && image.status === 'ready' && !isApplying;
+  const handleApply = useCallback(async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canApply) return;
+    setIsApplying(true);
+    try {
+      await apply(image.id);
+    } finally {
+      setIsApplying(false);
+    }
+  }, [apply, canApply, image.id]);
+
   const startDrag = useCallback((event: React.PointerEvent, layer: MagicLayer) => {
     if (!enabled || layer.hidden) return;
     event.preventDefault();
@@ -259,6 +277,33 @@ function MagicLayerOverlay({ image, enabled }: { image: CanvasImage; enabled: bo
           </div>
         );
       })}
+      {enabled && (changesPending || isApplying) && (
+        <button
+          type="button"
+          data-testid="magic-layer-apply"
+          aria-label="Apply Magic Layer changes"
+          disabled={!canApply}
+          onClick={handleApply}
+          className={cn(
+            'absolute right-11 top-2 z-50 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-xl ring-1 ring-fuchsia-300/40 backdrop-blur transition-all',
+            canApply
+              ? 'bg-fuchsia-600 text-white hover:bg-fuchsia-500 hover:shadow-fuchsia-500/30'
+              : 'bg-fuchsia-600/60 text-white/80 cursor-not-allowed opacity-60',
+          )}
+        >
+          {isApplying ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Applying…
+            </>
+          ) : (
+            <>
+              <Wand2 className="h-3.5 w-3.5" />
+              Apply
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }
