@@ -42,12 +42,14 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated SAM 3 concept prompts to try. Specific nouns work much better than generic 'object'.",
     )
     parser.add_argument("--score-threshold", type=float, default=0.25, help="Minimum SAM 3 score to keep after model inference.")
-    parser.add_argument("--max-segments", type=int, default=24, help="Maximum number of segments to emit.")
+    parser.add_argument("--max-segments", type=int, default=40, help="Maximum number of segments to emit.")
     parser.add_argument("--confidence-threshold", type=float, default=0.2, help="Sam3Processor confidence threshold before post-filtering.")
     parser.add_argument("--min-area-ratio", type=float, default=0.002, help="Drop masks smaller than this fraction of the image.")
     parser.add_argument("--max-area-ratio", type=float, default=0.75, help="Drop masks larger than this fraction of the image.")
     parser.add_argument("--nms-iou", type=float, default=0.72, help="Drop lower-scoring boxes with IoU above this value.")
-    parser.add_argument("--layout-segments", type=int, default=8, help="Maximum no-dependency layout/color components to add for slide-like images.")
+    parser.add_argument("--layout-segments", type=int, default=12, help="Maximum coarse no-dependency layout/color components to add for slide-like images.")
+    parser.add_argument("--layout-detail-segments", type=int, default=24, help="Maximum fine no-dependency layout/color components to add for slide-like images.")
+    parser.add_argument("--layout-color-segments", type=int, default=24, help="Maximum color-separated layout components to add for slide-like images.")
     parser.add_argument("--layout-distance-threshold", type=float, default=42.0, help="RGB distance from border-estimated background for layout component extraction.")
     parser.add_argument("--debug", action="store_true", help="Print debug info to stderr.")
     return parser.parse_args()
@@ -226,9 +228,143 @@ def connected_components(mask: "object") -> list[tuple[int, int, int, int, int]]
     return components
 
 
-def iter_layout_segments(image, image_size: tuple[int, int], max_segments: int, threshold: float, min_area_ratio: float, max_area_ratio: float) -> Iterable[dict]:
+def layout_component_segments(
+    foreground,
+    image_size: tuple[int, int],
+    scale: float,
+    kernel: int,
+    max_segments: int,
+    min_area_ratio: float,
+    max_area_ratio: float,
+    score: float,
+    id_prefix: str,
+    label: str,
+    include_filled_box: bool = False,
+) -> list[tuple[float, dict]]:
     import numpy as np
     from PIL import Image, ImageFilter
+
+    if max_segments <= 0:
+        return []
+
+    target_w, target_h = image_size
+    small_w = max(1, int(round(target_w * scale)))
+    small_h = max(1, int(round(target_h * scale)))
+    small = Image.fromarray((foreground.astype("uint8") * 255), mode="L").resize((small_w, small_h), resample=Image.Resampling.NEAREST)
+    if kernel > 1:
+        if kernel % 2 == 0:
+            kernel += 1
+        small = small.filter(ImageFilter.MaxFilter(kernel))
+    small_mask = np.asarray(small) > 0
+
+    components = []
+    layout_max_area_ratio = min(max_area_ratio, 0.45)
+    layout_min_area_ratio = min_area_ratio if id_prefix == "layout" else min(min_area_ratio, 0.00045)
+    for sx1, sy1, sx2, sy2, small_area in connected_components(small_mask):
+        x1 = max(0, int(sx1 / scale) - 3)
+        y1 = max(0, int(sy1 / scale) - 3)
+        x2 = min(target_w, int(np.ceil(sx2 / scale)) + 3)
+        y2 = min(target_h, int(np.ceil(sy2 / scale)) + 3)
+        if x2 <= x1 or y2 <= y1:
+            continue
+        component_mask = np.zeros((target_h, target_w), dtype=bool)
+        if include_filled_box:
+            component_mask[y1:y2, x1:x2] = True
+        else:
+            component_mask[y1:y2, x1:x2] = foreground[y1:y2, x1:x2]
+        bbox = mask_bbox(component_mask, [x1, y1, x2, y2])
+        ratio = area_ratio(bbox, image_size)
+        if ratio < layout_min_area_ratio or ratio > layout_max_area_ratio:
+            continue
+        # Prefer practical movable elements over tiny glyph dust: very thin components
+        # are usually individual strokes unless they are wide enough to be a text line.
+        if id_prefix == "layout-detail" and (bbox["width"] < 8 or bbox["height"] < 8):
+            continue
+        priority = bbox["width"] * bbox["height"] + small_area / max(scale * scale, 1e-6)
+        components.append((priority, bbox, component_mask))
+
+    components.sort(key=lambda item: item[0], reverse=True)
+    segments = []
+    for emitted, (_priority, bbox, component_mask) in enumerate(components[:max_segments], start=1):
+        segments.append((
+            box_area(bbox),
+            {
+                "id": f"{id_prefix}-{emitted}",
+                "label": label,
+                "score": score,
+                "source": "layout",
+                "bbox": bbox,
+                "maskDataUrl": mask_to_data_url(component_mask, target_w, target_h),
+            },
+        ))
+    return segments
+
+
+def color_component_segments(
+    arr,
+    foreground,
+    image_size: tuple[int, int],
+    scale: float,
+    max_segments: int,
+    min_area_ratio: float,
+    max_area_ratio: float,
+) -> list[tuple[float, dict]]:
+    import numpy as np
+
+    if max_segments <= 0:
+        return []
+
+    quantized = (arr // 32).astype("int16")
+    flat_keys = quantized[..., 0] * 100 + quantized[..., 1] * 10 + quantized[..., 2]
+    keys, counts = np.unique(flat_keys[foreground], return_counts=True)
+    order = keys[np.argsort(counts)[::-1]]
+    segments: list[tuple[float, dict]] = []
+    for key in order.tolist():
+        if len(segments) >= max_segments * 3:
+            break
+        color_mask = foreground & (flat_keys == key)
+        if float(color_mask.mean()) < 0.0002:
+            continue
+        segments.extend(layout_component_segments(
+            color_mask,
+            image_size,
+            scale,
+            max(3, int(round(5 * scale))),
+            max_segments,
+            min_area_ratio,
+            max_area_ratio,
+            0.43,
+            "layout-color",
+            "layout color element",
+            include_filled_box=False,
+        ))
+    segments.sort(key=lambda item: item[0], reverse=True)
+    deduped: list[tuple[float, dict]] = []
+    seen: set[str] = set()
+    for _area, segment in segments:
+        bbox = segment["bbox"]
+        key = f"{round(bbox['x'])}:{round(bbox['y'])}:{round(bbox['width'])}:{round(bbox['height'])}"
+        if key in seen:
+            continue
+        seen.add(key)
+        segment["id"] = f"layout-color-{len(deduped) + 1}"
+        deduped.append((box_area(bbox), segment))
+        if len(deduped) >= max_segments:
+            break
+    return deduped
+
+
+def iter_layout_segments(
+    image,
+    image_size: tuple[int, int],
+    max_segments: int,
+    detail_segments: int,
+    color_segments: int,
+    threshold: float,
+    min_area_ratio: float,
+    max_area_ratio: float,
+) -> Iterable[dict]:
+    import numpy as np
 
     target_w, target_h = image_size
     arr = np.asarray(image.convert("RGB"), dtype=np.float32)
@@ -241,47 +377,52 @@ def iter_layout_segments(image, image_size: tuple[int, int], max_segments: int, 
         return
 
     scale = min(1.0, 420.0 / max(target_w, target_h))
-    small_w = max(1, int(round(target_w * scale)))
-    small_h = max(1, int(round(target_h * scale)))
-    small = Image.fromarray((foreground.astype("uint8") * 255), mode="L").resize((small_w, small_h), resample=Image.Resampling.NEAREST)
-    kernel = max(3, int(round(19 * scale)))
-    if kernel % 2 == 0:
-        kernel += 1
-    small = small.filter(ImageFilter.MaxFilter(kernel))
-    small_mask = np.asarray(small) > 0
+    coarse_kernel = max(3, int(round(19 * scale)))
+    detail_kernel = max(3, int(round(7 * scale)))
 
-    components = []
-    for sx1, sy1, sx2, sy2, _area in connected_components(small_mask):
-        x1 = max(0, int(sx1 / scale) - 3)
-        y1 = max(0, int(sy1 / scale) - 3)
-        x2 = min(target_w, int(np.ceil(sx2 / scale)) + 3)
-        y2 = min(target_h, int(np.ceil(sy2 / scale)) + 3)
-        if x2 <= x1 or y2 <= y1:
+    coarse = layout_component_segments(
+        foreground,
+        image_size,
+        scale,
+        coarse_kernel,
+        max_segments,
+        min_area_ratio,
+        max_area_ratio,
+        0.45,
+        "layout",
+        "layout group",
+        include_filled_box=True,
+    )
+    details = layout_component_segments(
+        foreground,
+        image_size,
+        scale,
+        detail_kernel,
+        detail_segments,
+        min_area_ratio,
+        max_area_ratio,
+        0.44,
+        "layout-detail",
+        "layout detail",
+        include_filled_box=False,
+    )
+    colors = color_component_segments(
+        arr,
+        foreground,
+        image_size,
+        scale,
+        color_segments,
+        min_area_ratio,
+        max_area_ratio,
+    )
+
+    emitted: set[str] = set()
+    for _area, segment in coarse + details + colors:
+        key = f"{round(segment['bbox']['x'])}:{round(segment['bbox']['y'])}:{round(segment['bbox']['width'])}:{round(segment['bbox']['height'])}"
+        if key in emitted:
             continue
-        component_mask = np.zeros((target_h, target_w), dtype=bool)
-        component_mask[y1:y2, x1:x2] = foreground[y1:y2, x1:x2]
-        bbox = mask_bbox(component_mask, [x1, y1, x2, y2])
-        ratio = area_ratio(bbox, image_size)
-        layout_max_area_ratio = min(max_area_ratio, 0.45)
-        if ratio < min_area_ratio or ratio > layout_max_area_ratio:
-            continue
-        components.append((bbox["width"] * bbox["height"], bbox, component_mask))
-
-    components.sort(key=lambda item: item[0], reverse=True)
-    emitted = 0
-    for _area, bbox, component_mask in components:
-        emitted += 1
-        yield {
-            "id": f"layout-{emitted}",
-            "label": "layout element",
-            "score": 0.45,
-            "source": "layout",
-            "bbox": bbox,
-            "maskDataUrl": mask_to_data_url(component_mask, target_w, target_h),
-        }
-        if emitted >= max_segments:
-            break
-
+        emitted.add(key)
+        yield segment
 
 def iter_prompt_segments(processor, state, prompt: str, threshold: float, image_size: tuple[int, int], min_area_ratio: float, max_area_ratio: float, log) -> Iterable[dict]:
     output = processor.set_text_prompt(prompt=prompt, state=state)
@@ -373,7 +514,7 @@ def main() -> int:
             candidates.append(segment)
 
     if args.layout_segments > 0:
-        candidates.extend(iter_layout_segments(image, (target_w, target_h), args.layout_segments, args.layout_distance_threshold, args.min_area_ratio, args.max_area_ratio))
+        candidates.extend(iter_layout_segments(image, (target_w, target_h), args.layout_segments, args.layout_detail_segments, args.layout_color_segments, args.layout_distance_threshold, args.min_area_ratio, args.max_area_ratio))
 
     segments = dedupe_segments(candidates, args.nms_iou, args.max_segments)
     log(f"kept {len(segments)} of {len(candidates)} candidate(s) after NMS")
