@@ -51,3 +51,6 @@ next-env.d.ts
 
 # ad-hoc QA screenshots
 /btape-*.png
+
+# Electron build output
+/dist-electron/
