@@ -45,12 +45,16 @@ next-env.d.ts
 /test-results/
 
 # local agent/runtime state
+/.omo/
 /.omx/
 /.sisyphus/
 /.playwright-mcp/
 
 # ad-hoc QA screenshots
 /btape-*.png
+/[0-9][0-9]-*.png
+/auto-install-*.png
+/manual-qa-*.png
 
 # Electron build output
 /dist-electron/
