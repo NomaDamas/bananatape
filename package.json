@@ -9,8 +9,11 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "electron:dev": "ELECTRON_DEV=1 npx electron .",
-    "electron:build": "npm run build && npx electron-builder --config electron-builder.yml",
-    "electron:pack": "npm run build && npx electron-builder --config electron-builder.yml --dir"
+    "electron:build": "npm run build && electron-builder --config electron-builder.yml",
+    "electron:pack": "npm run build && electron-builder --config electron-builder.yml --dir",
+    "electron:dist:mac": "npm run build && electron-builder --config electron-builder.yml --mac dmg zip --publish never",
+    "electron:dist:win": "npm run build && electron-builder --config electron-builder.yml --win nsis portable --publish never",
+    "electron:dist:linux": "npm run build && electron-builder --config electron-builder.yml --linux AppImage deb rpm --publish never"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

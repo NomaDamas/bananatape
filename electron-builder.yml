@@ -5,6 +5,8 @@ copyright: "Copyright © 2025 NomaDamas"
 directories:
   output: dist-electron
 
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
 files:
   - electron/**/*
 
@@ -37,23 +39,30 @@ extraResources:
 mac:
   target:
     - target: dmg
-      arch:
-        - universal
+    - target: zip
   category: public.app-category.graphics-design
 
 win:
   target:
     - target: nsis
-      arch:
-        - x64
+    - target: portable
 
 linux:
   target:
     - target: AppImage
-      arch:
-        - x64
+    - target: deb
+    - target: rpm
   category: Graphics
 
+publish:
+  provider: github
+  owner: NomaDamas
+  repo: bananatape
+
 nsis:
+  artifactName: "${productName}-${version}-win-${arch}-nsis.${ext}"
   oneClick: false
   allowToChangeInstallationDirectory: true
+
+portable:
+  artifactName: "${productName}-${version}-win-${arch}-portable.${ext}"

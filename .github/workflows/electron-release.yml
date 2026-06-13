@@ -1,0 +1,159 @@
+name: Package desktop apps
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/electron-release.yml"
+      - "electron-builder.yml"
+      - "electron/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - "src/**"
+      - "public/**"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate desktop packaging config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const builderConfig = fs.readFileSync('electron-builder.yml', 'utf8');
+          const requiredScripts = [
+            'electron:build',
+            'electron:pack',
+            'electron:dist:mac',
+            'electron:dist:win',
+            'electron:dist:linux',
+          ];
+          const missingScripts = requiredScripts.filter((script) => !packageJson.scripts?.[script]);
+          if (missingScripts.length > 0) {
+            throw new Error(`Missing package scripts: ${missingScripts.join(', ')}`);
+          }
+          const requiredConfig = [
+            'target: dmg',
+            'target: zip',
+            'target: nsis',
+            'target: portable',
+            'target: AppImage',
+            'target: deb',
+            'target: rpm',
+            'provider: github',
+            'standalone/node_modules',
+          ];
+          const missingConfig = requiredConfig.filter((entry) => !builderConfig.includes(entry));
+          if (missingConfig.length > 0) {
+            throw new Error(`Missing electron-builder config entries: ${missingConfig.join(', ')}`);
+          }
+          console.log('desktop packaging metadata ok');
+          NODE
+
+  package:
+    name: Package ${{ matrix.name }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            script: electron:dist:mac
+            builder_args: --mac dmg zip
+          - name: Windows
+            os: windows-latest
+            script: electron:dist:win
+            builder_args: --win nsis portable
+          - name: Linux
+            os: ubuntu-latest
+            script: electron:dist:linux
+            builder_args: --linux AppImage deb rpm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies for Linux packaging
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply release version to package metadata
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          node -e "const v = process.argv[1]; if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(v)) { console.error('Release tag must be semver, e.g. v1.2.3 or 1.2.3. Got: ' + v); process.exit(1); }" "$VERSION"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Cache Next.js build output
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'electron/**/*.mjs', 'next.config.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+
+      - name: Check source
+        run: |
+          npm run lint
+          npm run typecheck
+
+      - name: Package desktop app for pull requests
+        if: github.event_name != 'release'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run ${{ matrix.script }}
+
+      - name: Package and publish desktop app for releases
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build && npx electron-builder --config electron-builder.yml ${{ matrix.builder_args }} --publish always
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BananaTape-${{ matrix.name }}
+          path: |
+            dist-electron/**
+            !dist-electron/**/builder-debug.yml
+            !dist-electron/**/builder-effective-config.yaml
