@@ -19,6 +19,7 @@ extraResources:
     filter:
       - "**/*"
       - "!**/.cache"
+      - "!dist-electron/**"
   - from: .next/standalone/node_modules
     to: standalone/node_modules
     filter:
@@ -48,6 +49,7 @@ win:
     - target: portable
 
 linux:
+  maintainer: "NomaDamas <vkehfdl1@gmail.com>"
   target:
     - target: AppImage
     - target: deb
