@@ -188,6 +188,7 @@ async function launchProject(ref, options) {
     console.log(`${project.id} already running at ${url}`);
     return;
   }
+  const port = await findFreePort(options.port);
   if (options.rebuild || !(await buildExists())) {
     console.log('Building BananaTape...');
     await new Promise((resolve, reject) => {
@@ -195,7 +196,6 @@ async function launchProject(ref, options) {
       child.on('exit', (code) => code === 0 ? resolve() : reject(new Error('Build failed')));
     });
   }
-  const port = await findFreePort(options.port);
   const launchId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const hasStandaloneServer = await standaloneServerExists();
   if (hasStandaloneServer) await prepareStandaloneServer();

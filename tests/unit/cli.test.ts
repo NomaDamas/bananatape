@@ -46,6 +46,22 @@ async function waitUntilRunning(projectId: string): Promise<CliResult> {
   return last;
 }
 
+async function createStandaloneAppRoot(): Promise<string> {
+  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'bananatape-app-root-'));
+  const standaloneRoot = path.join(appRoot, '.next', 'standalone');
+  await mkdir(standaloneRoot, { recursive: true });
+  await writeFile(path.join(appRoot, '.next', 'BUILD_ID'), 'test-build');
+  await writeFile(path.join(standaloneRoot, 'server.js'), `
+    const http = require('node:http');
+    const server = http.createServer((request, response) => {
+      response.end(request.url === '/api/projects/current' ? '{}' : 'ok');
+    });
+    server.listen(Number(process.env.PORT), process.env.HOSTNAME);
+    process.on('SIGTERM', () => server.close(() => process.exit(0)));
+  `);
+  return appRoot;
+}
+
 beforeEach(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), 'bananatape-cli-home-'));
   projectsDir = await mkdtemp(path.join(os.tmpdir(), 'bananatape-cli-projects-'));
@@ -119,13 +135,18 @@ describe('bananatape CLI project lifecycle', () => {
   });
 
   it('launches a project on the requested 127.0.0.1 port and stops it from the runtime registry', async () => {
+    const appRoot = await createStandaloneAppRoot();
+    env = {
+      ...env,
+      BANANATAPE_TEST_APP_ROOT: appRoot,
+    };
     await runCli(['create', 'Launchable']);
     const port = await freePort();
 
-    const launched = await runCli(['launch', 'launchable', '--port', String(port), '--no-open']);
-    expect(launched.stdout).toContain(`Launched launchable at http://127.0.0.1:${port}`);
-
     try {
+      const launched = await runCli(['launch', 'launchable', '--port', String(port), '--no-open']);
+      expect(launched.stdout).toContain(`Launched launchable at http://127.0.0.1:${port}`);
+
       const status = await waitUntilRunning('launchable');
       expect(status.stdout).toContain('status: running');
       expect(status.stdout).toContain(`url: http://127.0.0.1:${port}`);
@@ -142,6 +163,7 @@ describe('bananatape CLI project lifecycle', () => {
       expect(runtime.running[0].cookieName).toBeUndefined();
     } finally {
       await runCli(['stop', 'launchable']);
+      await rm(appRoot, { recursive: true, force: true });
     }
 
     const stoppedRuntime = JSON.parse(await readFile(path.join(home, 'runtime.json'), 'utf8'));
