@@ -38,6 +38,7 @@ extraResources:
       - "*.py"
 
 mac:
+  identity: null
   target:
     - target: dmg
     - target: zip

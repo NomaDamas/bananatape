@@ -25,4 +25,12 @@ describe('electron-builder Linux package metadata', () => {
     // Then: the packaged app cannot recursively include an older packaged app.
     expect(excludesElectronOutput).toBe(true);
   });
+
+  it('does not auto-discover a local macOS signing identity for unsigned packages', () => {
+    // Given: local developer machines may have inaccessible or unrelated signing identities.
+    const builderConfig = fs.readFileSync('electron-builder.yml', 'utf8');
+
+    // Then: local macOS packaging stays deterministic and does not fail during codesign.
+    expect(builderConfig).toMatch(/^\s*identity:\s*null$/m);
+  });
 });
