@@ -33,4 +33,12 @@ describe('electron-builder Linux package metadata', () => {
     // Then: local macOS packaging stays deterministic and does not fail during codesign.
     expect(builderConfig).toMatch(/^\s*identity:\s*null$/m);
   });
+
+  it('publishes desktop assets to the existing GitHub release', () => {
+    // Given: the desktop release workflow runs after a GitHub Release is published.
+    const builderConfig = fs.readFileSync('electron-builder.yml', 'utf8');
+
+    // Then: electron-builder uploads to that release instead of looking for a draft release.
+    expect(builderConfig).toMatch(/^\s*releaseType:\s*release$/m);
+  });
 });
