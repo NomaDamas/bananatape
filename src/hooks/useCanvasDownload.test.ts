@@ -70,7 +70,7 @@ beforeEach(() => {
   });
 
   const originalCreateElement = document.createElement.bind(document);
-  vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+  vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
     const node = originalCreateElement(tag);
     if (tag === 'a') {
       const anchor = node as HTMLAnchorElement;
@@ -78,7 +78,7 @@ beforeEach(() => {
       createdLinks.push(anchor);
     }
     return node;
-  });
+  }) as typeof document.createElement);
 });
 
 afterEach(() => {

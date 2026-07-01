@@ -25,6 +25,10 @@ The goal is not to replace a full design tool. It is a small editor for prompt-b
 
 ## Quick start
 
+BananaTape can be installed either as the CLI-first local web app or as a desktop wrapper. The CLI remains the recommended project-management surface; the desktop app opens an existing BananaTape project folder in a native window.
+
+### CLI install
+
 Install the CLI from npm:
 
 ```bash
@@ -58,6 +62,33 @@ bananatape status
 bananatape launch <project>
 bananatape stop <project>
 bananatape delete <project>
+```
+
+### Desktop app install
+
+Desktop builds are attached to GitHub Releases for macOS, Windows, and Linux. Create projects with the CLI, then open the project folder from the desktop app or launch the app with a project path.
+
+| Platform | Release artifact | Install notes |
+| --- | --- | --- |
+| macOS | `BananaTape-<version>-mac-<arch>.dmg` or `.zip` | Open the DMG and drag BananaTape to Applications, or unzip the app bundle. If Gatekeeper warns about an unsigned build, right-click the app and choose Open. |
+| Windows | `BananaTape-<version>-win-<arch>-nsis.exe` or `BananaTape-<version>-win-<arch>-portable.exe` | Use the NSIS installer for a normal install, or the portable EXE when you do not want an installer. |
+| Linux | `BananaTape-<version>-linux-<arch>.AppImage`, `.deb`, or `.rpm` | Use AppImage for a portable build, `sudo apt install ./BananaTape-*.deb` on Debian/Ubuntu, or `sudo rpm -i BananaTape-*.rpm` on RPM-based distributions. |
+
+Builds are produced by GitHub Actions from the same release tag as the npm package. The desktop app bundles the standalone Next.js server locally and keeps all project files on your machine.
+
+To build the desktop app from source on your current OS:
+
+```bash
+npm ci
+npm run electron:pack
+```
+
+Platform-specific release builds:
+
+```bash
+npm run electron:dist:mac
+npm run electron:dist:win
+npm run electron:dist:linux
 ```
 
 ## Provider setup
@@ -217,7 +248,7 @@ BananaTape keeps the image workflow simple and keeps project management outside 
 
 ## Local-first project model
 
-BananaTape is designed first as a local app that runs a Next.js server on `127.0.0.1` and opens in your normal browser. It does **not** use Electron, Tauri, Photino, or a native wrapper in the current V1.
+BananaTape is designed first as a local app that runs a Next.js server on `127.0.0.1` and opens in your normal browser. The Electron desktop app is a thin packaged wrapper around that same local server for users who prefer a native window; project creation, launch, listing, stopping, and deletion remain CLI-first.
 
 Projects are regular folders on disk. By default they are stored at:
 
