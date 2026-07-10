@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+set -eu
+
+GRADLE_VERSION="8.14.3"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAPPER_DIR="$SCRIPT_DIR/.gradle/wrapper"
+DIST_DIR="$WRAPPER_DIR/gradle-$GRADLE_VERSION"
+ZIP_PATH="$WRAPPER_DIR/gradle-$GRADLE_VERSION-bin.zip"
+GRADLE_BIN="$DIST_DIR/gradle-$GRADLE_VERSION/bin/gradle"
+
+if [ ! -x "$GRADLE_BIN" ]; then
+  mkdir -p "$WRAPPER_DIR"
+  if [ ! -f "$ZIP_PATH" ]; then
+    curl -L --fail --show-error --output "$ZIP_PATH" "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
+  fi
+  rm -rf "$DIST_DIR"
+  mkdir -p "$DIST_DIR"
+  unzip -q "$ZIP_PATH" -d "$DIST_DIR"
+fi
+
+exec "$GRADLE_BIN" "$@"
