@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "settings": {
+    "systemPrompt": "Preserve desktop-authored Magic Layer data.",
+    "referenceImages": []
+  },
+  "canvas": {
+    "images": {
+      "img-magic-generate-1": {
+        "id": "img-magic-generate-1",
+        "url": "/api/projects/assets/img_magic_generate_1",
+        "assetId": "img_magic_generate_1",
+        "size": { "width": 2, "height": 2 },
+        "position": { "x": 16, "y": 24 },
+        "parentId": null,
+        "generationIndex": 0,
+        "prompt": "A banana logo with draggable foreground layers.",
+        "provider": "openai",
+        "type": "generate",
+        "createdAt": 1783038660000,
+        "paths": [
+          {
+            "id": "path-magic-note",
+            "tool": "pen",
+            "points": [{ "x": 0.2, "y": 0.4 }],
+            "color": "#f4c430",
+            "strokeWidth": 3
+          }
+        ],
+        "boxes": [
+          {
+            "id": "box-magic-region",
+            "tool": "box",
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.6,
+            "height": 0.4,
+            "color": "#00ff00",
+            "status": "review"
+          }
+        ],
+        "memos": [
+          {
+            "id": "memo-magic-desktop-only",
+            "x": 0.25,
+            "y": 0.75,
+            "text": "Magic Layer editing is desktop-only on mobile.",
+            "color": "#111111"
+          }
+        ],
+        "magicLayers": [
+          {
+            "id": "layer-banana-foreground",
+            "name": "Banana foreground",
+            "maskDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            "cutoutDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            "sourceBounds": { "x": 0, "y": 0, "width": 1, "height": 1 },
+            "position": { "x": 12, "y": 18 },
+            "hidden": false
+          },
+          {
+            "id": "layer-label-shadow",
+            "name": "Label shadow",
+            "maskDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            "cutoutDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            "sourceBounds": { "x": 1, "y": 1, "width": 1, "height": 1 },
+            "position": { "x": 20, "y": 30 },
+            "hidden": true
+          }
+        ],
+        "magicLayerBaseUrl": "/api/projects/assets/img_magic_generate_1",
+        "magicLayerStatus": "ready",
+        "selectedMagicLayerId": "layer-banana-foreground",
+        "status": "ready"
+      }
+    },
+    "imageOrder": ["img-magic-generate-1"],
+    "focusedImageIds": ["img-magic-generate-1"]
+  }
+}

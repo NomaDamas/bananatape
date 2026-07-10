@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "desktop-v1-project-with-references",
+  "name": "Desktop V1 Project With References",
+  "createdAt": "2026-07-03T00:20:00.000Z",
+  "updatedAt": "2026-07-03T00:21:00.000Z",
+  "settings": {
+    "systemPrompt": "Match the reference banana color.",
+    "referenceImages": [
+      {
+        "id": "ref_meta_banana_png",
+        "assetId": "reference-banana",
+        "assetPath": "references/reference-banana.png",
+        "name": "reference-banana.png",
+        "mimeType": "image/png",
+        "createdAt": "2026-07-03T00:20:10.000Z"
+      }
+    ]
+  }
+}

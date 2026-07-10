@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "revision": 2,
+  "entries": [
+    {
+      "id": "hist_desktop_edit_1",
+      "type": "edit",
+      "provider": "openai",
+      "prompt": "Add handwritten tape labels around the banana.",
+      "assetId": "img_desktop_edit_1",
+      "assetPath": "assets/img_desktop_edit_1.jpg",
+      "thumbnailPath": null,
+      "parentId": "hist_desktop_generate_1",
+      "createdAt": "2026-07-03T00:11:00.000Z",
+      "timestamp": 1783037460000
+    },
+    {
+      "id": "hist_desktop_generate_1",
+      "type": "generate",
+      "provider": "openai",
+      "prompt": "A banana product poster with paper texture.",
+      "assetId": "img_desktop_generate_1",
+      "assetPath": "assets/img_desktop_generate_1.png",
+      "thumbnailPath": null,
+      "parentId": null,
+      "createdAt": "2026-07-03T00:10:00.000Z",
+      "timestamp": 1783037400000
+    }
+  ]
+}

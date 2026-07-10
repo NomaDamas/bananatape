@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "desktop-project-with-magic-layer-fields",
+  "name": "Desktop Project With Magic Layer Fields",
+  "createdAt": "2026-07-03T00:30:00.000Z",
+  "updatedAt": "2026-07-03T00:31:00.000Z",
+  "settings": {
+    "systemPrompt": "Preserve desktop-authored Magic Layer data.",
+    "referenceImages": []
+  }
+}

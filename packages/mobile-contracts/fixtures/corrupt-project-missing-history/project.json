@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "corrupt-project-missing-history",
+  "name": "Corrupt Project Missing History",
+  "createdAt": "2026-07-03T00:40:00.000Z",
+  "updatedAt": "2026-07-03T00:40:00.000Z",
+  "settings": {
+    "systemPrompt": "This fixture intentionally omits history.json.",
+    "referenceImages": []
+  }
+}

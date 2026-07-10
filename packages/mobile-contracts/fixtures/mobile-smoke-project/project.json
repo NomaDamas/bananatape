@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "mobile-smoke-project",
+  "name": "Mobile Smoke Project",
+  "createdAt": "2026-07-03T00:00:00.000Z",
+  "updatedAt": "2026-07-03T00:00:00.000Z",
+  "settings": {
+    "systemPrompt": "Keep the banana bright and readable.",
+    "referenceImages": []
+  }
+}

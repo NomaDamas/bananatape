@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "entries": [
+    {
+      "id": "hist_mobile_smoke_1",
+      "type": "generate",
+      "provider": "openai",
+      "prompt": "A tiny banana sticker on transparent paper.",
+      "assetId": "img_mobile_smoke_1",
+      "assetPath": "assets/img_mobile_smoke_1.png",
+      "thumbnailPath": null,
+      "parentId": null,
+      "createdAt": "2026-07-03T00:00:01.000Z",
+      "timestamp": 1783036801000
+    }
+  ]
+}

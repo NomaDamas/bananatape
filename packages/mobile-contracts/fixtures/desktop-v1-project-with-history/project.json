@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "desktop-v1-project-with-history",
+  "name": "Desktop V1 Project With History",
+  "createdAt": "2026-07-03T00:10:00.000Z",
+  "updatedAt": "2026-07-03T00:11:00.000Z",
+  "settings": {
+    "systemPrompt": "Use editorial poster lighting.",
+    "referenceImages": []
+  }
+}

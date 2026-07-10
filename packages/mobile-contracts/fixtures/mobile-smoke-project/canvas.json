@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "settings": {
+    "systemPrompt": "Keep the banana bright and readable.",
+    "referenceImages": []
+  },
+  "canvas": {
+    "images": {
+      "img-mobile-smoke-1": {
+        "id": "img-mobile-smoke-1",
+        "url": "/api/projects/assets/img_mobile_smoke_1",
+        "assetId": "img_mobile_smoke_1",
+        "size": { "width": 1, "height": 1 },
+        "position": { "x": 0, "y": 0 },
+        "parentId": null,
+        "generationIndex": 0,
+        "prompt": "A tiny banana sticker on transparent paper.",
+        "provider": "openai",
+        "type": "generate",
+        "createdAt": 1783036801000,
+        "paths": [],
+        "boxes": [],
+        "memos": [],
+        "status": "ready"
+      }
+    },
+    "imageOrder": ["img-mobile-smoke-1"],
+    "focusedImageIds": ["img-mobile-smoke-1"]
+  }
+}
