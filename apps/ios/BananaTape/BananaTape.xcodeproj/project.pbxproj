@@ -1,0 +1,269 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A0000010000000000000001 /* BananaTapeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000011 /* BananaTapeApp.swift */; };
+		0A0000010000000000000002 /* ProjectListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000012 /* ProjectListView.swift */; };
+		0A0000010000000000000003 /* BananaTapeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000013 /* BananaTapeTests.swift */; };
+		0A0000010000000000000004 /* BananaTapeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000014 /* BananaTapeUITests.swift */; };
+		0A0000010000000000000009 /* AdapterContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000017 /* AdapterContracts.swift */; };
+		0A000001000000000000000A /* FakeAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000018 /* FakeAdapters.swift */; };
+		0A000001000000000000000B /* AdapterContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000019 /* AdapterContractsTests.swift */; };
+		0A000001000000000000000C /* ProjectJSONValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000001A /* ProjectJSONValidation.swift */; };
+		0A000001000000000000000D /* LocalProjectStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000001B /* LocalProjectStorage.swift */; };
+		0A000001000000000000000E /* ProjectPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000001C /* ProjectPickerModel.swift */; };
+		0A000001000000000000000F /* LocalProjectStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000001D /* LocalProjectStorageTests.swift */; };
+		0A0000010000000000000090 /* EditorModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000094 /* EditorModels.swift */; };
+		0A0000010000000000000091 /* EditorJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000095 /* EditorJSON.swift */; };
+		0A0000010000000000000092 /* EditorHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000096 /* EditorHistory.swift */; };
+		0A0000010000000000000093 /* EditorModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000097 /* EditorModelTests.swift */; };
+		0A0000010000000000000098 /* ComposerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000009B /* ComposerModels.swift */; };
+		0A0000010000000000000099 /* ComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000009C /* ComposerView.swift */; };
+		0A000001000000000000009A /* ComposerModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000009D /* ComposerModelTests.swift */; };
+		0A00000100000000000000A0 /* NativeCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000A2 /* NativeCanvasView.swift */; };
+		0A00000100000000000000A1 /* NativeCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000A3 /* NativeCanvasTests.swift */; };
+		0A00000100000000000000A4 /* NativeImageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000A5 /* NativeImageComposer.swift */; };
+		0A00000100000000000000A6 /* GalleryShareAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000A7 /* GalleryShareAdapters.swift */; };
+		0A00000100000000000000A8 /* InboundShareAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AA /* InboundShareAdapters.swift */; };
+		0A00000100000000000000A9 /* InboundShareAdaptersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AB /* InboundShareAdaptersTests.swift */; };
+		0A00000100000000000000AC /* OpenAIURLSessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AD /* OpenAIURLSessionTransport.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0A0000010000000000000005 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A0000010000000000000020 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0A0000010000000000000030;
+			remoteInfo = BananaTape;
+		};
+		0A0000010000000000000006 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A0000010000000000000020 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0A0000010000000000000030;
+			remoteInfo = BananaTape;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0A0000010000000000000010 /* BananaTape.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BananaTape.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000010000000000000011 /* BananaTapeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaTapeApp.swift; sourceTree = "<group>"; };
+		0A0000010000000000000012 /* ProjectListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListView.swift; sourceTree = "<group>"; };
+		0A0000010000000000000013 /* BananaTapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaTapeTests.swift; sourceTree = "<group>"; };
+		0A0000010000000000000014 /* BananaTapeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaTapeUITests.swift; sourceTree = "<group>"; };
+		0A0000010000000000000015 /* BananaTapeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BananaTapeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000010000000000000016 /* BananaTapeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BananaTapeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000010000000000000017 /* AdapterContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdapterContracts.swift; sourceTree = "<group>"; };
+		0A0000010000000000000018 /* FakeAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeAdapters.swift; sourceTree = "<group>"; };
+		0A0000010000000000000019 /* AdapterContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdapterContractsTests.swift; sourceTree = "<group>"; };
+		0A000001000000000000001A /* ProjectJSONValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectJSONValidation.swift; sourceTree = "<group>"; };
+		0A000001000000000000001B /* LocalProjectStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalProjectStorage.swift; sourceTree = "<group>"; };
+		0A000001000000000000001C /* ProjectPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPickerModel.swift; sourceTree = "<group>"; };
+		0A000001000000000000001D /* LocalProjectStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalProjectStorageTests.swift; sourceTree = "<group>"; };
+		0A0000010000000000000094 /* EditorModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorModels.swift; sourceTree = "<group>"; };
+		0A0000010000000000000095 /* EditorJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorJSON.swift; sourceTree = "<group>"; };
+		0A0000010000000000000096 /* EditorHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorHistory.swift; sourceTree = "<group>"; };
+		0A0000010000000000000097 /* EditorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorModelTests.swift; sourceTree = "<group>"; };
+		0A000001000000000000009B /* ComposerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerModels.swift; sourceTree = "<group>"; };
+		0A000001000000000000009C /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
+		0A000001000000000000009D /* ComposerModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerModelTests.swift; sourceTree = "<group>"; };
+		0A00000100000000000000A2 /* NativeCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCanvasView.swift; sourceTree = "<group>"; };
+		0A00000100000000000000A3 /* NativeCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCanvasTests.swift; sourceTree = "<group>"; };
+		0A00000100000000000000A5 /* NativeImageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeImageComposer.swift; sourceTree = "<group>"; };
+		0A00000100000000000000A7 /* GalleryShareAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryShareAdapters.swift; sourceTree = "<group>"; };
+		0A00000100000000000000AA /* InboundShareAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboundShareAdapters.swift; sourceTree = "<group>"; };
+		0A00000100000000000000AD /* OpenAIURLSessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIURLSessionTransport.swift; sourceTree = "<group>"; };
+		0A00000100000000000000AB /* InboundShareAdaptersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboundShareAdaptersTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0A0000010000000000000040 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		0A0000010000000000000041 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		0A0000010000000000000042 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A0000010000000000000050 = {
+			isa = PBXGroup;
+			children = (
+				0A0000010000000000000051 /* BananaTape */,
+				0A0000010000000000000052 /* BananaTapeTests */,
+				0A0000010000000000000053 /* BananaTapeUITests */,
+				0A0000010000000000000054 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		0A0000010000000000000051 /* BananaTape */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000010000000000000011 /* BananaTapeApp.swift */,
+				0A0000010000000000000012 /* ProjectListView.swift */,
+				0A0000010000000000000017 /* AdapterContracts.swift */,
+				0A0000010000000000000018 /* FakeAdapters.swift */,
+				0A000001000000000000001A /* ProjectJSONValidation.swift */,
+				0A000001000000000000001B /* LocalProjectStorage.swift */,
+				0A000001000000000000001C /* ProjectPickerModel.swift */,
+				0A0000010000000000000094 /* EditorModels.swift */,
+				0A0000010000000000000095 /* EditorJSON.swift */,
+				0A0000010000000000000096 /* EditorHistory.swift */,
+				0A000001000000000000009B /* ComposerModels.swift */,
+				0A000001000000000000009C /* ComposerView.swift */,
+				0A00000100000000000000A2 /* NativeCanvasView.swift */,
+				0A00000100000000000000A5 /* NativeImageComposer.swift */,
+				0A00000100000000000000A7 /* GalleryShareAdapters.swift */,
+				0A00000100000000000000AA /* InboundShareAdapters.swift */,
+				0A00000100000000000000AD /* OpenAIURLSessionTransport.swift */,
+			);
+			path = BananaTape;
+			sourceTree = "<group>";
+		};
+		0A0000010000000000000052 /* BananaTapeTests */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000010000000000000013 /* BananaTapeTests.swift */,
+				0A0000010000000000000019 /* AdapterContractsTests.swift */,
+				0A000001000000000000001D /* LocalProjectStorageTests.swift */,
+				0A0000010000000000000097 /* EditorModelTests.swift */,
+				0A000001000000000000009D /* ComposerModelTests.swift */,
+				0A00000100000000000000A3 /* NativeCanvasTests.swift */,
+				0A00000100000000000000AB /* InboundShareAdaptersTests.swift */,
+			);
+			path = BananaTapeTests;
+			sourceTree = "<group>";
+		};
+		0A0000010000000000000053 /* BananaTapeUITests */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000010000000000000014 /* BananaTapeUITests.swift */,
+			);
+			path = BananaTapeUITests;
+			sourceTree = "<group>";
+		};
+		0A0000010000000000000054 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000010000000000000010 /* BananaTape.app */,
+				0A0000010000000000000015 /* BananaTapeTests.xctest */,
+				0A0000010000000000000016 /* BananaTapeUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0A0000010000000000000030 /* BananaTape */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000010000000000000060 /* Build configuration list for PBXNativeTarget "BananaTape" */;
+			buildPhases = (
+				0A0000010000000000000040 /* Frameworks */,
+				0A0000010000000000000070 /* Sources */,
+			);
+			buildRules = ( );
+			dependencies = ( );
+			name = BananaTape;
+			productName = BananaTape;
+			productReference = 0A0000010000000000000010 /* BananaTape.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0A0000010000000000000031 /* BananaTapeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000010000000000000061 /* Build configuration list for PBXNativeTarget "BananaTapeTests" */;
+			buildPhases = (
+				0A0000010000000000000041 /* Frameworks */,
+				0A0000010000000000000071 /* Sources */,
+			);
+			buildRules = ( );
+			dependencies = (
+				0A0000010000000000000007 /* PBXTargetDependency */,
+			);
+			name = BananaTapeTests;
+			productName = BananaTapeTests;
+			productReference = 0A0000010000000000000015 /* BananaTapeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		0A0000010000000000000032 /* BananaTapeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000010000000000000062 /* Build configuration list for PBXNativeTarget "BananaTapeUITests" */;
+			buildPhases = (
+				0A0000010000000000000042 /* Frameworks */,
+				0A0000010000000000000072 /* Sources */,
+			);
+			buildRules = ( );
+			dependencies = (
+				0A0000010000000000000008 /* PBXTargetDependency */,
+			);
+			name = BananaTapeUITests;
+			productName = BananaTapeUITests;
+			productReference = 0A0000010000000000000016 /* BananaTapeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0A0000010000000000000020 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					0A0000010000000000000030 = { CreatedOnToolsVersion = 16.0; };
+					0A0000010000000000000031 = { CreatedOnToolsVersion = 16.0; TestTargetID = 0A0000010000000000000030; };
+					0A0000010000000000000032 = { CreatedOnToolsVersion = 16.0; TestTargetID = 0A0000010000000000000030; };
+				};
+			};
+			buildConfigurationList = 0A0000010000000000000063 /* Build configuration list for PBXProject "BananaTape" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = ( en, Base );
+			mainGroup = 0A0000010000000000000050;
+			productRefGroup = 0A0000010000000000000054 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0A0000010000000000000030 /* BananaTape */,
+				0A0000010000000000000031 /* BananaTapeTests */,
+				0A0000010000000000000032 /* BananaTapeUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0A0000010000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000001 /* BananaTapeApp.swift in Sources */, 0A0000010000000000000002 /* ProjectListView.swift in Sources */, 0A0000010000000000000009 /* AdapterContracts.swift in Sources */, 0A000001000000000000000A /* FakeAdapters.swift in Sources */, 0A000001000000000000000C /* ProjectJSONValidation.swift in Sources */, 0A000001000000000000000D /* LocalProjectStorage.swift in Sources */, 0A000001000000000000000E /* ProjectPickerModel.swift in Sources */, 0A0000010000000000000090 /* EditorModels.swift in Sources */, 0A0000010000000000000091 /* EditorJSON.swift in Sources */, 0A0000010000000000000092 /* EditorHistory.swift in Sources */, 0A0000010000000000000098 /* ComposerModels.swift in Sources */, 0A0000010000000000000099 /* ComposerView.swift in Sources */, 0A00000100000000000000A0 /* NativeCanvasView.swift in Sources */, 0A00000100000000000000A4 /* NativeImageComposer.swift in Sources */, 0A00000100000000000000A6 /* GalleryShareAdapters.swift in Sources */, 0A00000100000000000000A8 /* InboundShareAdapters.swift in Sources */, 0A00000100000000000000AC /* OpenAIURLSessionTransport.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		0A0000010000000000000071 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000003 /* BananaTapeTests.swift in Sources */, 0A000001000000000000000B /* AdapterContractsTests.swift in Sources */, 0A000001000000000000000F /* LocalProjectStorageTests.swift in Sources */, 0A0000010000000000000093 /* EditorModelTests.swift in Sources */, 0A000001000000000000009A /* ComposerModelTests.swift in Sources */, 0A00000100000000000000A1 /* NativeCanvasTests.swift in Sources */, 0A00000100000000000000A9 /* InboundShareAdaptersTests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		0A0000010000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000004 /* BananaTapeUITests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0A0000010000000000000007 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 0A0000010000000000000030 /* BananaTape */; targetProxy = 0A0000010000000000000005 /* PBXContainerItemProxy */; };
+		0A0000010000000000000008 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 0A0000010000000000000030 /* BananaTape */; targetProxy = 0A0000010000000000000006 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0A0000010000000000000080 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ANALYZER_NONNULL = YES; CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE; CLANG_CXX_LANGUAGE_STANDARD = "gnu++20"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_ENABLE_OBJC_WEAK = YES; CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES; CLANG_WARN_BOOL_CONVERSION = YES; CLANG_WARN_COMMA = YES; CLANG_WARN_CONSTANT_CONVERSION = YES; CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES; CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; CLANG_WARN_EMPTY_BODY = YES; CLANG_WARN_ENUM_CONVERSION = YES; CLANG_WARN_INFINITE_RECURSION = YES; CLANG_WARN_INT_CONVERSION = YES; CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES; CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES; CLANG_WARN_OBJC_LITERAL_CONVERSION = YES; CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR; CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES; CLANG_WARN_RANGE_LOOP_ANALYSIS = YES; CLANG_WARN_STRICT_PROTOTYPES = YES; CLANG_WARN_SUSPICIOUS_MOVE = YES; CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE; CLANG_WARN_UNREACHABLE_CODE = YES; CLANG_WARN__DUPLICATE_METHOD_MATCH = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; ENABLE_TESTABILITY = YES; ENABLE_USER_SCRIPT_SANDBOXING = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_DYNAMIC_NO_PIC = NO; GCC_NO_COMMON_BLOCKS = YES; GCC_OPTIMIZATION_LEVEL = 0; GCC_PREPROCESSOR_DEFINITIONS = ( "DEBUG=1", "$(inherited)", ); GCC_WARN_64_TO_32_BIT_CONVERSION = YES; GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR; GCC_WARN_UNDECLARED_SELECTOR = YES; GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE; GCC_WARN_UNUSED_FUNCTION = YES; GCC_WARN_UNUSED_VARIABLE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		0A0000010000000000000081 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ANALYZER_NONNULL = YES; CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE; CLANG_CXX_LANGUAGE_STANDARD = "gnu++20"; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_ENABLE_OBJC_WEAK = YES; CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES; CLANG_WARN_BOOL_CONVERSION = YES; CLANG_WARN_COMMA = YES; CLANG_WARN_CONSTANT_CONVERSION = YES; CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES; CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; CLANG_WARN_EMPTY_BODY = YES; CLANG_WARN_ENUM_CONVERSION = YES; CLANG_WARN_INFINITE_RECURSION = YES; CLANG_WARN_INT_CONVERSION = YES; CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES; CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES; CLANG_WARN_OBJC_LITERAL_CONVERSION = YES; CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR; CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES; CLANG_WARN_RANGE_LOOP_ANALYSIS = YES; CLANG_WARN_STRICT_PROTOTYPES = YES; CLANG_WARN_SUSPICIOUS_MOVE = YES; CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE; CLANG_WARN_UNREACHABLE_CODE = YES; CLANG_WARN__DUPLICATE_METHOD_MATCH = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; ENABLE_STRICT_OBJC_MSGSEND = YES; ENABLE_USER_SCRIPT_SANDBOXING = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_NO_COMMON_BLOCKS = YES; GCC_WARN_64_TO_32_BIT_CONVERSION = YES; GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR; GCC_WARN_UNDECLARED_SELECTOR = YES; GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE; GCC_WARN_UNUSED_FUNCTION = YES; GCC_WARN_UNUSED_VARIABLE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; VALIDATE_PRODUCT = YES; }; name = Release; };
+		0A0000010000000000000082 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; DEVELOPMENT_TEAM = ""; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = BananaTape; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design"; INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save explicit BananaTape exports to your Photos library."; INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Place explicit BananaTape exports in the BananaTape Photos album."; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTape; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		0A0000010000000000000083 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = BananaTape; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design"; INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save explicit BananaTape exports to your Photos library."; INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Place explicit BananaTape exports in the BananaTape Photos album."; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTape; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		0A0000010000000000000084 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTapeTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BananaTape.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BananaTape"; }; name = Debug; };
+		0A0000010000000000000085 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTapeTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BananaTape.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BananaTape"; }; name = Release; };
+		0A0000010000000000000086 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTapeUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = BananaTape; }; name = Debug; };
+		0A0000010000000000000087 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.bananatape.BananaTapeUITests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = BananaTape; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0A0000010000000000000060 /* Build configuration list for PBXNativeTarget "BananaTape" */ = {isa = XCConfigurationList; buildConfigurations = (0A0000010000000000000082 /* Debug */, 0A0000010000000000000083 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		0A0000010000000000000061 /* Build configuration list for PBXNativeTarget "BananaTapeTests" */ = {isa = XCConfigurationList; buildConfigurations = (0A0000010000000000000084 /* Debug */, 0A0000010000000000000085 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		0A0000010000000000000062 /* Build configuration list for PBXNativeTarget "BananaTapeUITests" */ = {isa = XCConfigurationList; buildConfigurations = (0A0000010000000000000086 /* Debug */, 0A0000010000000000000087 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		0A0000010000000000000063 /* Build configuration list for PBXProject "BananaTape" */ = {isa = XCConfigurationList; buildConfigurations = (0A0000010000000000000080 /* Debug */, 0A0000010000000000000081 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = 0A0000010000000000000020 /* Project object */;
+}
