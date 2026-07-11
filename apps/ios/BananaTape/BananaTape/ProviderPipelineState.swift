@@ -91,13 +91,34 @@ struct ProviderPipelineState: Equatable {
 
     func reconcilingHistory(_ browserState: NativeHistoryBrowserState) -> ProviderPipelineState {
         let browserState = browserState.reconcilingLineage()
+        let retainedReadyImageIds: Set<String> = Set(images.compactMap { image -> String? in
+            guard image.status == .ready,
+                  browserState.entries.contains(where: { $0.id == image.id || $0.assetId == image.assetId })
+            else { return nil }
+            return image.id
+        })
         let retainedImages = images.filter { image in
-            browserState.entries.contains { $0.id == image.id || $0.assetId == image.assetId }
+            if image.status == .pending {
+                return image.parentId == nil || image.parentId.map(retainedReadyImageIds.contains) == true
+            }
+            return browserState.entries.contains { $0.id == image.id || $0.assetId == image.assetId }
         }
         let selectedImageId = browserState.selectedEntry.flatMap { selectedEntry in
             retainedImages.first { $0.id == selectedEntry.id || $0.assetId == selectedEntry.assetId }?.id
         }
-        return ProviderPipelineState(images: retainedImages, history: browserState.entries, focusedImageId: selectedImageId, userErrorMessage: userErrorMessage, lifecyclePhase: lifecyclePhase)
+        let retainsActiveRequest = activeRequestId.map { requestId in
+            retainedImages.contains { $0.id == pendingImageId(for: requestId) && $0.status == .pending }
+                && (activeParentHistoryId == nil || browserState.entries.contains { $0.id == activeParentHistoryId })
+        } == true
+        return ProviderPipelineState(
+            images: retainedImages,
+            history: browserState.entries,
+            focusedImageId: selectedImageId,
+            activeRequestId: retainsActiveRequest ? activeRequestId : nil,
+            activeParentHistoryId: retainsActiveRequest ? activeParentHistoryId : nil,
+            userErrorMessage: userErrorMessage,
+            lifecyclePhase: lifecyclePhase
+        )
     }
 
     func startingSubmission(mode: EditorMode, prompt: String, annotations: CanvasAnnotations, requestId: String, network: NetworkReachability, provider: EditorProvider = .mock) -> ProviderPipelineState {

@@ -176,6 +176,37 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(nonSelectedDeletion.focusedImageId, survivor.id)
     }
 
+    func testHistoryDeletion_whenUnrelatedBranchIsDeleted_preservesPendingEditAndAllowsProviderCompletion() throws {
+        let fixture = pendingEditWithCascadeChildren()
+        let deleted = HistoryDeletionCoordinator.deleting(entryID: "a-1", from: fixture.pendingState)
+        let retainedRequest = try XCTUnwrap(deleted.requestForActivePrompt())
+        let result = try MockImageProvider().edit(retainedRequest).successValue()
+        var persistenceCallCount = 0
+        var latestState = deleted
+
+        let resolution = ProviderPipelineCompletionCoordinator.resolvingSuccess(
+            result,
+            in: &latestState,
+            persistenceFailureMessage: "Persistence failed"
+        ) {
+            persistenceCallCount += 1
+            return result
+        }
+
+        XCTAssertEqual(deleted.pendingImages.map(\.id), ["pending-late-edit"])
+        XCTAssertEqual(deleted.activeRequestId, fixture.request.id)
+        XCTAssertEqual(deleted.activeParentHistoryId, fixture.parentID)
+        XCTAssertEqual(retainedRequest.parentImageId, fixture.parentID)
+        XCTAssertEqual(retainedRequest.parentHistoryId, fixture.parentID)
+        XCTAssertEqual(persistenceCallCount, 1)
+        guard case .applied = resolution else {
+            return XCTFail("Expected provider completion to apply")
+        }
+        XCTAssertEqual(latestState.history.last?.parentId, fixture.parentID)
+        XCTAssertEqual(latestState.focusedImage?.status, .ready)
+        XCTAssertNil(latestState.activeRequestId)
+    }
+
     func testHistoryOrdering_whenBatchTimestampsInterleave_keepsLineageBatchesContiguous() {
         let batchAFirst = lineageHistory(id: "a-first", assetId: "asset-a-first", parentId: nil, batchId: "batch-a", batchIndex: 0, timestamp: 10)
         let batchASecond = lineageHistory(id: "a-second", assetId: "asset-a-second", parentId: nil, batchId: "batch-a", batchIndex: 1, timestamp: 40)
@@ -276,6 +307,20 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(restored.selectedEntry?.id, root.id)
         XCTAssertEqual(restored.exportPreview?.assetPath, "assets/root.png")
         XCTAssertEqual(restored.historyCountLabel, "1 version")
+    }
+
+    func testEditorVersionPill_whenEarlierHistoryEntryIsFocused_displaysFocusedVersionInsteadOfHistoryCount() {
+        let root = lineageHistory(id: "root", assetId: "asset-root", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 1)
+        let child = lineageHistory(id: "child", assetId: "asset-child", parentId: root.id, batchId: nil, batchIndex: nil, timestamp: 2)
+        let laterRoot = lineageHistory(id: "later-root", assetId: "asset-later-root", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 3)
+        let focusedChild = NativeHistoryBrowserState(entries: [root, child, laterRoot], selectedEntryId: child.id)
+
+        let label = EditorVersionPillLabel.text(
+            historyState: focusedChild,
+            imageSize: EditorSize(width: 1024, height: 768)
+        )
+
+        XCTAssertEqual(label, "v2 · 1024x768")
     }
 
     func testMockProvider_whenGenerateSucceeds_createsReadyImageAndHistory() throws {

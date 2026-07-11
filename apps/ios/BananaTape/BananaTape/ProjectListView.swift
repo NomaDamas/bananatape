@@ -3,6 +3,13 @@ import Photos
 import SwiftUI
 import UIKit
 
+enum EditorVersionPillLabel {
+    static func text(historyState: NativeHistoryBrowserState, imageSize: EditorSize) -> String {
+        let versionLabel = historyState.rows.first(where: { $0.id == historyState.selectedEntryId })?.versionLabel ?? "v1"
+        return "\(versionLabel) · \(Int(imageSize.width))x\(Int(imageSize.height))"
+    }
+}
+
 struct ProjectListState: Equatable {
     let projects: [MobileProjectSummary]
 
@@ -995,7 +1002,7 @@ private struct EditorScreen: View {
 
     private var versionPill: some View {
         Button { onShowHistory() } label: {
-            Text("v\(max(historyState.entries.count, 1)) · \(Int(canvasState.image.size.width))x\(Int(canvasState.image.size.height))")
+            Text(EditorVersionPillLabel.text(historyState: historyState, imageSize: canvasState.image.size))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(TossStyle.secondaryText)
                 .padding(.horizontal, 13)
