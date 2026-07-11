@@ -68,16 +68,6 @@ final class BananaTapeUITests: XCTestCase {
         record("Opened Lineage QA and selected Navigate lineage.")
 
         assertFocus("A-1", in: app, presentButtons: ["lineageRightButton"], absentButtons: ["lineageLeftButton", "lineageUpButton", "lineageDownButton"])
-        let penTool = app.buttons["Pen"]
-        if penTool.exists {
-            XCTAssertTrue(penTool.isHittable)
-            penTool.tap()
-            record("Selected the exposed Pen annotation tool on A-1.")
-            app.buttons["Navigate lineage"].tap()
-            record("Returned to Navigate lineage for swipe traversal.")
-        } else {
-            record("No annotation tool selection control was exposed.")
-        }
         attachScreenshot("01-selection-mode-A-1", app: app)
 
         let canvas = app.otherElements["nativeCanvasSurface"]
@@ -117,6 +107,17 @@ final class BananaTapeUITests: XCTestCase {
         assertFocus("B-2", in: app, presentButtons: ["lineageLeftButton", "lineageUpButton"], absentButtons: ["lineageRightButton", "lineageDownButton"])
         record("Swiped outward left at B-2; focus and edge controls remained unchanged.")
         attachScreenshot("08-B-2-outward-clamped", app: app)
+
+        let penTool = app.buttons["Pen"]
+        XCTAssertTrue(penTool.waitForExistence(timeout: 5))
+        XCTAssertTrue(penTool.isHittable)
+        penTool.tap()
+        XCTAssertTrue(app.otherElements["focusedImage-B-2"].exists)
+        record("Selected the Pen annotation tool while derived image B-2 remained focused.")
+        attachScreenshot("09-B-2-annotation-pen", app: app)
+        app.buttons["Navigate lineage"].tap()
+        record("Returned to Navigate lineage after exercising annotation on B-2.")
+        assertFocus("B-2", in: app, presentButtons: ["lineageLeftButton", "lineageUpButton"], absentButtons: ["lineageRightButton", "lineageDownButton"])
 
         app.buttons["historyVersionPill"].tap()
         let historyPanel = element(identifier: "historyBrowserPanel", in: app)
