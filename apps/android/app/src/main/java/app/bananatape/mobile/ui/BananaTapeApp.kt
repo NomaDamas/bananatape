@@ -144,6 +144,7 @@ import app.bananatape.mobile.editor.OpenAiImageProvider
 import app.bananatape.mobile.editor.OpenAiProviderResult
 import app.bananatape.mobile.editor.OutputSize
 import app.bananatape.mobile.editor.ProviderPipelineState
+import app.bananatape.mobile.editor.ProviderRequest
 import app.bananatape.mobile.editor.ProviderRequestCompletion
 import app.bananatape.mobile.editor.openingForFocusedImage
 import app.bananatape.mobile.editor.resolvedSubmissionMode
@@ -1172,29 +1173,48 @@ private fun submitGeneration(
     val provider = if (composerState.selectedProvider == ComposerProvider.OPENAI) EditorProvider.OPENAI else EditorProvider.MOCK
     val requestId = "generate-${System.currentTimeMillis()}"
     val isEdit = resolvedSubmissionMode(composerState.mode, pipelineState.focusedImage) == app.bananatape.mobile.editor.EditorMode.EDIT
-    val pending = if (isEdit) {
-        pipelineState.startingEdit(composerState.trimmedPrompt, annotations, requestId, NetworkReachability.ONLINE, provider)
+    val editAssets = if (isEdit) {
+        prepareEditRequestAssets(
+            pipelineState = pipelineState,
+            annotations = annotations,
+            outputDirectory = storage.filePath(projectId, "tmp/$requestId"),
+            resolveSourcePath = { image -> imagePath(storage, projectId, image) },
+            compose = { request -> NativeImageComposer(AndroidBitmapImageRenderer()).compose(request) },
+        )
     } else {
-        pipelineState.startingGenerate(composerState.trimmedPrompt, requestId, NetworkReachability.ONLINE, provider)
+        null
     }
+    if (editAssets is EditRequestAssetPreparation.Failure) {
+        onPipelineState(editAssets.pipelineState)
+        onStatus(editAssets.message)
+        onSubmitting(false)
+        return
+    }
+    val preparation = prepareProviderRequest(
+        pipelineState = pipelineState,
+        prompt = composerState.trimmedPrompt,
+        annotations = annotations,
+        requestId = requestId,
+        provider = provider,
+        isEdit = isEdit,
+        outputSize = composerState.outputSize,
+        references = composerState.references,
+        editAssets = editAssets,
+    )
+    val readyPreparation = when (preparation) {
+        is ProviderRequestPreparation.Failure -> {
+            onPipelineState(preparation.pipelineState)
+            onStatus(preparation.message)
+            onSubmitting(false)
+            return
+        }
+        is ProviderRequestPreparation.Ready -> preparation
+    }
+    val pending = readyPreparation.pipelineState
+    val request = readyPreparation.request
     onPipelineState(pending)
     val completion = ProviderRequestCompletion(currentPipelineState, onPipelineState)
     onStatus("Submitting image request...")
-    var inputImagePath: Path? = null
-    var maskImagePath: Path? = null
-    if (isEdit) {
-        val focused = pipelineState.images.firstOrNull { it.id == pipelineState.focusedImageId } ?: return
-        val sourcePath = imagePath(storage, projectId, focused) ?: return
-        val composition = NativeImageComposer(AndroidBitmapImageRenderer()).compose(NativeImageCompositionRequest(sourcePath, annotations, storage.filePath(projectId, "tmp/$requestId")))
-        if (composition !is NativeImageCompositionOutcome.Success) {
-            completion.fail(requestId, "This image could not be prepared for export.")
-            onStatus("This image could not be prepared for export.")
-            return
-        }
-        inputImagePath = sourcePath
-        maskImagePath = composition.result.mask.filePath
-    }
-    val request = pending.requestForActivePrompt(composerState.outputSize, composerState.references, inputImagePath, maskImagePath) ?: return
     onSubmitting(true)
     fun applyResult(result: app.bananatape.mobile.editor.ProviderImageResult) =
         completion.succeed(
@@ -1244,6 +1264,85 @@ private fun submitGeneration(
             }
         }.start()
     }
+}
+
+internal sealed interface EditRequestAssetPreparation {
+    val pipelineState: ProviderPipelineState
+
+    data class Ready(
+        override val pipelineState: ProviderPipelineState,
+        val inputImagePath: Path,
+        val maskImagePath: Path,
+    ) : EditRequestAssetPreparation
+
+    data class Failure(
+        override val pipelineState: ProviderPipelineState,
+        val message: String,
+    ) : EditRequestAssetPreparation
+}
+
+internal fun prepareEditRequestAssets(
+    pipelineState: ProviderPipelineState,
+    annotations: CanvasAnnotations,
+    outputDirectory: Path,
+    resolveSourcePath: (CanvasImage) -> Path?,
+    compose: (NativeImageCompositionRequest) -> NativeImageCompositionOutcome,
+): EditRequestAssetPreparation {
+    val focused = pipelineState.focusedImage?.takeIf { it.status == app.bananatape.mobile.editor.ImageGenerationStatus.READY }
+        ?: return EditRequestAssetPreparation.Failure(pipelineState, "Select an image before editing.")
+    val sourcePath = resolveSourcePath(focused)
+        ?: return EditRequestAssetPreparation.Failure(pipelineState, "This image could not be prepared for export.")
+    return when (val composition = compose(NativeImageCompositionRequest(sourcePath, annotations, outputDirectory))) {
+        is NativeImageCompositionOutcome.Success -> EditRequestAssetPreparation.Ready(pipelineState, sourcePath, composition.result.mask.filePath)
+        is NativeImageCompositionOutcome.Failure -> EditRequestAssetPreparation.Failure(pipelineState, composition.error.userMessage)
+    }
+}
+
+internal sealed interface ProviderRequestPreparation {
+    val pipelineState: ProviderPipelineState
+
+    data class Ready(
+        override val pipelineState: ProviderPipelineState,
+        val request: ProviderRequest,
+    ) : ProviderRequestPreparation
+
+    data class Failure(
+        override val pipelineState: ProviderPipelineState,
+        val message: String,
+    ) : ProviderRequestPreparation
+}
+
+internal fun prepareProviderRequest(
+    pipelineState: ProviderPipelineState,
+    prompt: String,
+    annotations: CanvasAnnotations,
+    requestId: String,
+    provider: EditorProvider,
+    isEdit: Boolean,
+    outputSize: OutputSize,
+    references: List<ComposerReferenceSummary>,
+    editAssets: EditRequestAssetPreparation?,
+): ProviderRequestPreparation {
+    if (isEdit && editAssets !is EditRequestAssetPreparation.Ready) {
+        return ProviderRequestPreparation.Failure(pipelineState, "This image could not be prepared for export.")
+    }
+    val pending = if (isEdit) {
+        pipelineState.startingEdit(prompt, annotations, requestId, NetworkReachability.ONLINE, provider)
+    } else {
+        pipelineState.startingGenerate(prompt, requestId, NetworkReachability.ONLINE, provider)
+    }
+    val readyAssets = editAssets as? EditRequestAssetPreparation.Ready
+    val request = pending.requestForActivePrompt(
+        outputSize = outputSize,
+        references = references,
+        inputImagePath = readyAssets?.inputImagePath,
+        maskImagePath = readyAssets?.maskImagePath,
+    )
+    if (request != null) return ProviderRequestPreparation.Ready(pending, request)
+
+    val message = pending.userErrorMessage ?: "This image request could not be prepared."
+    val rolledBack = if (pending.activeRequestId == requestId) pending.failing(requestId, message) else pending
+    return ProviderRequestPreparation.Failure(rolledBack, message)
 }
 
 internal fun importReferenceImage(

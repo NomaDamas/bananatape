@@ -121,6 +121,102 @@ class ProviderPipelineStateTest {
     }
 
     @Test
+    fun startingGenerate_whenReadyImageIsFocused_keepsReadyFocusWhilePlaceholderIsPending() {
+        val root = readyImage("root", null, 1.0)
+        val state = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        )
+
+        val pending = state.startingGenerate("new root", "generate-focus", NetworkReachability.ONLINE)
+
+        assertEquals(root.id, pending.focusedImageId)
+        assertEquals(root.id, pending.focusedImage?.id)
+        assertEquals(listOf("pending-generate-focus"), pending.pendingImages.map { it.id })
+    }
+
+    @Test
+    fun applyingGenerate_whenReadyImageStayedFocused_movesFocusToSuccessfulImage() {
+        val root = readyImage("root", null, 1.0)
+        val pending = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        ).startingGenerate("new root", "generate-success", NetworkReachability.ONLINE)
+        val request = requireNotNull(pending.requestForActivePrompt())
+
+        val completed = pending.applying((MockImageProvider().generate(request) as MockProviderResult.Success).value)
+
+        assertEquals("pending-generate-success", completed.focusedImageId)
+        assertEquals(ImageGenerationStatus.READY, completed.focusedImage?.status)
+    }
+
+    @Test
+    fun failingGenerate_whenReadyImageStayedFocused_retainsReadyFocus() {
+        val root = readyImage("root", null, 1.0)
+        val pending = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        ).startingGenerate("new root", "generate-failure", NetworkReachability.ONLINE)
+
+        val failed = pending.failing("generate-failure", "failed")
+
+        assertEquals(root.id, failed.focusedImageId)
+        assertEquals(root.id, failed.focusedImage?.id)
+        assertTrue(failed.pendingImages.isEmpty())
+    }
+
+    @Test
+    fun startingEdit_whenReadyImageIsFocused_keepsParentFocusWhilePlaceholderIsPending() {
+        val root = readyImage("root", null, 1.0)
+        val state = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        )
+
+        val pending = state.startingEdit("edit root", CanvasAnnotations.Empty, "edit-focus", NetworkReachability.ONLINE)
+
+        assertEquals(root.id, pending.focusedImageId)
+        assertEquals(root.id, pending.focusedImage?.id)
+        assertEquals(listOf("pending-edit-focus"), pending.pendingImages.map { it.id })
+    }
+
+    @Test
+    fun applyingEdit_whenParentStayedFocused_movesFocusToSuccessfulImage() {
+        val root = readyImage("root", null, 1.0)
+        val pending = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        ).startingEdit("edit root", CanvasAnnotations.Empty, "edit-success", NetworkReachability.ONLINE)
+        val request = requireNotNull(pending.requestForActivePrompt())
+
+        val completed = pending.applying((MockImageProvider().edit(request) as MockProviderResult.Success).value)
+
+        assertEquals("pending-edit-success", completed.focusedImageId)
+        assertEquals(ImageGenerationStatus.READY, completed.focusedImage?.status)
+    }
+
+    @Test
+    fun failingEdit_whenParentStayedFocused_retainsParentFocus() {
+        val root = readyImage("root", null, 1.0)
+        val pending = ProviderPipelineState(
+            images = listOf(root),
+            history = listOf(historyEntry(root)),
+            focusedImageId = root.id,
+        ).startingEdit("edit root", CanvasAnnotations.Empty, "edit-failure", NetworkReachability.ONLINE)
+
+        val failed = pending.failing("edit-failure", "failed")
+
+        assertEquals(root.id, failed.focusedImageId)
+        assertEquals(root.id, failed.focusedImage?.id)
+        assertTrue(failed.pendingImages.isEmpty())
+    }
+
+    @Test
     fun editFailure_whenAnotherBranchWasCreatedLater_restoresFocusedParentBranch() {
         val root = readyImage("root", null, 1.0)
         val parent = readyImage("parent", root.id, 2.0)
@@ -211,7 +307,7 @@ class ProviderPipelineStateTest {
 
         assertEquals("edit-active", deleted.activeRequestId)
         assertEquals(listOf(activeRoot.id, "pending-edit-active"), deleted.images.map { it.id })
-        assertEquals("pending-edit-active", deleted.focusedImageId)
+        assertEquals(activeRoot.id, deleted.focusedImageId)
     }
 
     @Test

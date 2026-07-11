@@ -130,7 +130,7 @@ data class ProviderPipelineState(
         )
         return copy(
             images = images + placeholder,
-            focusedImageId = placeholder.id,
+            focusedImageId = this.focusedImageId,
             activeRequestId = requestId,
             activeParentHistoryId = null,
             activePreviousFocusedImageId = focusedReadyImage()?.id,
@@ -162,7 +162,7 @@ data class ProviderPipelineState(
         )
         return copy(
             images = images + placeholder,
-            focusedImageId = placeholder.id,
+            focusedImageId = this.focusedImageId,
             activeRequestId = requestId,
             activeParentHistoryId = parentHistory.id,
             activePreviousFocusedImageId = parentImage.id,
