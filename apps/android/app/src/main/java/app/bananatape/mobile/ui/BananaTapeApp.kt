@@ -95,6 +95,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -672,7 +673,7 @@ private fun LineageNavigator(
         LineageButton(LineageDirection.LEFT, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Lineage left: previous batch sibling", lineage.canMoveLeft, Modifier.align(Alignment.CenterStart), onNavigate)
         LineageButton(LineageDirection.RIGHT, Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Lineage right: next batch sibling", lineage.canMoveRight, Modifier.align(Alignment.CenterEnd), onNavigate)
         LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 72.dp), onNavigate)
-        LineageButton(LineageDirection.DOWN, Icons.Outlined.KeyboardArrowDown, "Lineage down: first direct child batch", lineage.canMoveDown, Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), onNavigate)
+        LineageButton(LineageDirection.DOWN, Icons.Outlined.KeyboardArrowDown, "Lineage down: first direct child batch", lineage.canMoveDown, Modifier.align(Alignment.BottomCenter).padding(bottom = 168.dp), onNavigate)
     }
 }
 
@@ -734,6 +735,7 @@ private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: B
     )
     Column(
         modifier = modifier
+            .testTag("editor.tool-rail")
             .clip(RoundedCornerShape(999.dp))
             .background(PrototypeColor.Panel)
             .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(999.dp))

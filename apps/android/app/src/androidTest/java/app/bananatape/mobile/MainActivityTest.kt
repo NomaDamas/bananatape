@@ -3,7 +3,10 @@ package app.bananatape.mobile
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -11,10 +14,12 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.bananatape.mobile.adapters.AdapterResult
 import app.bananatape.mobile.adapters.MobileProjectRecord
@@ -26,6 +31,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
@@ -52,20 +58,20 @@ class MainActivityTest {
 
     @Test
     fun accessibilitySemantics_whenEditorLaunches_exposesRequiredControlLabels() {
-        createProject("Accessibility Test")
+        createFocusedProject("Accessibility Test")
 
         composeRule.onNodeWithContentDescription("BananaTape project list").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Open Accessibility Test").assertHasClickAction().performClick()
         composeRule.onNodeWithContentDescription("Back to projects").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Project menu").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Pan").assertHasClickAction().assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Focused image empty").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Focused image focused-image").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Lineage left: previous batch sibling").assertIsNotEnabled().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Lineage right: next batch sibling").assertIsNotEnabled().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Lineage up: parent image").assertIsNotEnabled().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Lineage down: first direct child batch").assertIsNotEnabled().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Native bottom composer").assertIsDisplayed()
-        composeRule.onNodeWithText("Generate").assertIsNotEnabled()
+        composeRule.onNodeWithText("Apply edit").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Expand composer").assertHasClickAction().performClick()
         composeRule.onNodeWithContentDescription("Prompt").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("OpenAI").assertHasClickAction().assertIsDisplayed()
@@ -95,9 +101,75 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Open Focused Composer").performClick()
         composeRule.onNodeWithContentDescription("Expand composer").performClick()
 
-        composeRule.onAllNodesWithText("Apply edit").assertCountEquals(2)
+        composeRule.onAllNodesWithText("Apply edit", useUnmergedTree = true).assertCountEquals(3)
         composeRule.onNodeWithContentDescription("New Generation").assertHasClickAction().performClick()
-        composeRule.onAllNodesWithText("Generate").assertCountEquals(2)
+        composeRule.onAllNodesWithText("Generate", useUnmergedTree = true).assertCountEquals(3)
+    }
+
+    @Test
+    fun editorOverlays_onPixel7Portrait_preserveUsableBounds() {
+        createOverlayProject("Overlay Geometry")
+
+        composeRule.onNodeWithContentDescription("Open Overlay Geometry").performClick()
+        composeRule.waitForIdle()
+
+        val density = composeRule.activity.resources.displayMetrics.density
+        val widthDp = composeRule.activity.resources.displayMetrics.widthPixels / density
+        val heightDp = composeRule.activity.resources.displayMetrics.heightPixels / density
+        assertTrue("Expected Pixel 7 portrait width, was ${widthDp}dp", widthDp in 400f..420f)
+        assertTrue("Expected portrait display, was ${widthDp}x${heightDp}dp", heightDp > widthDp)
+
+        val canvas = boundsForDescription("Focused image focused")
+        val imageContent = boundsForDescription("Native annotation canvas")
+        val composer = boundsForDescription("Native bottom composer")
+        val toolRail = boundsForTag("editor.tool-rail")
+        val versionPill = boundsForDescription("Open history")
+        val lineage = mapOf(
+            "left" to boundsForDescription("Lineage left: previous batch sibling"),
+            "right" to boundsForDescription("Lineage right: next batch sibling"),
+            "up" to boundsForDescription("Lineage up: parent image"),
+            "down" to boundsForDescription("Lineage down: first direct child batch"),
+        )
+        val editorBounds = buildString {
+            appendLine("device=${android.os.Build.MODEL} sdk=${android.os.Build.VERSION.SDK_INT} density=$density viewportDp=${widthDp}x$heightDp")
+            appendLine("canvas=$canvas")
+            appendLine("imageContent=$imageContent")
+            appendLine("composer=$composer")
+            appendLine("toolRail=$toolRail")
+            appendLine("versionPill=$versionPill")
+            lineage.forEach { (direction, bounds) -> appendLine("lineage.$direction=$bounds") }
+        }
+        writeArtifact("real-overlay-bounds.txt", editorBounds)
+        captureScreenshot("real-overlay-editor.png")
+
+        assertTrue("Focused canvas must have nonzero visible bounds: $canvas", canvas.width > 0f && canvas.height > 0f)
+        lineage.forEach { (direction, bounds) ->
+            assertDisjoint("lineage $direction and compact composer", bounds, composer)
+            assertDisjoint("lineage $direction and tool rail", bounds, toolRail)
+            val outsideImageContent = !bounds.overlaps(imageContent)
+            val clearOfEditorRails = !bounds.overlaps(composer) && !bounds.overlaps(toolRail)
+            assertTrue("lineage $direction must be outside image content or clear of editor rails: $bounds", outsideImageContent || clearOfEditorRails)
+        }
+        assertDisjoint("compact composer and version pill", composer, versionPill)
+        assertDisjoint("compact composer and lineage down", composer, lineage.getValue("down"))
+        assertDisjoint("version pill and lineage down", versionPill, lineage.getValue("down"))
+
+        composeRule.onNodeWithContentDescription("Open history").performClick()
+        composeRule.waitForIdle()
+        val historyPanel = boundsForDescription("History browser")
+        val historyClose = boundsForDescription("Close history")
+        val selectedRow = boundsForDescription("v3 Edit history item, focused prompt")
+        assertContains("history panel contains close control", historyPanel, historyClose)
+        assertContains("history panel contains selected row", historyPanel, selectedRow)
+        assertDisjoint("history close and selected row", historyClose, selectedRow)
+        composeRule.onNodeWithContentDescription("v3 Edit history item, focused prompt").assertHasClickAction().performClick()
+        captureScreenshot("real-overlay-history.png")
+        writeArtifact(
+            "real-overlay-bounds.txt",
+            editorBounds + "historyPanel=$historyPanel\nhistoryClose=$historyClose\nhistorySelectedRow=$selectedRow\n",
+        )
+        composeRule.onNodeWithContentDescription("Close history").assertHasClickAction().performClick()
+        composeRule.onNodeWithContentDescription("History browser").assertDoesNotExist()
     }
 
     @Test
@@ -169,4 +241,57 @@ class MainActivityTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
+
+    private fun createOverlayProject(name: String) {
+        val id = "overlay-geometry"
+        val imageIds = listOf("root", "left", "focused", "right", "child")
+        val parentIds = mapOf("root" to null, "left" to "root", "focused" to "root", "right" to "root", "child" to "focused")
+        val batches = mapOf("root" to "root-batch", "left" to "sibling-batch", "focused" to "sibling-batch", "right" to "sibling-batch", "child" to "child-batch")
+        val batchIndexes = mapOf("root" to 0, "left" to 0, "focused" to 1, "right" to 2, "child" to 0)
+        val manifest = """{"schemaVersion":1,"id":"$id","name":"$name","createdAt":"1970-01-01T00:00:00.000Z","updatedAt":"1970-01-01T00:00:00.000Z","settings":{"systemPrompt":"","referenceImages":[]}}"""
+        val historyEntries = imageIds.mapIndexed { index, imageId ->
+            """{"id":"$imageId","type":"${if (imageId == "root") "generate" else "edit"}","provider":"mock","prompt":"$imageId prompt","assetId":"asset-$imageId","assetPath":"assets/$imageId.png","parentId":${parentIds.getValue(imageId)?.let { "\"$it\"" } ?: "null"},"createdAt":"1970-01-01T00:0$index:00.000Z","timestamp":${index + 1},"generationBatchId":"${batches.getValue(imageId)}","batchIndex":${batchIndexes.getValue(imageId)}}"""
+        }.joinToString(",")
+        val canvasImages = imageIds.joinToString(",") { imageId ->
+            """"$imageId":{"id":"$imageId","url":"assets/$imageId.png","assetId":"asset-$imageId","size":{"width":304,"height":390},"position":{"x":0,"y":0},"parentId":${parentIds.getValue(imageId)?.let { "\"$it\"" } ?: "null"},"generationIndex":${batchIndexes.getValue(imageId)},"prompt":"$imageId prompt","provider":"mock","type":"${if (imageId == "root") "generate" else "edit"}","createdAt":${imageIds.indexOf(imageId) + 1},"generationBatchId":"${batches.getValue(imageId)}","batchIndex":${batchIndexes.getValue(imageId)},"paths":[],"boxes":[],"memos":[]}"""
+        }
+        val history = """{"schemaVersion":1,"revision":1,"entries":[$historyEntries]}"""
+        val canvas = """{"schemaVersion":1,"settings":{},"canvas":{"images":{$canvasImages},"imageOrder":[${imageIds.joinToString(",") { "\"$it\"" }}],"focusedImageIds":["focused"]}}"""
+        val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+        assertEquals(AdapterResult.Success(MobileProjectRecord(id, name, manifest, history, canvas)), storage.create(MobileProjectRecord(id, name, manifest, history, canvas)))
+        imageIds.forEachIndexed { index, imageId ->
+            val bitmap = Bitmap.createBitmap(304, 390, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(28 + index * 16, 54, 82)) }
+            storage.filePath(id, "assets/$imageId.png").toFile().outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+    }
+
+    private fun boundsForTag(tag: String): Rect = composeRule.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+
+    private fun boundsForDescription(description: String): Rect = composeRule.onNodeWithContentDescription(description).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+
+    private fun assertDisjoint(label: String, first: Rect, second: Rect) {
+        assertTrue("$label overlap incoherently: $first vs $second", !first.overlaps(second))
+    }
+
+    private fun assertContains(label: String, container: Rect, content: Rect) {
+        assertTrue(
+            "$label: $container does not contain $content",
+            content.left >= container.left && content.top >= container.top && content.right <= container.right && content.bottom <= container.bottom,
+        )
+    }
+
+    private fun writeArtifact(name: String, contents: String) {
+        artifactFile(name).writeText(contents)
+    }
+
+    private fun captureScreenshot(name: String) {
+        val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        artifactFile(name).outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        screenshot.recycle()
+    }
+
+    private fun artifactFile(name: String): File = File(composeRule.activity.getExternalFilesDir(null), name)
 }
