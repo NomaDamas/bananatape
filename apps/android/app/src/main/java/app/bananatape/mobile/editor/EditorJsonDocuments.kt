@@ -35,6 +35,8 @@ data class MobileCanvasDocument(
             createdAt = record.number("createdAt"),
             annotations = CanvasAnnotations(paths = record["paths"].paths(), boxes = record["boxes"].boxes(), memos = record["memos"].memos()),
             hasMagicLayerFields = listOf("magicLayers", "magicLayerBaseUrl", "magicLayerStatus", "selectedMagicLayerId").any(record::containsKey),
+            generationBatchId = record["generationBatchId"].string(),
+            batchIndex = record["batchIndex"].optionalInt(),
         )
     }
 }
@@ -49,7 +51,7 @@ data class ProjectHistoryDocument(
     fun buildTree(): List<HistoryTreeNode> {
         val grouped = entries.groupBy { it.parentId }
         fun children(parentId: String?): List<HistoryTreeNode> = grouped[parentId].orEmpty()
-            .sortedWith(compareBy<HistoryEntry> { it.timestamp }.thenBy { it.id })
+            .orderedByGenerationBatch()
             .map { HistoryTreeNode(entry = it, children = children(it.id)) }
         return children(null)
     }
@@ -71,6 +73,8 @@ data class ProjectHistoryDocument(
             parentId = record["parentId"].string(),
             createdAt = record.getString("createdAt"),
             timestamp = record.number("timestamp"),
+            generationBatchId = record["generationBatchId"].string(),
+            batchIndex = record["batchIndex"].optionalInt(),
         )
     }
 }
@@ -85,6 +89,8 @@ data class HistoryEntry(
     val parentId: String?,
     val createdAt: String,
     val timestamp: Double,
+    val generationBatchId: String? = null,
+    val batchIndex: Int? = null,
 )
 
 data class HistoryTreeNode(val entry: HistoryEntry, val children: List<HistoryTreeNode>)
@@ -93,6 +99,7 @@ private fun mode(value: String): EditorMode = EditorMode.entries.first { it.valu
 private fun provider(value: String): EditorProvider = EditorProvider.entries.firstOrNull { it.value == value } ?: EditorProvider.OPENAI
 private fun Map<String, JsonValue>.getString(key: String): String = getValue(key).stringOrNull().orEmpty()
 private fun Map<String, JsonValue>.number(key: String): Double = this[key]?.numberOrZero() ?: 0.0
+private fun JsonValue?.optionalInt(): Int? = (this as? JsonValue.NumberValue)?.value?.toInt()
 private fun JsonValue?.string(): String? = this?.stringOrNull()
 private fun JsonValue?.strings(): List<String> = (this as? JsonValue.ArrayValue)?.values.orEmpty().mapNotNull { it.stringOrNull() }
 private fun JsonValue?.paths(): List<DrawingPath> = (this as? JsonValue.ArrayValue)?.values.orEmpty().mapNotNull { path(it.obj()) }

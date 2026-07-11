@@ -15,7 +15,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,6 +45,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.CallMade
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
@@ -61,6 +62,8 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.Settings
@@ -127,6 +130,7 @@ import app.bananatape.mobile.editor.ComposerProvider
 import app.bananatape.mobile.editor.ComposerReferenceSummary
 import app.bananatape.mobile.editor.ComposerState
 import app.bananatape.mobile.editor.EditorProvider
+import app.bananatape.mobile.editor.FocusedImageLineage
 import app.bananatape.mobile.editor.MockImageProvider
 import app.bananatape.mobile.editor.MockProviderResult
 import app.bananatape.mobile.editor.NativeCanvasState
@@ -134,11 +138,17 @@ import app.bananatape.mobile.editor.NativeImageComposer
 import app.bananatape.mobile.editor.NativeImageCompositionOutcome
 import app.bananatape.mobile.editor.NativeImageCompositionRequest
 import app.bananatape.mobile.editor.HistoryEntry
+import app.bananatape.mobile.editor.LineageDirection
 import app.bananatape.mobile.editor.NativeHistoryBrowserState
 import app.bananatape.mobile.editor.OpenAiImageProvider
 import app.bananatape.mobile.editor.OpenAiProviderResult
 import app.bananatape.mobile.editor.OutputSize
 import app.bananatape.mobile.editor.ProviderPipelineState
+import app.bananatape.mobile.editor.ProviderRequestCompletion
+import app.bananatape.mobile.editor.openingForFocusedImage
+import app.bananatape.mobile.editor.resolvedSubmissionMode
+import app.bananatape.mobile.editor.startingNewGeneration
+import app.bananatape.mobile.editor.withFocusedImageSelection
 import app.bananatape.mobile.storage.LocalProjectStorage
 import app.bananatape.mobile.storage.defaultAndroidProjectStorageRoot
 import java.nio.file.Files
@@ -228,7 +238,7 @@ fun ProjectListScreen(
                 pipelineState = session.pipelineState
                 historyState = session.historyState
                 annotationHistory = AnnotationHistoryStack(session.annotations)
-                canvasState = NativeCanvasState(image = session.pipelineState.images.lastOrNull() ?: NativeCanvasState.EmptyImage, annotations = session.annotations)
+                canvasState = NativeCanvasState(image = session.pipelineState.focusedImage ?: NativeCanvasState.EmptyImage, annotations = session.annotations)
                 statusMessage = "Image imported."
                 onRefresh()
             }
@@ -245,7 +255,7 @@ fun ProjectListScreen(
                 pipelineState = session.pipelineState
                 historyState = session.historyState
                 annotationHistory = AnnotationHistoryStack(session.annotations)
-                canvasState = NativeCanvasState(image = session.pipelineState.images.lastOrNull() ?: NativeCanvasState.EmptyImage, annotations = session.annotations)
+                canvasState = NativeCanvasState(image = session.pipelineState.focusedImage ?: NativeCanvasState.EmptyImage, annotations = session.annotations)
                 statusMessage = null
             }
             is AdapterResult.Failure -> statusMessage = result.error.userMessage
@@ -253,14 +263,53 @@ fun ProjectListScreen(
     }
 
     selectedProject?.let { project ->
-        val displayedImage = pipelineState.images.lastOrNull() ?: NativeCanvasState.EmptyImage
+        val displayedImage = pipelineState.focusedImage ?: NativeCanvasState.EmptyImage
         val updatePipeline: (ProviderPipelineState) -> Unit = {
             pipelineState = it
             historyState = it.historyBrowserState
-            canvasState = canvasState.copy(image = it.images.lastOrNull() ?: NativeCanvasState.EmptyImage)
+            annotationHistory = AnnotationHistoryStack(it.focusedAnnotations)
+            canvasState = canvasState.copy(image = it.focusedImage ?: NativeCanvasState.EmptyImage, annotations = it.focusedAnnotations)
+        }
+        val focusImage: (String) -> Unit = { imageId ->
+            val next = pipelineState.focusing(imageId)
+            val nextComposer = composerState.withFocusedImageSelection(next.focusedImage)
+            pipelineState = next
+            historyState = next.historyBrowserState
+            annotationHistory = AnnotationHistoryStack(next.focusedAnnotations)
+            canvasState = canvasState.copy(image = next.focusedImage ?: NativeCanvasState.EmptyImage, annotations = next.focusedAnnotations)
+            composerState = nextComposer
+            persistProjectSession(projectStorage, project.id, nextComposer, next, next.historyBrowserState, next.focusedAnnotations)
+        }
+        val navigateLineage: (LineageDirection) -> Unit = { direction ->
+            val next = when (direction) {
+                LineageDirection.LEFT -> pipelineState.movingFocusLeft()
+                LineageDirection.RIGHT -> pipelineState.movingFocusRight()
+                LineageDirection.UP -> pipelineState.movingFocusUp()
+                LineageDirection.DOWN -> pipelineState.movingFocusDown()
+            }
+            next.focusedImageId?.let(focusImage)
+        }
+        val focusHistoryEntry: (String) -> Unit = { entryId ->
+            val entry = pipelineState.history.firstOrNull { it.id == entryId }
+            pipelineState.images.firstOrNull { image -> image.id == entryId || image.assetId == entry?.assetId }?.id?.let(focusImage)
         }
         val generate = {
-            submitGeneration(composerState, keyStore, pipelineState, annotationHistory.current, project.id, projectStorage, updatePipeline, { composerState = it }, { statusMessage = it }, { isSubmitting = it }, mainHandler)
+            submitGeneration(composerState, keyStore, { pipelineState }, annotationHistory.current, project.id, projectStorage, updatePipeline, { composerState = it }, { statusMessage = it }, { isSubmitting = it }, mainHandler)
+        }
+        val deleteHistoryEntry: (String) -> Unit = { entryId ->
+            val activeRequestId = pipelineState.activeRequestId
+            val next = pipelineState.deletingHistoryBranch(entryId)
+            val nextComposer = composerState.withFocusedImageSelection(next.focusedImage)
+            pipelineState = next
+            historyState = next.historyBrowserState
+            annotationHistory = AnnotationHistoryStack(next.focusedAnnotations)
+            canvasState = canvasState.copy(image = next.focusedImage ?: NativeCanvasState.EmptyImage, annotations = next.focusedAnnotations)
+            composerState = nextComposer
+            if (activeRequestId != null && next.activeRequestId == null) {
+                isSubmitting = false
+                statusMessage = null
+            }
+            persistProjectSession(projectStorage, project.id, nextComposer, next, next.historyBrowserState, next.focusedAnnotations)
         }
         EditorScreen(
             project = project,
@@ -273,7 +322,10 @@ fun ProjectListScreen(
             isExpandedWidth = isExpandedWidth,
             onBack = { selectedProject = null },
             onToolSelected = { canvasState = canvasState.copy(tool = it) },
-            onOpenComposer = { activeSheet = EditorSheet.Composer },
+            onOpenComposer = {
+                composerState = composerState.openingForFocusedImage(pipelineState.focusedImage)
+                activeSheet = EditorSheet.Composer
+            },
             onOpenHistory = { activeSheet = EditorSheet.History },
             onOpenMenu = { activeSheet = EditorSheet.Actions },
             onPromptChange = { composerState = composerState.copy(promptText = it) },
@@ -281,29 +333,35 @@ fun ProjectListScreen(
             onOutputSizeSelected = { composerState = composerState.copy(outputSize = it) },
             onSystemPromptChange = { composerState = composerState.copy(systemPrompt = it) },
             onApiKeyChange = { apiKey = it.trim() },
-            onHistorySelect = { historyState = historyState.selecting(it) },
-            onHistoryDelete = { historyState = historyState.deleting(it); persistProjectSession(projectStorage, project.id, composerState, pipelineState.copy(history = historyState.entries), historyState, annotationHistory.current) },
+            onHistorySelect = focusHistoryEntry,
+            onHistoryDelete = deleteHistoryEntry,
             onOpenReferences = { activeSheet = EditorSheet.References },
             onExport = { shareCanvasImage(context, projectStorage, project.id, displayedImage) { statusMessage = it } },
+            lineage = pipelineState.focusedLineage,
+            onLineageNavigate = navigateLineage,
             annotationHistory = annotationHistory,
             onAnnotationsChange = {
                 annotationHistory = annotationHistory.apply(it)
                 canvasState = canvasState.copy(annotations = it)
-                composerState = composerState.copy(hasSelectedImage = pipelineState.readyImages.isNotEmpty(), mode = if (it == CanvasAnnotations.Empty) app.bananatape.mobile.editor.EditorMode.GENERATE else app.bananatape.mobile.editor.EditorMode.EDIT)
+                pipelineState = pipelineState.updatingFocusedAnnotations(it)
+                composerState = composerState.withFocusedImageSelection(pipelineState.focusedImage)
                 persistProjectSession(projectStorage, project.id, composerState, pipelineState, historyState, it)
             },
             onViewportChange = { canvasState = canvasState.copy(viewport = it) },
             onUndo = {
                 annotationHistory = annotationHistory.undo()
                 canvasState = canvasState.copy(annotations = annotationHistory.current)
+                pipelineState = pipelineState.updatingFocusedAnnotations(annotationHistory.current)
                 persistProjectSession(projectStorage, project.id, composerState, pipelineState, historyState, annotationHistory.current)
             },
             onRedo = {
                 annotationHistory = annotationHistory.redo()
                 canvasState = canvasState.copy(annotations = annotationHistory.current)
+                pipelineState = pipelineState.updatingFocusedAnnotations(annotationHistory.current)
                 persistProjectSession(projectStorage, project.id, composerState, pipelineState, historyState, annotationHistory.current)
             },
             onGenerate = generate,
+            onNewGeneration = { composerState = composerState.startingNewGeneration() },
         )
         EditorSheetHost(
             activeSheet = activeSheet,
@@ -320,16 +378,9 @@ fun ProjectListScreen(
             onSystemPromptChange = { composerState = composerState.copy(systemPrompt = it) },
             onApiKeyChange = { apiKey = it.trim() },
             onGenerate = generate,
-            onHistorySelect = { historyState = historyState.selecting(it) },
-            onHistoryDelete = {
-                historyState = historyState.deleting(it)
-                pipelineState = pipelineState.copy(
-                    images = pipelineState.images.filter { image -> historyState.entries.any { entry -> entry.id == image.id } },
-                    history = historyState.entries,
-                    focusedImageId = historyState.selectedEntryId,
-                )
-                persistProjectSession(projectStorage, project.id, composerState, pipelineState, historyState, annotationHistory.current)
-            },
+            onNewGeneration = { composerState = composerState.startingNewGeneration() },
+            onHistorySelect = focusHistoryEntry,
+            onHistoryDelete = deleteHistoryEntry,
             onHistoryExport = { shareHistoryEntry(context, projectStorage, project.id, it) { message -> statusMessage = message } },
             onOpenHistory = { activeSheet = EditorSheet.History },
             onOpenReferences = { activeSheet = EditorSheet.References },
@@ -532,13 +583,17 @@ private fun EditorScreen(
     onHistoryDelete: (String) -> Unit,
     onOpenReferences: () -> Unit,
     onExport: () -> Unit,
+    lineage: FocusedImageLineage,
+    onLineageNavigate: (LineageDirection) -> Unit,
     annotationHistory: AnnotationHistoryStack,
     onAnnotationsChange: (CanvasAnnotations) -> Unit,
     onViewportChange: (app.bananatape.mobile.editor.CanvasViewport) -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onGenerate: () -> Unit,
+    onNewGeneration: () -> Unit,
 ) {
+    val overlayLayout = editorOverlayLayout(isExpandedWidth)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -547,17 +602,29 @@ private fun EditorScreen(
             .imePadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize().widthIn(max = if (isExpandedWidth) 720.dp else Dp.Unspecified)) {
+        Box(modifier = Modifier.fillMaxSize().widthIn(max = if (isExpandedWidth) 720.dp else Dp.Unspecified)) {
             CanvasGrid(modifier = Modifier.fillMaxSize())
             NativeCanvasView(
                 state = canvasState,
                 onAnnotationsChange = onAnnotationsChange,
                 onViewportChange = onViewportChange,
+                onLineageNavigate = onLineageNavigate,
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(horizontal = 54.dp)
                     .fillMaxWidth()
                     .aspectRatio(0.78f),
+            )
+            LineageNavigator(
+                lineage = lineage,
+                onNavigate = onLineageNavigate,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(
+                        start = overlayLayout.lineageStartPaddingDp.dp,
+                        end = overlayLayout.lineageEndPaddingDp.dp,
+                    )
+                    .fillMaxSize(),
             )
             EditorTopBar(project = project, providerStatus = providerStatus(composerState, apiKey), onBack = onBack, onExport = onExport, onMenu = onOpenMenu)
             FloatingToolBar(activeTool = canvasState.tool, canUndo = annotationHistory.canUndo, canRedo = annotationHistory.canRedo, onToolSelected = onToolSelected, onUndo = onUndo, onRedo = onRedo, modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
@@ -572,6 +639,7 @@ private fun EditorScreen(
                 onSystemPromptChange = onSystemPromptChange,
                 onApiKeyChange = onApiKeyChange,
                 onPrimaryAction = onGenerate,
+                onNewGeneration = onNewGeneration,
                 onExpand = onOpenComposer,
                 onManageReferences = onOpenReferences,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 16.dp),
@@ -582,10 +650,51 @@ private fun EditorScreen(
                     onSelect = onHistorySelect,
                     onDelete = onHistoryDelete,
                     onExport = { onExport() },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).width(280.dp).fillMaxHeight(0.58f),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = overlayLayout.historyEndPaddingDp.dp)
+                        .width(overlayLayout.historyWidthDp.dp)
+                        .fillMaxHeight(0.58f),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LineageNavigator(
+    lineage: FocusedImageLineage,
+    onNavigate: (LineageDirection) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        LineageButton(LineageDirection.LEFT, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Lineage left: previous batch sibling", lineage.canMoveLeft, Modifier.align(Alignment.CenterStart), onNavigate)
+        LineageButton(LineageDirection.RIGHT, Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Lineage right: next batch sibling", lineage.canMoveRight, Modifier.align(Alignment.CenterEnd), onNavigate)
+        LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 72.dp), onNavigate)
+        LineageButton(LineageDirection.DOWN, Icons.Outlined.KeyboardArrowDown, "Lineage down: first direct child batch", lineage.canMoveDown, Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), onNavigate)
+    }
+}
+
+@Composable
+private fun LineageButton(
+    direction: LineageDirection,
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    modifier: Modifier,
+    onNavigate: (LineageDirection) -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(PrototypeColor.Panel.copy(alpha = if (enabled) 0.94f else 0.45f))
+            .border(BorderStroke(1.dp, PrototypeColor.Border), CircleShape)
+            .clickable(enabled = enabled) { onNavigate(direction) }
+            .semantics { contentDescription = description; role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = PrototypeColor.TextSecondary.copy(alpha = if (enabled) 1f else 0.35f), modifier = Modifier.size(22.dp))
     }
 }
 
@@ -754,6 +863,7 @@ private fun EditorSheetHost(
     onSystemPromptChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onGenerate: () -> Unit,
+    onNewGeneration: () -> Unit,
     onHistorySelect: (String) -> Unit,
     onHistoryDelete: (String) -> Unit,
     onHistoryExport: (app.bananatape.mobile.editor.HistoryEntry) -> Unit,
@@ -788,6 +898,7 @@ private fun EditorSheetHost(
                 onSystemPromptChange = onSystemPromptChange,
                 isSubmitting = isSubmitting,
                 onPrimaryAction = onGenerate,
+                onNewGeneration = onNewGeneration,
                 onClose = onDismiss,
                 onManageReferences = onOpenReferences,
                 onAddKey = onProviderSettings,
@@ -1047,7 +1158,7 @@ private fun DragHandle() {
 private fun submitGeneration(
     composerState: ComposerState,
     keyStore: OpenAiApiKeyStore,
-    pipelineState: ProviderPipelineState,
+    currentPipelineState: () -> ProviderPipelineState,
     annotations: CanvasAnnotations,
     projectId: String,
     storage: LocalProjectStorage,
@@ -1057,15 +1168,17 @@ private fun submitGeneration(
     onSubmitting: (Boolean) -> Unit,
     mainHandler: Handler,
 ) {
+    val pipelineState = currentPipelineState()
     val provider = if (composerState.selectedProvider == ComposerProvider.OPENAI) EditorProvider.OPENAI else EditorProvider.MOCK
     val requestId = "generate-${System.currentTimeMillis()}"
-    val isEdit = annotations != CanvasAnnotations.Empty && pipelineState.readyImages.isNotEmpty()
+    val isEdit = resolvedSubmissionMode(composerState.mode, pipelineState.focusedImage) == app.bananatape.mobile.editor.EditorMode.EDIT
     val pending = if (isEdit) {
         pipelineState.startingEdit(composerState.trimmedPrompt, annotations, requestId, NetworkReachability.ONLINE, provider)
     } else {
         pipelineState.startingGenerate(composerState.trimmedPrompt, requestId, NetworkReachability.ONLINE, provider)
     }
     onPipelineState(pending)
+    val completion = ProviderRequestCompletion(currentPipelineState, onPipelineState)
     onStatus("Submitting image request...")
     var inputImagePath: Path? = null
     var maskImagePath: Path? = null
@@ -1074,7 +1187,7 @@ private fun submitGeneration(
         val sourcePath = imagePath(storage, projectId, focused) ?: return
         val composition = NativeImageComposer(AndroidBitmapImageRenderer()).compose(NativeImageCompositionRequest(sourcePath, annotations, storage.filePath(projectId, "tmp/$requestId")))
         if (composition !is NativeImageCompositionOutcome.Success) {
-            onPipelineState(pending.failing(requestId, "This image could not be prepared for export."))
+            completion.fail(requestId, "This image could not be prepared for export.")
             onStatus("This image could not be prepared for export.")
             return
         }
@@ -1083,24 +1196,31 @@ private fun submitGeneration(
     }
     val request = pending.requestForActivePrompt(composerState.outputSize, composerState.references, inputImagePath, maskImagePath) ?: return
     onSubmitting(true)
-    fun applyResult(result: app.bananatape.mobile.editor.ProviderImageResult): ProviderPipelineState {
-        val persisted = persistProviderImage(storage, projectId, result) ?: return pending.failing(requestId, AdapterError.CorruptProject(projectId).userMessage)
-        val next = pending.applying(persisted)
-        val nextComposer = composerState.copy(hasSelectedImage = true, mode = app.bananatape.mobile.editor.EditorMode.GENERATE)
-        onComposerState(nextComposer)
-        persistProjectSession(storage, projectId, nextComposer, next, next.historyBrowserState, CanvasAnnotations.Empty)
-        return next
-    }
-    if (composerState.selectedProvider == ComposerProvider.MOCK) {
-        val result = if (isEdit) MockImageProvider().edit(request) else MockImageProvider().generate(request)
-        onPipelineState(
-            when (result) {
-                is MockProviderResult.Success -> applyResult(result.value)
-                is MockProviderResult.Failure -> pending.failing(requestId, result.message)
+    fun applyResult(result: app.bananatape.mobile.editor.ProviderImageResult) =
+        completion.succeed(
+            result = result,
+            persist = { persistProviderImage(storage, projectId, it) },
+            onApplied = { next ->
+                val nextComposer = composerState.withFocusedImageSelection(next.focusedImage)
+                onComposerState(nextComposer)
+                persistProjectSession(storage, projectId, nextComposer, next, next.historyBrowserState, next.focusedAnnotations)
             },
         )
+    if (composerState.selectedProvider == ComposerProvider.MOCK) {
+        val result = if (isEdit) MockImageProvider().edit(request) else MockImageProvider().generate(request)
+        val outcome = when (result) {
+            is MockProviderResult.Success -> applyResult(result.value)
+            is MockProviderResult.Failure -> completion.fail(requestId, result.message)
+        }
         onSubmitting(false)
-        onStatus("Mock image generated.")
+        if (outcome.accepted) {
+            onStatus(
+                when (result) {
+                    is MockProviderResult.Success -> "Mock image generated."
+                    is MockProviderResult.Failure -> result.message
+                },
+            )
+        }
     } else {
         Thread {
             val result = OpenAiImageProvider(
@@ -1108,19 +1228,19 @@ private fun submitGeneration(
                 transport = AndroidOpenAiImageTransport(),
             ).let { if (isEdit) it.edit(request) else it.generate(request) }
             mainHandler.post {
-                onPipelineState(
-                    when (result) {
-                        is OpenAiProviderResult.Success -> applyResult(result.value)
-                        is OpenAiProviderResult.Failure -> pending.failing(requestId, result.message)
-                    },
-                )
+                val outcome = when (result) {
+                    is OpenAiProviderResult.Success -> applyResult(result.value)
+                    is OpenAiProviderResult.Failure -> completion.fail(requestId, result.message)
+                }
                 onSubmitting(false)
-                onStatus(
-                    when (result) {
-                        is OpenAiProviderResult.Success -> "Image generated."
-                        is OpenAiProviderResult.Failure -> result.message
-                    },
-                )
+                if (outcome.accepted) {
+                    onStatus(
+                        when (result) {
+                            is OpenAiProviderResult.Success -> "Image generated."
+                            is OpenAiProviderResult.Failure -> result.message
+                        },
+                    )
+                }
             }
         }.start()
     }

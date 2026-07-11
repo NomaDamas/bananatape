@@ -57,4 +57,33 @@ class ComposerModelTest {
         assertEquals("Sticker sheet", state.projectContext)
         assertFalse(ComposerState.UnsupportedControls.any { it.contains("Magic Layer", ignoreCase = true) })
     }
+
+    @Test
+    fun composerLaunch_whenFocusedImageExists_defaultsToEditUntilNewGenerationIsExplicit() {
+        val focused = CanvasImage(
+            id = "focused",
+            url = "file:///focused.png",
+            assetId = "asset-focused",
+            size = EditorSize(1.0, 1.0),
+            position = EditorPoint(0.0, 0.0),
+            parentId = null,
+            generationIndex = 0,
+            prompt = "focused prompt",
+            provider = EditorProvider.MOCK,
+            mode = EditorMode.GENERATE,
+            createdAt = 1.0,
+            annotations = CanvasAnnotations.Empty,
+            hasMagicLayerFields = false,
+        )
+        val state = ComposerState(promptText = "edit instructions", mode = EditorMode.GENERATE)
+
+        val opened = state.openingForFocusedImage(focused)
+        val newGeneration = opened.startingNewGeneration()
+
+        assertEquals(EditorMode.EDIT, opened.mode)
+        assertEquals("edit instructions", opened.promptText)
+        assertEquals("Apply edit", opened.primaryActionLabel)
+        assertEquals(EditorMode.GENERATE, newGeneration.mode)
+        assertEquals("Generate", newGeneration.primaryActionLabel)
+    }
 }

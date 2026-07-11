@@ -44,8 +44,10 @@ import app.bananatape.mobile.editor.DrawingPath
 import app.bananatape.mobile.editor.DrawingTool
 import app.bananatape.mobile.editor.EditorPoint
 import app.bananatape.mobile.editor.ImageGenerationStatus
+import app.bananatape.mobile.editor.LineageDirection
 import app.bananatape.mobile.editor.NativeCanvasState
 import app.bananatape.mobile.editor.TextMemo
+import app.bananatape.mobile.editor.lineageSwipeDirection
 import java.io.File
 import java.util.UUID
 import kotlin.math.abs
@@ -59,6 +61,7 @@ fun NativeCanvasView(
     modifier: Modifier = Modifier,
     onAnnotationsChange: (CanvasAnnotations) -> Unit = {},
     onViewportChange: (CanvasViewport) -> Unit = {},
+    onLineageNavigate: (LineageDirection) -> Unit = {},
 ) {
     val decodedImage = remember(state.image.url) { decodeImage(state.image.url) }
     Box(
@@ -67,7 +70,7 @@ fun NativeCanvasView(
             .clip(RoundedCornerShape(28.dp))
             .background(PrototypeColor.ImageShell)
             .border(androidx.compose.foundation.BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(28.dp))
-            .semantics { contentDescription = "Native canvas" },
+            .semantics { contentDescription = "Focused image ${state.image.id}" },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(
@@ -84,7 +87,21 @@ fun NativeCanvasView(
                                 ),
                             )
                         }
-                    } else if (state.tool != CanvasTool.SELECT) {
+                    } else if (state.tool == CanvasTool.SELECT) {
+                        var totalDrag = Offset.Zero
+                        detectDragGestures(
+                            onDragStart = { totalDrag = Offset.Zero },
+                            onDrag = { change, dragAmount -> totalDrag += dragAmount; change.consume() },
+                            onDragEnd = {
+                                lineageSwipeDirection(
+                                    tool = state.tool,
+                                    deltaX = totalDrag.x,
+                                    deltaY = totalDrag.y,
+                                    minimumDistance = 48.dp.toPx(),
+                                )?.let(onLineageNavigate)
+                            },
+                        )
+                    } else {
                         var start = Offset.Zero
                         var end = Offset.Zero
                         val points = mutableListOf<EditorPoint>()

@@ -30,6 +30,7 @@ import app.bananatape.mobile.editor.NativeHistoryBrowserState
 import app.bananatape.mobile.editor.ProjectHistoryDocument
 import app.bananatape.mobile.editor.ProviderImageResult
 import app.bananatape.mobile.editor.ProviderPipelineState
+import app.bananatape.mobile.editor.withFocusedImageSelection
 import app.bananatape.mobile.storage.LocalProjectStorage
 import org.json.JSONArray
 import org.json.JSONObject
@@ -52,21 +53,7 @@ internal fun loadProjectSession(storage: LocalProjectStorage, record: MobileProj
         image.copy(url = localUrl(storage, record.id, image.url))
     }.ifEmpty {
         history.mapIndexed { index, entry ->
-            CanvasImage(
-                id = entry.id,
-                url = storage.filePath(record.id, entry.assetPath).toUri().toString(),
-                assetId = entry.assetId,
-                size = EditorSize(1024.0, 1024.0),
-                position = EditorPoint(0.0, 0.0),
-                parentId = entry.parentId,
-                generationIndex = index,
-                prompt = entry.prompt,
-                provider = entry.provider,
-                mode = entry.mode,
-                createdAt = entry.timestamp,
-                annotations = CanvasAnnotations.Empty,
-                hasMagicLayerFields = false,
-            )
+            recoveredImageFromHistory(entry, index, storage.filePath(record.id, entry.assetPath).toUri().toString())
         }
     }
     val settings = JSONObject(record.manifestJson).optJSONObject("settings") ?: JSONObject()
@@ -75,14 +62,14 @@ internal fun loadProjectSession(storage: LocalProjectStorage, record: MobileProj
         val assetPath = reference.optString("assetPath")
         if (id.isBlank() || assetPath.isBlank()) null else ComposerReferenceSummary(id, reference.optString("label", assetPath.substringAfterLast('/')), assetPath)
     }
-    val focused = canvas?.focusedImageIds?.firstOrNull() ?: images.lastOrNull()?.id
+    val focused = restoredFocusedImageId(images, canvas?.focusedImageIds.orEmpty())
     val pipeline = ProviderPipelineState(images = images, history = history, focusedImageId = focused)
     return LoadedProjectSession(
         project = ProjectListItem(record.id, record.name),
-        composerState = ComposerState(selectedProvider = ComposerProvider.OPENAI, systemPrompt = settings.optString("systemPrompt"), references = references, hasSelectedImage = images.isNotEmpty()),
+        composerState = ComposerState(selectedProvider = ComposerProvider.OPENAI, systemPrompt = settings.optString("systemPrompt"), references = references).withFocusedImageSelection(pipeline.focusedImage),
         pipelineState = pipeline,
-        historyState = NativeHistoryBrowserState(history, focused),
-        annotations = images.lastOrNull()?.annotations ?: CanvasAnnotations.Empty,
+        historyState = pipeline.historyBrowserState,
+        annotations = pipeline.focusedAnnotations,
     )
 }
 
@@ -112,7 +99,8 @@ internal fun importBaseProjectImage(context: Context, uri: Uri, storage: LocalPr
         BitmapFactory.decodeFile(asset.filePath.toString(), bounds)
         val entry = HistoryEntry("history-$timestamp", EditorMode.GENERATE, EditorProvider.MOCK, "Imported image", assetId, asset.projectRelativePath, null, Instant.now().toString(), timestamp.toDouble())
         val image = CanvasImage(entry.id, asset.filePath.toUri().toString(), assetId, EditorSize(bounds.outWidth.coerceAtLeast(1).toDouble(), bounds.outHeight.coerceAtLeast(1).toDouble()), EditorPoint(0.0, 0.0), null, 0, entry.prompt, entry.provider, entry.mode, entry.timestamp, CanvasAnnotations.Empty, false)
-        val session = LoadedProjectSession(ProjectListItem(projectId, name), ComposerState(selectedProvider = ComposerProvider.OPENAI, hasSelectedImage = true), ProviderPipelineState(listOf(image), listOf(entry), image.id), NativeHistoryBrowserState(listOf(entry), entry.id), CanvasAnnotations.Empty)
+        val pipeline = ProviderPipelineState(listOf(image), listOf(entry), image.id)
+        val session = LoadedProjectSession(ProjectListItem(projectId, name), ComposerState(selectedProvider = ComposerProvider.OPENAI).withFocusedImageSelection(image), pipeline, pipeline.historyBrowserState, CanvasAnnotations.Empty)
         persistProjectSession(storage, projectId, session.composerState, session.pipelineState, session.historyState, session.annotations)
         AdapterResult.Success(session)
     } catch (_: Exception) {
@@ -146,28 +134,61 @@ internal fun persistProjectSession(storage: LocalProjectStorage, projectId: Stri
     val history = JSONObject().put("schemaVersion", 1).put("revision", historyState.entries.size).put("entries", JSONArray(historyState.entries.map(::historyJson)))
     val ready = pipeline.images.filter { it.status == ImageGenerationStatus.READY && it.assetId != null }
     val records = JSONObject()
-    ready.forEach { image -> records.put(image.id, imageJson(image, historyState, if (image.id == ready.lastOrNull()?.id) annotations else image.annotations)) }
-    val canvas = JSONObject().put("schemaVersion", 1).put("settings", JSONObject()).put("canvas", JSONObject().put("images", records).put("imageOrder", JSONArray(ready.map { it.id })).put("focusedImageIds", JSONArray(listOfNotNull(pipeline.focusedImageId))))
+    ready.forEach { image -> records.put(image.id, imageJson(image, historyState, if (image.id == pipeline.focusedImageId) annotations else image.annotations)) }
+    val canvas = JSONObject().put("schemaVersion", 1).put("settings", JSONObject()).put("canvas", JSONObject().put("images", records).put("imageOrder", JSONArray(ready.map { it.id })).put("focusedImageIds", JSONArray(persistedFocusedImageIds(pipeline))))
     storage.updateDocuments(projectId, manifest.toString(2), history.toString(2), canvas.toString(2))
 }
+
+internal fun restoredFocusedImageId(images: List<CanvasImage>, persistedFocusIds: List<String>): String? =
+    persistedFocusIds.firstOrNull { candidate -> images.any { it.id == candidate && it.status == ImageGenerationStatus.READY } }
+        ?: images.lastOrNull { it.status == ImageGenerationStatus.READY }?.id
+
+internal fun persistedFocusedImageIds(pipeline: ProviderPipelineState): List<String> =
+    listOfNotNull(pipeline.focusedImage?.takeIf { it.status == ImageGenerationStatus.READY }?.id)
+
+internal fun recoveredImageFromHistory(entry: HistoryEntry, index: Int, url: String): CanvasImage = CanvasImage(
+    id = entry.id,
+    url = url,
+    assetId = entry.assetId,
+    size = EditorSize(1024.0, 1024.0),
+    position = EditorPoint(0.0, 0.0),
+    parentId = entry.parentId,
+    generationIndex = index,
+    prompt = entry.prompt,
+    provider = entry.provider,
+    mode = entry.mode,
+    createdAt = entry.timestamp,
+    annotations = CanvasAnnotations.Empty,
+    hasMagicLayerFields = false,
+    generationBatchId = entry.generationBatchId,
+    batchIndex = entry.batchIndex,
+)
 
 private fun historyJson(entry: HistoryEntry): JSONObject = JSONObject()
     .put("id", entry.id).put("type", entry.mode.value).put("provider", entry.provider.value).put("prompt", entry.prompt)
     .put("assetId", entry.assetId).put("assetPath", entry.assetPath).put("parentId", entry.parentId ?: JSONObject.NULL)
     .put("createdAt", entry.createdAt).put("timestamp", entry.timestamp)
+    .apply {
+        entry.generationBatchId?.let { put("generationBatchId", it) }
+        entry.batchIndex?.let { put("batchIndex", it) }
+    }
 
 private fun imageJson(image: CanvasImage, history: NativeHistoryBrowserState, annotations: CanvasAnnotations): JSONObject = JSONObject()
     .put("id", image.id).put("url", history.entries.firstOrNull { it.assetId == image.assetId }?.assetPath ?: image.url).put("assetId", image.assetId)
     .put("size", JSONObject().put("width", image.size.width).put("height", image.size.height)).put("position", JSONObject().put("x", image.position.x).put("y", image.position.y))
     .put("parentId", image.parentId ?: JSONObject.NULL).put("generationIndex", image.generationIndex).put("prompt", image.prompt).put("provider", image.provider.value).put("type", image.mode.value).put("createdAt", image.createdAt)
+    .apply {
+        image.generationBatchId?.let { put("generationBatchId", it) }
+        image.batchIndex?.let { put("batchIndex", it) }
+    }
     .put("paths", JSONArray(annotations.paths.map { path -> JSONObject().put("id", path.id).put("tool", path.tool.value).put("points", JSONArray(path.points.map { JSONObject().put("x", it.x).put("y", it.y) })).put("color", path.color).put("strokeWidth", path.strokeWidth) }))
     .put("boxes", JSONArray(annotations.boxes.map { JSONObject().put("id", it.id).put("x", it.x).put("y", it.y).put("width", it.width).put("height", it.height).put("color", it.color).put("status", it.status.value) }))
     .put("memos", JSONArray(annotations.memos.map { JSONObject().put("id", it.id).put("x", it.x).put("y", it.y).put("text", it.text).put("color", it.color) }))
 
 private fun localUrl(storage: LocalProjectStorage, projectId: String, url: String): String = if (url.startsWith("data:") || url.startsWith("file:")) url else storage.filePath(projectId, url).toUri().toString()
 
-private fun manifest(id: String, name: String): String = JSONObject().put("schemaVersion", 1).put("id", id).put("name", name).put("createdAt", Instant.now().toString()).put("updatedAt", Instant.now().toString()).put("settings", JSONObject().put("systemPrompt", "").put("referenceImages", JSONArray())).toString(2)
+internal fun manifest(id: String, name: String): String = JSONObject().put("schemaVersion", 1).put("id", id).put("name", name).put("createdAt", Instant.now().toString()).put("updatedAt", Instant.now().toString()).put("settings", JSONObject().put("systemPrompt", "").put("referenceImages", JSONArray())).toString(2)
 
 private fun JSONArray?.toObjectList(): List<JSONObject> = if (this == null) emptyList() else (0 until length()).mapNotNull(::optJSONObject)
 
-private const val MinimalHistoryJson = """{"schemaVersion":1,"revision":0,"entries":[]}"""
+internal const val MinimalHistoryJson = """{"schemaVersion":1,"revision":0,"entries":[]}"""

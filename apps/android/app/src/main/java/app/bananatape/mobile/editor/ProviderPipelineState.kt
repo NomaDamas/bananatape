@@ -98,12 +98,17 @@ data class ProviderPipelineState(
     val focusedImageId: String? = null,
     val activeRequestId: String? = null,
     val activeParentHistoryId: String? = null,
+    val activePreviousFocusedImageId: String? = null,
     val userErrorMessage: String? = null,
     val lifecyclePhase: AppLifecyclePhase = AppLifecyclePhase.FOREGROUND,
 ) {
     val pendingImages: List<CanvasImage> = images.filter { it.status == ImageGenerationStatus.PENDING }
     val readyImages: List<CanvasImage> = images.filter { it.status == ImageGenerationStatus.READY }
-    val historyBrowserState: NativeHistoryBrowserState = NativeHistoryBrowserState(entries = history, selectedEntryId = history.lastOrNull()?.id)
+    val focusedImage: CanvasImage? = images.firstOrNull { it.id == focusedImageId }
+    val focusedAnnotations: CanvasAnnotations = focusedImage?.annotations ?: CanvasAnnotations.Empty
+    val focusedHistoryEntry: HistoryEntry? = focusedImage?.let { image -> history.firstOrNull { it.id == image.id || it.assetId == image.assetId } }
+    val historyBrowserState: NativeHistoryBrowserState = NativeHistoryBrowserState(entries = history, selectedEntryId = focusedHistoryEntry?.id)
+    val focusedLineage: FocusedImageLineage = focusedImageLineage(images, focusedImageId)
 
     fun startingGenerate(
         prompt: String,
@@ -120,8 +125,17 @@ data class ProviderPipelineState(
             mode = EditorMode.GENERATE,
             parentId = null,
             generationIndex = images.size,
+            generationBatchId = requestId,
+            batchIndex = 0,
         )
-        return copy(images = images + placeholder, focusedImageId = placeholder.id, activeRequestId = requestId, activeParentHistoryId = null, userErrorMessage = null)
+        return copy(
+            images = images + placeholder,
+            focusedImageId = placeholder.id,
+            activeRequestId = requestId,
+            activeParentHistoryId = null,
+            activePreviousFocusedImageId = focusedReadyImage()?.id,
+            userErrorMessage = null,
+        )
     }
 
     fun startingEdit(
@@ -143,8 +157,17 @@ data class ProviderPipelineState(
             parentId = parentImage.id,
             generationIndex = images.size,
             annotations = annotations,
+            generationBatchId = requestId,
+            batchIndex = 0,
         )
-        return copy(images = images + placeholder, focusedImageId = placeholder.id, activeRequestId = requestId, activeParentHistoryId = parentHistory.id, userErrorMessage = null)
+        return copy(
+            images = images + placeholder,
+            focusedImageId = placeholder.id,
+            activeRequestId = requestId,
+            activeParentHistoryId = parentHistory.id,
+            activePreviousFocusedImageId = parentImage.id,
+            userErrorMessage = null,
+        )
     }
 
     fun applying(result: ProviderImageResult): ProviderPipelineState {
@@ -167,6 +190,8 @@ data class ProviderPipelineState(
             parentId = if (ready.mode == EditorMode.EDIT) activeParentHistoryId else null,
             createdAt = result.createdAt,
             timestamp = result.timestamp,
+            generationBatchId = ready.generationBatchId,
+            batchIndex = ready.batchIndex,
         )
         return copy(
             images = images.map { if (it.id == pending.id) ready else it },
@@ -174,6 +199,7 @@ data class ProviderPipelineState(
             focusedImageId = ready.id,
             activeRequestId = null,
             activeParentHistoryId = null,
+            activePreviousFocusedImageId = null,
             userErrorMessage = null,
         )
     }
@@ -181,13 +207,13 @@ data class ProviderPipelineState(
     fun failing(requestId: String, message: String): ProviderPipelineState {
         if (activeRequestId != requestId) return this
         val nextImages = images.filterNot { it.id == pendingImageId(requestId) && it.status == ImageGenerationStatus.PENDING }
-        return copy(images = nextImages, focusedImageId = nextImages.lastOrNull { it.status == ImageGenerationStatus.READY }?.id, activeRequestId = null, activeParentHistoryId = null, userErrorMessage = message)
+        return copy(images = nextImages, focusedImageId = restoredFocus(nextImages), activeRequestId = null, activeParentHistoryId = null, activePreviousFocusedImageId = null, userErrorMessage = message)
     }
 
     fun canceling(requestId: String): ProviderPipelineState {
         if (activeRequestId != requestId) return this
         val nextImages = images.filterNot { it.id == pendingImageId(requestId) && it.status == ImageGenerationStatus.PENDING }
-        return copy(images = nextImages, focusedImageId = nextImages.lastOrNull { it.status == ImageGenerationStatus.READY }?.id, activeRequestId = null, activeParentHistoryId = null, userErrorMessage = null)
+        return copy(images = nextImages, focusedImageId = restoredFocus(nextImages), activeRequestId = null, activeParentHistoryId = null, activePreviousFocusedImageId = null, userErrorMessage = null)
     }
 
     fun movingToBackground(): ProviderPipelineState {
@@ -199,6 +225,54 @@ data class ProviderPipelineState(
         lifecyclePhase = AppLifecyclePhase.FOREGROUND,
         userErrorMessage = if (network == NetworkReachability.OFFLINE) AdapterError.Offline.userMessage else userErrorMessage,
     )
+
+    fun focusing(imageId: String): ProviderPipelineState =
+        if (readyImages.any { it.id == imageId }) copy(focusedImageId = imageId) else this
+
+    fun updatingFocusedAnnotations(annotations: CanvasAnnotations): ProviderPipelineState {
+        val focused = focusedImageId ?: return this
+        return copy(images = images.map { image -> if (image.id == focused) image.copy(annotations = annotations) else image })
+    }
+
+    fun deletingHistoryBranch(entryId: String): ProviderPipelineState {
+        val nextHistoryState = NativeHistoryBrowserState(history, focusedHistoryEntry?.id).deleting(entryId)
+        val remainingIds = nextHistoryState.entries.mapTo(mutableSetOf()) { it.id }
+        val remainingAssetIds = nextHistoryState.entries.mapTo(mutableSetOf()) { it.assetId }
+        val deletedHistoryIds = history.mapTo(mutableSetOf()) { it.id }.apply { removeAll(remainingIds) }
+        val activePendingId = activeRequestId?.let(::pendingImageId)
+        val activePending = activePendingId?.let { pendingId -> images.firstOrNull { it.id == pendingId } }
+        val activeRequestDeleted = activePendingId == entryId ||
+            activeParentHistoryId in deletedHistoryIds ||
+            activePending?.parentId in deletedHistoryIds
+        val nextImages = images.filter { image ->
+            when {
+                image.status == ImageGenerationStatus.PENDING -> !activeRequestDeleted || image.id != activePendingId
+                else -> image.id in remainingIds || image.assetId in remainingAssetIds
+            }
+        }
+        val selectedImageId = nextHistoryState.selectedEntry?.let { selected ->
+            nextImages.firstOrNull { image -> image.id == selected.id || image.assetId == selected.assetId }?.id
+        }
+        val nextFocus = focusedImageId?.takeIf { focused -> nextImages.any { it.id == focused } }
+            ?: selectedImageId
+            ?: nextImages.lastOrNull { it.status == ImageGenerationStatus.READY }?.id
+        return copy(
+            images = nextImages,
+            history = nextHistoryState.entries,
+            focusedImageId = nextFocus,
+            activeRequestId = activeRequestId.takeUnless { activeRequestDeleted },
+            activeParentHistoryId = activeParentHistoryId.takeUnless { activeRequestDeleted },
+            activePreviousFocusedImageId = activePreviousFocusedImageId.takeUnless { activeRequestDeleted },
+        )
+    }
+
+    fun movingFocusLeft(): ProviderPipelineState = movingFocus(LineageDirection.LEFT)
+
+    fun movingFocusRight(): ProviderPipelineState = movingFocus(LineageDirection.RIGHT)
+
+    fun movingFocusUp(): ProviderPipelineState = movingFocus(LineageDirection.UP)
+
+    fun movingFocusDown(): ProviderPipelineState = movingFocus(LineageDirection.DOWN)
 
     fun requestForActivePrompt(
         outputSize: OutputSize = OutputSize.SQUARE,
@@ -228,6 +302,10 @@ data class ProviderPipelineState(
         return images.firstOrNull { it.id == focused && it.status == ImageGenerationStatus.READY }
     }
 
+    private fun restoredFocus(nextImages: List<CanvasImage>): String? =
+        activePreviousFocusedImageId?.takeIf { previous -> nextImages.any { it.id == previous && it.status == ImageGenerationStatus.READY } }
+            ?: nextImages.lastOrNull { it.status == ImageGenerationStatus.READY }?.id
+
     private fun pendingImageId(requestId: String): String = "pending-$requestId"
 
     private fun withError(message: String): ProviderPipelineState = copy(userErrorMessage = message)
@@ -241,6 +319,8 @@ data class ProviderPipelineState(
         parentId: String?,
         generationIndex: Int,
         annotations: CanvasAnnotations = CanvasAnnotations.Empty,
+        generationBatchId: String?,
+        batchIndex: Int?,
     ): CanvasImage = CanvasImage(
         id = id,
         url = "mock://pending/$requestId",
@@ -257,5 +337,8 @@ data class ProviderPipelineState(
         hasMagicLayerFields = false,
         status = ImageGenerationStatus.PENDING,
         userErrorMessage = null,
+        generationBatchId = generationBatchId,
+        batchIndex = batchIndex,
     )
+
 }

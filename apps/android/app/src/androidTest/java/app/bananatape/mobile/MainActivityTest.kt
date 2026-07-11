@@ -5,16 +5,19 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.bananatape.mobile.adapters.AdapterResult
+import app.bananatape.mobile.adapters.MobileProjectRecord
 import app.bananatape.mobile.storage.LocalProjectStorage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,7 +59,11 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Back to projects").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Project menu").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Pan").assertHasClickAction().assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Native canvas").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Focused image empty").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Lineage left: previous batch sibling").assertIsNotEnabled().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Lineage right: next batch sibling").assertIsNotEnabled().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Lineage up: parent image").assertIsNotEnabled().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Lineage down: first direct child batch").assertIsNotEnabled().assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Native bottom composer").assertIsDisplayed()
         composeRule.onNodeWithText("Generate").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Expand composer").assertHasClickAction().performClick()
@@ -79,6 +86,18 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add reference").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithText("0 references").assertIsDisplayed()
         composeRule.onNodeWithText("Use a PNG or JPEG image.").assertDoesNotExist()
+    }
+
+    @Test
+    fun focusedImageComposer_whenOpened_defaultsToEditAndNewGenerationResetsMode() {
+        createFocusedProject("Focused Composer")
+
+        composeRule.onNodeWithContentDescription("Open Focused Composer").performClick()
+        composeRule.onNodeWithContentDescription("Expand composer").performClick()
+
+        composeRule.onAllNodesWithText("Apply edit").assertCountEquals(2)
+        composeRule.onNodeWithContentDescription("New Generation").assertHasClickAction().performClick()
+        composeRule.onAllNodesWithText("Generate").assertCountEquals(2)
     }
 
     @Test
@@ -138,5 +157,16 @@ class MainActivityTest {
         composeRule.onNode(hasSetTextAction()).performTextInput(name)
         composeRule.onNodeWithText("Create").performClick()
         composeRule.onNodeWithContentDescription("Open $name").assertIsDisplayed()
+    }
+
+    private fun createFocusedProject(name: String) {
+        val id = "focused-composer"
+        val manifest = """{"schemaVersion":1,"id":"$id","name":"$name","createdAt":"1970-01-01T00:00:00.000Z","updatedAt":"1970-01-01T00:00:00.000Z","settings":{"systemPrompt":"","referenceImages":[]}}"""
+        val history = """{"schemaVersion":1,"revision":1,"entries":[{"id":"focused-image","type":"generate","provider":"mock","prompt":"focused prompt","assetId":"asset-focused","assetPath":"assets/focused.png","parentId":null,"createdAt":"1970-01-01T00:00:00.000Z","timestamp":1,"generationBatchId":"batch-focused","batchIndex":0}]}"""
+        val canvas = """{"schemaVersion":1,"settings":{},"canvas":{"images":{"focused-image":{"id":"focused-image","url":"assets/focused.png","assetId":"asset-focused","size":{"width":1,"height":1},"position":{"x":0,"y":0},"parentId":null,"generationIndex":0,"prompt":"focused prompt","provider":"mock","type":"generate","createdAt":1,"generationBatchId":"batch-focused","batchIndex":0,"paths":[],"boxes":[],"memos":[]}},"imageOrder":["focused-image"],"focusedImageIds":["focused-image"]}}"""
+        val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+        assertEquals(AdapterResult.Success(MobileProjectRecord(id, name, manifest, history, canvas)), storage.create(MobileProjectRecord(id, name, manifest, history, canvas)))
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
     }
 }

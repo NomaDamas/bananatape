@@ -121,6 +121,115 @@ class ProviderPipelineStateTest {
     }
 
     @Test
+    fun editFailure_whenAnotherBranchWasCreatedLater_restoresFocusedParentBranch() {
+        val root = readyImage("root", null, 1.0)
+        val parent = readyImage("parent", root.id, 2.0)
+        val laterBranch = readyImage("later", root.id, 3.0)
+        val state = ProviderPipelineState(
+            images = listOf(root, parent, laterBranch),
+            history = listOf(historyEntry(root), historyEntry(parent), historyEntry(laterBranch)),
+            focusedImageId = parent.id,
+        )
+
+        val failed = state.startingEdit("edit parent", CanvasAnnotations.Empty, "edit-fail", NetworkReachability.ONLINE)
+            .failing("edit-fail", "failed")
+
+        assertEquals(parent.id, failed.focusedImageId)
+    }
+
+    @Test
+    fun editCancel_whenAnotherBranchWasCreatedLater_restoresFocusedParentBranch() {
+        val root = readyImage("root", null, 1.0)
+        val parent = readyImage("parent", root.id, 2.0)
+        val laterBranch = readyImage("later", root.id, 3.0)
+        val state = ProviderPipelineState(
+            images = listOf(root, parent, laterBranch),
+            history = listOf(historyEntry(root), historyEntry(parent), historyEntry(laterBranch)),
+            focusedImageId = parent.id,
+        )
+
+        val canceled = state.startingEdit("edit parent", CanvasAnnotations.Empty, "edit-cancel", NetworkReachability.ONLINE)
+            .canceling("edit-cancel")
+
+        assertEquals(parent.id, canceled.focusedImageId)
+    }
+
+    @Test
+    fun deletingHistoryBranch_removesDescendantsAndImagesAndReconcilesFocus() {
+        val otherRoot = readyImage("other", null, 0.0)
+        val root = readyImage("root", null, 1.0)
+        val child = readyImage("child", root.id, 2.0)
+        val grandchild = readyImage("grandchild", child.id, 3.0)
+        val state = ProviderPipelineState(
+            images = listOf(otherRoot, root, child, grandchild),
+            history = listOf(historyEntry(otherRoot), historyEntry(root), historyEntry(child), historyEntry(grandchild)),
+            focusedImageId = grandchild.id,
+        )
+
+        val deleted = state.deletingHistoryBranch(root.id)
+
+        assertEquals(listOf(otherRoot.id), deleted.images.map { it.id })
+        assertEquals(listOf(otherRoot.id), deleted.history.map { it.id })
+        assertEquals(otherRoot.id, deleted.focusedImageId)
+    }
+
+    @Test
+    fun deletingHistoryBranch_whenActiveEditParentIsDeleted_invalidatesLateSuccessAndFailure() {
+        val root = readyImage("root", null, 1.0)
+        val parent = readyImage("parent", root.id, 2.0)
+        val state = ProviderPipelineState(
+            images = listOf(root, parent),
+            history = listOf(historyEntry(root), historyEntry(parent)),
+            focusedImageId = parent.id,
+        )
+        val pending = state.startingEdit("edit parent", CanvasAnnotations.Empty, "edit-late", NetworkReachability.ONLINE)
+        val request = requireNotNull(pending.requestForActivePrompt())
+        val result = (MockImageProvider().edit(request) as MockProviderResult.Success).value
+
+        val deleted = pending.deletingHistoryBranch(parent.id)
+        val lateSuccess = deleted.applying(result)
+        val lateFailure = deleted.failing(request.id, "late failure")
+
+        assertNull(deleted.activeRequestId)
+        assertEquals(listOf(root.id), deleted.images.map { it.id })
+        assertEquals(deleted, lateSuccess)
+        assertEquals(deleted, lateFailure)
+    }
+
+    @Test
+    fun deletingHistoryBranch_whenUnrelatedBranchIsDeleted_keepsActiveRequestPending() {
+        val deletedRoot = readyImage("deleted-root", null, 1.0)
+        val activeRoot = readyImage("active-root", null, 2.0)
+        val state = ProviderPipelineState(
+            images = listOf(deletedRoot, activeRoot),
+            history = listOf(historyEntry(deletedRoot), historyEntry(activeRoot)),
+            focusedImageId = activeRoot.id,
+        )
+        val pending = state.startingEdit("edit active", CanvasAnnotations.Empty, "edit-active", NetworkReachability.ONLINE)
+
+        val deleted = pending.deletingHistoryBranch(deletedRoot.id)
+
+        assertEquals("edit-active", deleted.activeRequestId)
+        assertEquals(listOf(activeRoot.id, "pending-edit-active"), deleted.images.map { it.id })
+        assertEquals("pending-edit-active", deleted.focusedImageId)
+    }
+
+    @Test
+    fun deletingHistoryBranch_whenPendingImageIsDeleted_invalidatesItsActiveRequest() {
+        val pending = ProviderPipelineState().startingGenerate(
+            prompt = "pending generation",
+            requestId = "generate-pending",
+            network = NetworkReachability.ONLINE,
+        )
+
+        val deleted = pending.deletingHistoryBranch("pending-generate-pending")
+
+        assertEquals(emptyList<CanvasImage>(), deleted.images)
+        assertNull(deleted.activeRequestId)
+        assertNull(deleted.focusedImageId)
+    }
+
+    @Test
     fun mockProvider_whenOffline_failsFastWithoutPendingPlaceholder() {
         val offline = ProviderPipelineState().startingGenerate(prompt = "banana sticker on transparent background", requestId = "generate-1", network = NetworkReachability.OFFLINE)
 
@@ -220,6 +329,17 @@ class ProviderPipelineStateTest {
     }
 
     private fun pngBytes(vararg tail: Int): ByteArray = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, *tail.map { it.toByte() }.toByteArray())
+
+    private fun readyImage(id: String, parentId: String?, timestamp: Double) = CanvasImage(
+        id, "file:///$id.png", "asset-$id", EditorSize(1.0, 1.0), EditorPoint(0.0, 0.0), parentId,
+        timestamp.toInt(), id, EditorProvider.MOCK, if (parentId == null) EditorMode.GENERATE else EditorMode.EDIT,
+        timestamp, CanvasAnnotations.Empty, false,
+    )
+
+    private fun historyEntry(image: CanvasImage) = HistoryEntry(
+        image.id, image.mode, image.provider, image.prompt, requireNotNull(image.assetId), "assets/${image.id}.png",
+        image.parentId, "1970-01-01T00:00:00Z", image.createdAt,
+    )
 
     private fun minimalManifest(id: String, name: String): String = """{"schemaVersion":1,"id":"$id","name":"$name","createdAt":"1970-01-01T00:00:00.000Z","updatedAt":"1970-01-01T00:00:00.000Z","settings":{"systemPrompt":"","referenceImages":[]}}"""
 

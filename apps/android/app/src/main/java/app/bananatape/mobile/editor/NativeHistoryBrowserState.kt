@@ -42,36 +42,38 @@ data class NativeHistoryBrowserState(
 
     fun deleting(entryId: String): NativeHistoryBrowserState {
         val deleted = entries.firstOrNull { it.id == entryId }
-        val remaining = entries.filterNot { it.id == entryId }
-        val nextSelected = if (selectedEntryId == entryId) fallbackSelection(deleted, remaining) else selectedEntryId
+        val deletedIds = descendantsOf(entryId) + entryId
+        val remaining = entries.filterNot { it.id in deletedIds }
+        val nextSelected = if (selectedEntryId in deletedIds) fallbackSelection(deleted, remaining) else selectedEntryId
         return NativeHistoryBrowserState(entries = remaining, selectedEntryId = nextSelected)
     }
 
     private fun fallbackSelection(deleted: HistoryEntry?, remaining: List<HistoryEntry>): String? =
-        deleted?.parentId?.takeIf { parentId -> remaining.any { it.id == parentId } } ?: remaining.firstOrNull()?.id
+        deleted?.parentId?.takeIf { parentId -> remaining.any { it.id == parentId } } ?: remaining.lastOrNull()?.id
 
-    private fun buildRows(): List<HistoryBrowserRow> {
-        val rows = mutableListOf<HistoryBrowserRow>()
-        fun append(node: HistoryTreeNode, depth: Int) {
-            rows += HistoryBrowserRow(
-                entry = node.entry,
-                depth = depth,
-                branchLabel = if (depth == 0) "Root" else "Edit",
-                versionLabel = "v${rows.size + 1}",
-                isSelected = node.entry.id == selectedEntryId,
-            )
-            node.children.forEach { append(it, depth + 1) }
+    private fun descendantsOf(entryId: String): Set<String> {
+        val childrenByParent = entries.groupBy { it.parentId }
+        val descendants = mutableSetOf<String>()
+        fun collect(parentId: String) {
+            childrenByParent[parentId].orEmpty().forEach { child ->
+                if (descendants.add(child.id)) collect(child.id)
+            }
         }
-        buildTree().forEach { append(it, 0) }
-        return rows
+        collect(entryId)
+        return descendants
     }
 
-    private fun buildTree(): List<HistoryTreeNode> {
-        val grouped = entries.groupBy { it.parentId }
-        fun children(parentId: String?): List<HistoryTreeNode> = grouped[parentId].orEmpty()
-            .sortedWith(compareBy<HistoryEntry> { it.timestamp }.thenBy { it.id })
-            .map { HistoryTreeNode(entry = it, children = children(it.id)) }
-        return children(null)
+    private fun buildRows(): List<HistoryBrowserRow> {
+        val ordered = historyLineageDisplayOrder(entries)
+        return ordered.mapIndexed { index, item ->
+            HistoryBrowserRow(
+                entry = item.entry,
+                depth = item.depth,
+                branchLabel = if (item.depth == 0) "Root" else "Edit",
+                versionLabel = "v${index + 1}",
+                isSelected = item.entry.id == selectedEntryId,
+            )
+        }
     }
 
     companion object {

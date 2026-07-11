@@ -31,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.bananatape.mobile.editor.ComposerProvider
 import app.bananatape.mobile.editor.ComposerState
+import app.bananatape.mobile.editor.EditorMode
 import app.bananatape.mobile.editor.OutputSize
 
 @Composable
@@ -64,6 +66,7 @@ fun ComposerView(
     isSubmitting: Boolean = false,
     statusMessage: String? = null,
     onPrimaryAction: () -> Unit = {},
+    onNewGeneration: () -> Unit = {},
     onExpand: () -> Unit = {},
     onManageReferences: () -> Unit = {},
     onAddKey: () -> Unit = {},
@@ -81,6 +84,7 @@ fun ComposerView(
             onApiKeyChange = onApiKeyChange,
             onSystemPromptChange = onSystemPromptChange,
             onPrimaryAction = onPrimaryAction,
+            onNewGeneration = onNewGeneration,
             onManageReferences = onManageReferences,
             onAddKey = onAddKey,
             onClose = onClose,
@@ -155,7 +159,7 @@ private fun CompactComposerView(
             Icon(Icons.Outlined.ExpandLess, contentDescription = null, tint = PrototypeColor.TextSecondary, modifier = Modifier.size(19.dp))
         }
         PrimaryComposerButton(
-            label = if (isSubmitting) "Generating" else "Generate",
+            label = if (isSubmitting) "Working" else state.primaryActionLabel,
             enabled = state.canSubmitPrimaryAction && !isSubmitting,
             onClick = onPrimaryAction,
             modifier = Modifier.width(97.dp).height(40.dp),
@@ -174,6 +178,7 @@ private fun ExpandedComposerSheet(
     onApiKeyChange: (String) -> Unit,
     onSystemPromptChange: (String) -> Unit,
     onPrimaryAction: () -> Unit,
+    onNewGeneration: () -> Unit,
     onManageReferences: () -> Unit,
     onAddKey: () -> Unit,
     onClose: () -> Unit,
@@ -187,7 +192,17 @@ private fun ExpandedComposerSheet(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Generate", color = PrototypeColor.TextStrong, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(text = state.primaryActionLabel, color = PrototypeColor.TextStrong, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (state.hasSelectedImage && state.mode == EditorMode.EDIT) {
+                TextButton(
+                    onClick = onNewGeneration,
+                    modifier = Modifier.semantics { contentDescription = "New Generation"; role = Role.Button },
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("New Generation", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -263,7 +278,7 @@ private fun ExpandedComposerSheet(
             )
         }
         PrimaryComposerButton(
-            label = if (isSubmitting) "Generating..." else "Generate",
+            label = if (isSubmitting) "Working..." else state.primaryActionLabel,
             enabled = state.canSubmitPrimaryAction && !isSubmitting,
             onClick = onPrimaryAction,
             modifier = Modifier.fillMaxWidth().height(52.dp),

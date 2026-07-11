@@ -1,5 +1,9 @@
 package app.bananatape.mobile.editor
 
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+
 data class EditorPoint(val x: Double, val y: Double)
 
 data class EditorSize(val width: Double, val height: Double)
@@ -20,6 +24,48 @@ enum class EditorMode(val value: String) {
     GENERATE("generate"),
     EDIT("edit"),
 }
+
+enum class LineageDirection {
+    LEFT,
+    RIGHT,
+    UP,
+    DOWN,
+}
+
+fun lineageSwipeDirection(
+    tool: CanvasTool,
+    deltaX: Float,
+    deltaY: Float,
+    minimumDistance: Float = 48f,
+    axisDominanceRatio: Float = 1.25f,
+): LineageDirection? {
+    if (tool != CanvasTool.SELECT) return null
+    val horizontalDistance = abs(deltaX)
+    val verticalDistance = abs(deltaY)
+    val dominantDistance = max(horizontalDistance, verticalDistance)
+    val secondaryDistance = min(horizontalDistance, verticalDistance)
+    if (dominantDistance < minimumDistance || dominantDistance < secondaryDistance * axisDominanceRatio) return null
+    return if (horizontalDistance > verticalDistance) {
+        if (deltaX < 0f) LineageDirection.RIGHT else LineageDirection.LEFT
+    } else {
+        if (deltaY < 0f) LineageDirection.DOWN else LineageDirection.UP
+    }
+}
+
+fun ComposerState.withFocusedImageSelection(image: CanvasImage?): ComposerState =
+    copy(
+        hasSelectedImage = image?.status == ImageGenerationStatus.READY,
+        mode = if (image?.status == ImageGenerationStatus.READY) EditorMode.EDIT else EditorMode.GENERATE,
+    )
+
+fun ComposerState.openingForFocusedImage(image: CanvasImage?): ComposerState =
+    withFocusedImageSelection(image)
+
+fun ComposerState.startingNewGeneration(): ComposerState =
+    copy(mode = EditorMode.GENERATE)
+
+fun resolvedSubmissionMode(composerMode: EditorMode, focusedImage: CanvasImage?): EditorMode =
+    if (focusedImage?.status == ImageGenerationStatus.READY) composerMode else EditorMode.GENERATE
 
 enum class OutputSize(val value: String) {
     SQUARE("1024x1024"),
@@ -90,6 +136,8 @@ data class CanvasImage(
     val hasMagicLayerFields: Boolean,
     val status: ImageGenerationStatus = ImageGenerationStatus.READY,
     val userErrorMessage: String? = null,
+    val generationBatchId: String? = null,
+    val batchIndex: Int? = null,
 ) {
     val canEditMagicLayers: Boolean = false
 
