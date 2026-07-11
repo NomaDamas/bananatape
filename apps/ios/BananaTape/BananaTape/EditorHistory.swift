@@ -8,8 +8,24 @@ struct HistoryEntry: Equatable {
     let assetId: String
     let assetPath: String
     let parentId: String?
+    let generationBatchId: String?
+    let batchIndex: Int?
     let createdAt: String
     let timestamp: Double
+
+    init(id: String, mode: EditorMode, provider: EditorProvider, prompt: String, assetId: String, assetPath: String, parentId: String?, generationBatchId: String? = nil, batchIndex: Int? = nil, createdAt: String, timestamp: Double) {
+        self.id = id
+        self.mode = mode
+        self.provider = provider
+        self.prompt = prompt
+        self.assetId = assetId
+        self.assetPath = assetPath
+        self.parentId = parentId
+        self.generationBatchId = generationBatchId
+        self.batchIndex = batchIndex
+        self.createdAt = createdAt
+        self.timestamp = timestamp
+    }
 }
 
 struct HistoryTreeNode: Equatable {
@@ -35,13 +51,40 @@ struct ExportPreviewMetadata: Equatable {
     let magicLayerMessage: String?
 }
 
+private enum HistoryLineageOrdering {
+    static func sorted(_ entries: [HistoryEntry]) -> [HistoryEntry] {
+        let batches = Dictionary(grouping: entries) { $0.generationBatchId ?? $0.id }
+        return batches.values
+            .map { $0.sorted(by: itemOrder) }
+            .sorted(by: batchOrder)
+            .flatMap { $0 }
+    }
+
+    private static func batchOrder(_ lhs: [HistoryEntry], _ rhs: [HistoryEntry]) -> Bool {
+        guard let lhsAnchor = lhs.first, let rhsAnchor = rhs.first else { return lhs.count < rhs.count }
+        if lhsAnchor.timestamp != rhsAnchor.timestamp { return lhsAnchor.timestamp < rhsAnchor.timestamp }
+        return lhsAnchor.id < rhsAnchor.id
+    }
+
+    private static func itemOrder(_ lhs: HistoryEntry, _ rhs: HistoryEntry) -> Bool {
+        let lhsIndex = lhs.batchIndex ?? 0
+        let rhsIndex = rhs.batchIndex ?? 0
+        if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
+        if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
+        return lhs.id < rhs.id
+    }
+}
+
 struct NativeHistoryBrowserState: Equatable {
     let entries: [HistoryEntry]
     let selectedEntryId: String?
 
     init(entries: [HistoryEntry], selectedEntryId: String? = nil) {
-        self.entries = entries.sorted { lhs, rhs in lhs.timestamp == rhs.timestamp ? lhs.id < rhs.id : lhs.timestamp < rhs.timestamp }
-        self.selectedEntryId = selectedEntryId ?? self.entries.first?.id
+        let sortedEntries = HistoryLineageOrdering.sorted(entries)
+        self.entries = sortedEntries
+        self.selectedEntryId = selectedEntryId.flatMap { selected in
+            sortedEntries.contains(where: { $0.id == selected }) ? selected : nil
+        } ?? sortedEntries.first?.id
     }
 
     var rows: [HistoryBrowserRow] {
@@ -80,9 +123,31 @@ struct NativeHistoryBrowserState: Equatable {
 
     func deleting(entryId: String) -> NativeHistoryBrowserState {
         let deleted = entries.first { $0.id == entryId }
-        let remaining = entries.filter { $0.id != entryId }
-        let nextSelected = selectedEntryId == entryId ? fallbackSelection(afterDeleting: deleted, remaining: remaining) : selectedEntryId
+        var deletedIds: Set<String> = [entryId]
+        while true {
+            let descendants = entries.filter { entry in
+                entry.parentId.map(deletedIds.contains) == true && !deletedIds.contains(entry.id)
+            }
+            guard !descendants.isEmpty else { break }
+            deletedIds.formUnion(descendants.map(\.id))
+        }
+        let remaining = entries.filter { !deletedIds.contains($0.id) }
+        let selectionWasDeleted = selectedEntryId.map(deletedIds.contains) == true
+        let nextSelected = selectionWasDeleted ? fallbackSelection(afterDeleting: deleted, remaining: remaining) : selectedEntryId
         return NativeHistoryBrowserState(entries: remaining, selectedEntryId: nextSelected)
+    }
+
+    func reconcilingLineage() -> NativeHistoryBrowserState {
+        var remaining = entries
+        while true {
+            let ids = Set(remaining.map(\.id))
+            let reconciled = remaining.filter { entry in
+                entry.parentId == nil || entry.parentId.map(ids.contains) == true
+            }
+            guard reconciled.count != remaining.count else { break }
+            remaining = reconciled
+        }
+        return NativeHistoryBrowserState(entries: remaining, selectedEntryId: selectedEntryId)
     }
 
     private func fallbackSelection(afterDeleting deleted: HistoryEntry?, remaining: [HistoryEntry]) -> String? {
@@ -93,8 +158,7 @@ struct NativeHistoryBrowserState: Equatable {
     private func tree(from entries: [HistoryEntry]) -> [HistoryTreeNode] {
         let grouped = Dictionary(grouping: entries) { $0.parentId }
         func children(for parentId: String?) -> [HistoryTreeNode] {
-            (grouped[parentId] ?? [])
-                .sorted { lhs, rhs in lhs.timestamp == rhs.timestamp ? lhs.id < rhs.id : lhs.timestamp < rhs.timestamp }
+            HistoryLineageOrdering.sorted(grouped[parentId] ?? [])
                 .map { HistoryTreeNode(entry: $0, children: children(for: $0.id)) }
         }
         return children(for: nil)
@@ -134,8 +198,7 @@ struct ProjectHistoryDocument: Equatable {
     func buildTree() -> [HistoryTreeNode] {
         let grouped = Dictionary(grouping: entries) { $0.parentId }
         func sortedChildren(for parentId: String?) -> [HistoryTreeNode] {
-            (grouped[parentId] ?? [])
-                .sorted { lhs, rhs in lhs.timestamp == rhs.timestamp ? lhs.id < rhs.id : lhs.timestamp < rhs.timestamp }
+            HistoryLineageOrdering.sorted(grouped[parentId] ?? [])
                 .map { HistoryTreeNode(entry: $0, children: sortedChildren(for: $0.id)) }
         }
         return sortedChildren(for: nil)
@@ -159,6 +222,8 @@ struct ProjectHistoryDocument: Equatable {
             assetId: assetId,
             assetPath: assetPath,
             parentId: record["parentId"] as? String,
+            generationBatchId: record["generationBatchId"] as? String,
+            batchIndex: optionalInt(record["batchIndex"]),
             createdAt: createdAt,
             timestamp: number(record["timestamp"])
         )
@@ -168,6 +233,12 @@ struct ProjectHistoryDocument: Equatable {
         if let value = value as? Double { return value }
         if let value = value as? Int { return Double(value) }
         return 0
+    }
+
+    private static func optionalInt(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? Double { return Int(exactly: value) }
+        return nil
     }
 }
 

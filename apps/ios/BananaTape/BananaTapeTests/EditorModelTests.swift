@@ -14,6 +14,218 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(document.toJSONString(), historyJSON)
     }
 
+    func testLineageC001_whenFocusedImageMoves_navigatesSiblingsAndDirectChildrenDeterministically() {
+        let rootA = lineageImage(id: "root-a", batchId: "roots", batchIndex: 0, timestamp: 3)
+        let pendingRoot = lineageImage(id: "pending-root", batchId: "roots", batchIndex: 1, timestamp: 2, status: .pending)
+        let unrelatedChild = lineageImage(id: "unrelated-child", parentId: "other-parent", batchId: "roots", batchIndex: 1, timestamp: 2)
+        let rootB = lineageImage(id: "root-b", batchId: "roots", batchIndex: 2, timestamp: 1)
+        let pendingChild = lineageImage(id: "pending-child", parentId: rootB.id, batchId: "pending-children", batchIndex: 0, timestamp: 2, status: .pending)
+        let laterChild = lineageImage(id: "later-child", parentId: rootB.id, batchId: "later-children", batchIndex: 0, timestamp: 5)
+        let firstChild = lineageImage(id: "z-first-child", parentId: rootB.id, batchId: "first-children", batchIndex: 0, timestamp: 4)
+        let firstChildSecond = lineageImage(id: "a-second-child", parentId: rootB.id, batchId: "first-children", batchIndex: 1, timestamp: 4)
+        let state = ProviderPipelineState(images: [pendingChild, unrelatedChild, laterChild, firstChildSecond, rootB, firstChild, pendingRoot, rootA], focusedImageId: rootA.id)
+
+        let sibling = state.movingFocus(.right)
+        let child = sibling.movingFocus(.down)
+        let parent = child.movingFocus(.up)
+
+        XCTAssertEqual(sibling.focusedImageId, rootB.id)
+        XCTAssertEqual(child.focusedImageId, firstChild.id)
+        XCTAssertEqual(parent.focusedImageId, rootB.id)
+        XCTAssertEqual(sibling.lineageAvailability, LineageNavigationAvailability(canMoveLeft: true, canMoveRight: false, canMoveUp: false, canMoveDown: true))
+        XCTAssertEqual(state.focusing(imageId: pendingRoot.id).focusedImageId, rootA.id)
+        XCTAssertEqual(state.startingGenerate(prompt: "new root", requestId: "generate-next", network: .online).focusedImageId, rootA.id)
+    }
+
+    func testLineageSwipe_whenDragEnds_resolvesDominantAxisThresholdAndAnnotationConflictPolicy() {
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: -80, height: 12), tool: .select), .lineage(.right))
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 75, height: -10), tool: .select), .lineage(.left))
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 8, height: -90), tool: .select), .lineage(.down))
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: -6, height: 72), tool: .select), .lineage(.up))
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 90, height: 0), tool: .pan), .viewportPan)
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 45, height: 4), tool: .pan), .viewportPan)
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 70, height: 65), tool: .select), .ignored)
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: -100, height: 0), tool: .pen), .annotation)
+        XCTAssertEqual(LineageSwipeResolver.resolve(translation: CGSize(width: 0, height: -100), tool: .box), .annotation)
+    }
+
+    func testLineageSubmission_whenReadyGeneratedRootIsFocused_routesActualSubmissionToEditUnlessGenerationIsExplicit() throws {
+        let annotations = CanvasAnnotations(paths: [DrawingPath(id: "root-mark", tool: .pen, points: [], color: "#fff", strokeWidth: 2)], boxes: [], memos: [])
+        let root = lineageImage(id: "root", batchId: "root-batch", batchIndex: 0, timestamp: 1, annotations: annotations)
+        let history = [lineageHistory(id: root.id, assetId: "asset-root", parentId: nil, batchId: "root-batch", batchIndex: 0, timestamp: 1)]
+        let state = ProviderPipelineState(images: [root], history: history, focusedImageId: root.id)
+
+        let editPending = state.startingSubmission(mode: .edit, prompt: "edit the focused root", annotations: annotations, requestId: "edit-root", network: .online)
+        let editRequest = try XCTUnwrap(editPending.requestForActivePrompt())
+        let generatePending = state.startingSubmission(mode: .generate, prompt: "make a separate root", annotations: annotations, requestId: "generate-root", network: .online)
+        let generateRequest = try XCTUnwrap(generatePending.requestForActivePrompt())
+
+        XCTAssertEqual(editRequest.mode, .edit)
+        XCTAssertEqual(editRequest.parentImageId, root.id)
+        XCTAssertEqual(editRequest.parentHistoryId, root.id)
+        XCTAssertEqual(editRequest.annotations, annotations)
+        XCTAssertEqual(generateRequest.mode, .generate)
+        XCTAssertNil(generateRequest.parentImageId)
+        XCTAssertNil(generateRequest.parentHistoryId)
+    }
+
+    func testLineageC002_whenMovementReachesBoundary_clampsAndLegacyImagesRemainSingletonBatches() {
+        let legacyRoot = lineageImage(id: "legacy-root", timestamp: 1)
+        let legacyPeer = lineageImage(id: "legacy-peer", timestamp: 2)
+        let child = lineageImage(id: "child", parentId: legacyRoot.id, batchId: "child-batch", batchIndex: 0, timestamp: 3)
+        let state = ProviderPipelineState(images: [legacyPeer, child, legacyRoot], focusedImageId: legacyRoot.id)
+
+        XCTAssertEqual(state.movingFocus(.left).focusedImageId, legacyRoot.id)
+        XCTAssertEqual(state.movingFocus(.right).focusedImageId, legacyRoot.id)
+        XCTAssertEqual(state.movingFocus(.up).focusedImageId, legacyRoot.id)
+        XCTAssertEqual(state.movingFocus(.down).movingFocus(.down).focusedImageId, child.id)
+        XCTAssertEqual(state.lineageAvailability, LineageNavigationAvailability(canMoveLeft: false, canMoveRight: false, canMoveUp: false, canMoveDown: true))
+    }
+
+    func testLineageC003_whenFocusChanges_bindsImageHistoryAnnotationsAndEditParentToFocus() throws {
+        let rootAnnotations = CanvasAnnotations(paths: [DrawingPath(id: "root-path", tool: .pen, points: [], color: "#fff", strokeWidth: 2)], boxes: [], memos: [])
+        let childAnnotations = CanvasAnnotations(paths: [], boxes: [BoundingBox(id: "child-box", x: 0, y: 0, width: 1, height: 1, color: "#00f", status: .pending)], memos: [])
+        let root = lineageImage(id: "root", batchId: "roots", batchIndex: 0, timestamp: 1, annotations: rootAnnotations)
+        let child = lineageImage(id: "child", parentId: root.id, batchId: "children", batchIndex: 0, timestamp: 2, annotations: childAnnotations)
+        let history = [
+            lineageHistory(id: root.id, assetId: "asset-root", parentId: nil, batchId: "roots", batchIndex: 0, timestamp: 1),
+            lineageHistory(id: child.id, assetId: "asset-child", parentId: root.id, batchId: "children", batchIndex: 0, timestamp: 2)
+        ]
+        let focused = ProviderPipelineState(images: [root, child], history: history, focusedImageId: root.id).movingFocus(.down)
+        let editPending = focused.startingEdit(prompt: "focused edit", annotations: focused.focusedImage?.annotations ?? .empty, requestId: "edit-focused", network: .online)
+        let request = try XCTUnwrap(editPending.requestForActivePrompt())
+
+        XCTAssertEqual(focused.focusedImage?.id, child.id)
+        XCTAssertEqual(focused.focusedImage?.annotations, childAnnotations)
+        XCTAssertEqual(focused.historyBrowserState.selectedEntryId, child.id)
+        XCTAssertEqual(editPending.focusedImageId, child.id)
+        XCTAssertEqual(request.parentImageId, child.id)
+        XCTAssertEqual(request.parentHistoryId, child.id)
+        XCTAssertEqual(request.annotations, childAnnotations)
+    }
+
+    func testLineageC003_whenFocusedHistoryChildIsDeleted_reconcilesFocusBeforePersistence() {
+        let rootAnnotations = CanvasAnnotations(paths: [DrawingPath(id: "root-path", tool: .pen, points: [], color: "#fff", strokeWidth: 2)], boxes: [], memos: [])
+        let childAnnotations = CanvasAnnotations(paths: [], boxes: [BoundingBox(id: "child-box", x: 0, y: 0, width: 1, height: 1, color: "#00f", status: .pending)], memos: [])
+        let root = lineageImage(id: "root", timestamp: 1, annotations: rootAnnotations)
+        let child = lineageImage(id: "child", parentId: root.id, timestamp: 2, annotations: childAnnotations)
+        let history = [
+            lineageHistory(id: root.id, assetId: "asset-root", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 1),
+            lineageHistory(id: child.id, assetId: "asset-child", parentId: root.id, batchId: nil, batchIndex: nil, timestamp: 2)
+        ]
+        let state = ProviderPipelineState(images: [root, child], history: history, focusedImageId: child.id)
+        let remainingHistory = state.historyBrowserState.deleting(entryId: child.id)
+
+        let reconciled = state.reconcilingHistory(remainingHistory)
+
+        XCTAssertEqual(reconciled.focusedImageId, root.id)
+        XCTAssertEqual(reconciled.focusedImage?.annotations, rootAnnotations)
+        XCTAssertEqual(reconciled.focusedImage?.mode, .generate)
+        XCTAssertEqual(reconciled.historyBrowserState.selectedEntryId, root.id)
+    }
+
+    func testHistoryDeletion_whenParentIsDeleted_cascadesAllDescendantsFromPersistenceFacingState() {
+        let root = lineageImage(id: "root", timestamp: 1)
+        let child = lineageImage(id: "child", parentId: root.id, timestamp: 2)
+        let grandchild = lineageImage(id: "grandchild", parentId: child.id, timestamp: 3)
+        let survivor = lineageImage(id: "survivor", timestamp: 4)
+        let history = [
+            lineageHistory(id: root.id, assetId: "asset-root", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 1),
+            lineageHistory(id: child.id, assetId: "asset-child", parentId: root.id, batchId: nil, batchIndex: nil, timestamp: 2),
+            lineageHistory(id: grandchild.id, assetId: "asset-grandchild", parentId: child.id, batchId: nil, batchIndex: nil, timestamp: 3),
+            lineageHistory(id: survivor.id, assetId: "asset-survivor", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 4)
+        ]
+        let state = ProviderPipelineState(images: [root, child, grandchild, survivor], history: history, focusedImageId: grandchild.id)
+
+        let deleted = state.historyBrowserState.deleting(entryId: root.id)
+        let reconciled = state.reconcilingHistory(deleted)
+        let retainedHistoryIDs = Set(reconciled.history.map(\.id))
+        let retainedImageIDs = Set(reconciled.images.map(\.id))
+
+        XCTAssertEqual(retainedHistoryIDs, [survivor.id])
+        XCTAssertEqual(retainedImageIDs, [survivor.id])
+        XCTAssertTrue(reconciled.history.allSatisfy { $0.parentId == nil || retainedHistoryIDs.contains($0.parentId!) })
+        XCTAssertTrue(reconciled.images.allSatisfy { $0.parentId == nil || retainedImageIDs.contains($0.parentId!) })
+        XCTAssertEqual(reconciled.focusedImageId, survivor.id)
+    }
+
+    func testHistoryDeletionCoordinator_whenUsedByHistoryRoutes_reconcilesSelectedAndNonSelectedDeletion() {
+        let root = lineageImage(id: "root", timestamp: 1)
+        let child = lineageImage(id: "child", parentId: root.id, timestamp: 2)
+        let survivor = lineageImage(id: "survivor", timestamp: 3)
+        let history = [
+            lineageHistory(id: root.id, assetId: "asset-root", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 1),
+            lineageHistory(id: child.id, assetId: "asset-child", parentId: root.id, batchId: nil, batchIndex: nil, timestamp: 2),
+            lineageHistory(id: survivor.id, assetId: "asset-survivor", parentId: nil, batchId: nil, batchIndex: nil, timestamp: 3)
+        ]
+
+        let selectedDeletion = HistoryDeletionCoordinator.deleting(
+            entryID: root.id,
+            from: ProviderPipelineState(images: [root, child, survivor], history: history, focusedImageId: child.id)
+        )
+        let nonSelectedDeletion = HistoryDeletionCoordinator.deleting(
+            entryID: root.id,
+            from: ProviderPipelineState(images: [root, child, survivor], history: history, focusedImageId: survivor.id)
+        )
+
+        XCTAssertEqual(selectedDeletion.history.map(\.id), [survivor.id])
+        XCTAssertEqual(selectedDeletion.images.map(\.id), [survivor.id])
+        XCTAssertEqual(selectedDeletion.focusedImageId, survivor.id)
+        XCTAssertEqual(nonSelectedDeletion.history.map(\.id), [survivor.id])
+        XCTAssertEqual(nonSelectedDeletion.images.map(\.id), [survivor.id])
+        XCTAssertEqual(nonSelectedDeletion.focusedImageId, survivor.id)
+    }
+
+    func testHistoryOrdering_whenBatchTimestampsInterleave_keepsLineageBatchesContiguous() {
+        let batchAFirst = lineageHistory(id: "a-first", assetId: "asset-a-first", parentId: nil, batchId: "batch-a", batchIndex: 0, timestamp: 10)
+        let batchASecond = lineageHistory(id: "a-second", assetId: "asset-a-second", parentId: nil, batchId: "batch-a", batchIndex: 1, timestamp: 40)
+        let batchBFirst = lineageHistory(id: "b-first", assetId: "asset-b-first", parentId: nil, batchId: "batch-b", batchIndex: 0, timestamp: 20)
+        let batchBSecond = lineageHistory(id: "b-second", assetId: "asset-b-second", parentId: nil, batchId: "batch-b", batchIndex: 1, timestamp: 30)
+        let tiedAnchorZ = lineageHistory(id: "z-anchor", assetId: "asset-z-anchor", parentId: nil, batchId: "batch-z", batchIndex: 0, timestamp: 50)
+        let tiedAnchorA = lineageHistory(id: "a-anchor", assetId: "asset-a-anchor", parentId: nil, batchId: "batch-later-a", batchIndex: 0, timestamp: 50)
+
+        let state = NativeHistoryBrowserState(entries: [batchASecond, tiedAnchorZ, batchBSecond, batchBFirst, tiedAnchorA, batchAFirst])
+        let expected = [batchAFirst.id, batchASecond.id, batchBFirst.id, batchBSecond.id, tiedAnchorA.id, tiedAnchorZ.id]
+
+        XCTAssertEqual(state.entries.map(\.id), expected)
+        XCTAssertEqual(state.rows.map(\.id), expected)
+    }
+
+    func testLineageSwipe_whenPinchOverlapsDrag_suppressesLineageUntilThatDragEnds() {
+        var arbitration = CanvasGestureArbitrationState()
+        arbitration.dragChanged()
+        arbitration.pinchChanged()
+        arbitration.pinchEnded()
+
+        let simultaneousResolution = arbitration.dragEnded(translation: CGSize(width: -100, height: 0), tool: .select)
+        arbitration.dragChanged()
+        let nextResolution = arbitration.dragEnded(translation: CGSize(width: -100, height: 0), tool: .select)
+
+        XCTAssertEqual(simultaneousResolution, .ignored)
+        XCTAssertEqual(nextResolution, .lineage(.right))
+    }
+
+    func testLineageC003_whenPersistedFocusIsMissingOrPending_fallsBackToLastReadyImage() {
+        let root = lineageImage(id: "root", timestamp: 1)
+        let ready = lineageImage(id: "ready", timestamp: 2)
+        let pending = lineageImage(id: "pending", timestamp: 3, status: .pending)
+
+        XCTAssertEqual(ProviderPipelineState(images: [root, ready, pending], focusedImageId: "missing").focusedImageId, ready.id)
+        XCTAssertEqual(ProviderPipelineState(images: [root, ready, pending], focusedImageId: pending.id).focusedImageId, ready.id)
+    }
+
+    func testLineageMetadata_whenIndexesAreOutOfRange_ignoresThemWithoutCrashing() throws {
+        let canvasJSON = #"{"canvas":{"images":{"image":{"id":"image","url":"fixture://image.png","size":{"width":100,"height":100},"position":{"x":0,"y":0},"generationIndex":1e300,"batchIndex":1e300}},"imageOrder":["image"],"focusedImageIds":["image"]}}"#
+        let historyJSON = #"{"revision":1,"entries":[{"id":"image","type":"generate","provider":"mock","assetId":"asset-image","assetPath":"assets/image.png","createdAt":"1970-01-01T00:00:00.000Z","timestamp":1,"batchIndex":1e300}]}"#
+
+        let canvas = try MobileCanvasDocument.parse(canvasJSON)
+        let history = try ProjectHistoryDocument.parse(historyJSON)
+
+        XCTAssertEqual(canvas.images["image"]?.generationIndex, 0)
+        XCTAssertNil(canvas.images["image"]?.batchIndex)
+        XCTAssertNil(history.entries.first?.batchIndex)
+    }
+
     func testAnnotations_whenUndoAndRedoApplied_restoresAddRemoveAndUpdateStates() {
         let pen = DrawingPath(id: "path-1", tool: .pen, points: [EditorPoint(x: 0.1, y: 0.2)], color: "#ffffff", strokeWidth: 2)
         let box = BoundingBox(id: "box-1", x: 0.2, y: 0.3, width: 0.4, height: 0.5, color: "#00ff00", status: .pending)
@@ -201,6 +413,14 @@ final class EditorModelTests: XCTestCase {
             directory.deleteLastPathComponent()
         }
         throw EditorJSONError.missingField(fileName)
+    }
+
+    private func lineageImage(id: String, parentId: String? = nil, batchId: String? = nil, batchIndex: Int? = nil, timestamp: Double, annotations: CanvasAnnotations = .empty, status: ImageGenerationStatus = .ready) -> CanvasImage {
+        CanvasImage(id: id, url: "fixture://\(id).png", assetId: status == .ready ? "asset-\(id)" : nil, size: EditorSize(width: 100, height: 100), position: EditorPoint(x: 0, y: 0), parentId: parentId, generationIndex: Int(timestamp), generationBatchId: batchId, batchIndex: batchIndex, prompt: id, provider: .mock, mode: parentId == nil ? .generate : .edit, createdAt: timestamp, annotations: annotations, hasMagicLayerFields: false, status: status, userErrorMessage: nil)
+    }
+
+    private func lineageHistory(id: String, assetId: String, parentId: String?, batchId: String?, batchIndex: Int?, timestamp: Double) -> HistoryEntry {
+        HistoryEntry(id: id, mode: parentId == nil ? .generate : .edit, provider: .mock, prompt: id, assetId: assetId, assetPath: "assets/\(id).png", parentId: parentId, generationBatchId: batchId, batchIndex: batchIndex, createdAt: "1970-01-01T00:00:00.000Z", timestamp: timestamp)
     }
 
 }

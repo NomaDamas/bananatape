@@ -208,6 +208,58 @@ final class LocalProjectStorageTests: XCTestCase {
         XCTAssertEqual(restarted.canvasJSON, updatedCanvas)
     }
 
+    func testLineagePersistence_whenDocumentsAreSavedAndReloaded_preservesFocusCascadeDeletionAndBatchMetadata() throws {
+        let rootURL = try makeTemporaryRoot()
+        let storage = LocalProjectStorage(rootURL: rootURL)
+        let project = MobileProjectRecord(id: "mobile-smoke-project", name: "Mobile Smoke Project", manifestJSON: manifestJSON, historyJSON: emptyHistoryJSON, canvasJSON: nil)
+        _ = try storage.create(project).get()
+        let doomedRoot = lineageImage(id: "doomed-root", timestamp: 1)
+        let doomedChild = lineageImage(id: "doomed-child", parentId: doomedRoot.id, timestamp: 2)
+        let doomedGrandchild = lineageImage(id: "doomed-grandchild", parentId: doomedChild.id, timestamp: 3)
+        let annotations = CanvasAnnotations(
+            paths: [DrawingPath(id: "focused-path", tool: .pen, points: [EditorPoint(x: 0.1, y: 0.2), EditorPoint(x: 0.8, y: 0.9)], color: "#ffffff", strokeWidth: 2)],
+            boxes: [BoundingBox(id: "focused-box", x: 0.2, y: 0.3, width: 0.4, height: 0.5, color: "#0d99ff", status: .pending)],
+            memos: [TextMemo(id: "focused-memo", x: 0.6, y: 0.7, text: "Keep this annotation", color: "#ffe066")]
+        )
+        let survivorA = lineageImage(id: "survivor-a", batchId: "survivor-batch", batchIndex: 0, timestamp: 4)
+        let survivorB = lineageImage(id: "survivor-b", batchId: "survivor-batch", batchIndex: 1, timestamp: 5, annotations: annotations)
+        let history = [
+            lineageHistory(for: doomedRoot),
+            lineageHistory(for: doomedChild),
+            lineageHistory(for: doomedGrandchild),
+            lineageHistory(for: survivorA),
+            lineageHistory(for: survivorB)
+        ]
+        let initial = ProviderPipelineState(images: [doomedRoot, doomedChild, doomedGrandchild, survivorA, survivorB], history: history, focusedImageId: survivorB.id)
+        let afterDeletion = HistoryDeletionCoordinator.deleting(entryID: doomedRoot.id, from: initial)
+
+        let documents = try EditorProjectDocumentSerializer.serialize(
+            history: afterDeletion.history,
+            images: afterDeletion.images,
+            focusedImageID: afterDeletion.focusedImageId,
+            focusedAnnotations: afterDeletion.focusedImage?.annotations
+        )
+        _ = try storage.updateDocuments(projectID: project.id, manifestJSON: manifestJSON, historyJSON: documents.historyJSON, canvasJSON: documents.canvasJSON).get()
+        let reloaded = try LocalProjectStorage(rootURL: rootURL).read(id: project.id).get()
+        let reloadedHistory = try ProjectHistoryDocument.parse(reloaded.historyJSON)
+        let reloadedCanvas = try MobileCanvasDocument.parse(try XCTUnwrap(reloaded.canvasJSON))
+
+        XCTAssertEqual(reloadedHistory.entries.map(\.id), [survivorA.id, survivorB.id])
+        XCTAssertEqual(reloadedCanvas.imageOrder, [survivorA.id, survivorB.id])
+        XCTAssertEqual(reloadedCanvas.focusedImageIds, [survivorB.id])
+        XCTAssertEqual(reloadedHistory.entries.map(\.generationBatchId), ["survivor-batch", "survivor-batch"])
+        XCTAssertEqual(reloadedHistory.entries.map(\.batchIndex), [0, 1])
+        XCTAssertEqual(reloadedCanvas.images[survivorB.id]?.generationBatchId, "survivor-batch")
+        XCTAssertEqual(reloadedCanvas.images[survivorB.id]?.batchIndex, 1)
+        XCTAssertEqual(reloadedCanvas.images[survivorB.id]?.annotations, annotations)
+        XCTAssertFalse(reloaded.historyJSON.contains(doomedRoot.id))
+        XCTAssertFalse(reloaded.historyJSON.contains(doomedChild.id))
+        XCTAssertFalse(reloaded.historyJSON.contains(doomedGrandchild.id))
+        XCTAssertFalse(try XCTUnwrap(reloaded.canvasJSON).contains(doomedRoot.id))
+        XCTAssertFalse(try XCTUnwrap(reloaded.canvasJSON).contains(doomedChild.id))
+        XCTAssertFalse(try XCTUnwrap(reloaded.canvasJSON).contains(doomedGrandchild.id))
+    }
+
     func testPickerModel_whenCreateOpenAndDelete_updatesLocalProjectState() throws {
         let model = ProjectPickerModel(storage: LocalProjectStorage(rootURL: try makeTemporaryRoot()), now: { Date(timeIntervalSince1970: 0) })
 
@@ -240,6 +292,14 @@ final class LocalProjectStorageTests: XCTestCase {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         return rootURL
+    }
+
+    private func lineageImage(id: String, parentId: String? = nil, batchId: String? = nil, batchIndex: Int? = nil, timestamp: Double, annotations: CanvasAnnotations = .empty) -> CanvasImage {
+        CanvasImage(id: id, url: "fixture://\(id).png", assetId: "asset-\(id)", size: EditorSize(width: 100, height: 100), position: EditorPoint(x: 0, y: 0), parentId: parentId, generationIndex: Int(timestamp), generationBatchId: batchId, batchIndex: batchIndex, prompt: id, provider: .mock, mode: parentId == nil ? .generate : .edit, createdAt: timestamp, annotations: annotations, hasMagicLayerFields: false, status: .ready, userErrorMessage: nil)
+    }
+
+    private func lineageHistory(for image: CanvasImage) -> HistoryEntry {
+        HistoryEntry(id: image.id, mode: image.mode, provider: image.provider, prompt: image.prompt, assetId: image.assetId ?? "", assetPath: "assets/\(image.id).png", parentId: image.parentId, generationBatchId: image.generationBatchId, batchIndex: image.batchIndex, createdAt: "1970-01-01T00:00:00.000Z", timestamp: image.createdAt)
     }
 
     private func fixtureURL(_ fixture: String?, _ fileName: String) throws -> URL {

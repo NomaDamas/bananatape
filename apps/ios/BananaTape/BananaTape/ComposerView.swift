@@ -13,6 +13,7 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 18) {
             sheetHeader
             promptField
+            submissionModeSection
             missingKeyWarning
             providerSection
             outputSizeSection
@@ -25,7 +26,7 @@ struct ComposerView: View {
                     .foregroundStyle(TossStyle.secondaryText)
             }
 
-            Button(isSubmitting ? "Generating..." : "Generate") {
+            Button(isSubmitting ? "Submitting..." : state.primaryActionLabel) {
                 onSubmit()
             }
             .buttonStyle(TossPrimaryButtonStyle())
@@ -41,10 +42,22 @@ struct ComposerView: View {
 
     private var sheetHeader: some View {
         HStack {
-            Text("Generate")
+            Text(state.primaryActionLabel)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(TossStyle.primaryText)
             Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var submissionModeSection: some View {
+        if state.hasSelectedImage {
+            Picker("Submission mode", selection: $state.mode) {
+                Text("Edit focused").tag(EditorMode.edit)
+                Text("New generation").tag(EditorMode.generate)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("composerSubmissionMode")
         }
     }
 

@@ -70,7 +70,9 @@ struct NativeCanvasView: View {
     let state: NativeCanvasState
     var onAnnotationsChange: (CanvasAnnotations) -> Void = { _ in }
     var onViewportChange: (CanvasViewport) -> Void = { _ in }
+    var onMoveFocus: (LineageNavigationDirection) -> Void = { _ in }
     @State private var draftPoints: [EditorPoint] = []
+    @State private var gestureArbitration = CanvasGestureArbitrationState()
 
     var body: some View {
         ZStack {
@@ -79,10 +81,15 @@ struct NativeCanvasView: View {
                 .scaleEffect(state.viewport.zoom)
                 .offset(x: state.viewport.pan.x, y: state.viewport.pan.y)
                 .gesture(canvasDragGesture)
-                .simultaneousGesture(MagnifyGesture().onEnded { value in
-                    let zoom = min(max(state.viewport.zoom * value.magnification, 0.5), 4)
-                    onViewportChange(CanvasViewport(pan: state.viewport.pan, zoom: zoom))
-                })
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { _ in gestureArbitration.pinchChanged() }
+                        .onEnded { value in
+                            let zoom = min(max(state.viewport.zoom * value.magnification, 0.5), 4)
+                            onViewportChange(CanvasViewport(pan: state.viewport.pan, zoom: zoom))
+                            gestureArbitration.pinchEnded()
+                        }
+                )
         }
         .background(TossStyle.imageShell)
         .clipShape(RoundedRectangle(cornerRadius: 28))
@@ -94,6 +101,7 @@ struct NativeCanvasView: View {
     private var canvasDragGesture: some Gesture {
         DragGesture(minimumDistance: state.tool == .memo ? 0 : 2)
             .onChanged { value in
+                gestureArbitration.dragChanged()
                 guard state.tool == .pen || state.tool == .arrow else { return }
                 let point = normalized(value.location)
                 if draftPoints.isEmpty {
@@ -104,23 +112,30 @@ struct NativeCanvasView: View {
             .onEnded { value in
                 let start = normalized(value.startLocation)
                 let end = normalized(value.location)
-                switch state.tool {
-                case .pan:
+                switch gestureArbitration.dragEnded(translation: value.translation, tool: state.tool) {
+                case .lineage(let direction):
+                    onMoveFocus(direction)
+                case .viewportPan:
                     onViewportChange(CanvasViewport(
                         pan: EditorPoint(x: state.viewport.pan.x + Double(value.translation.width), y: state.viewport.pan.y + Double(value.translation.height)),
                         zoom: state.viewport.zoom
                     ))
-                case .pen, .arrow:
-                    let points = draftPoints.count > 1 ? draftPoints : [start, end]
-                    let path = DrawingPath(id: UUID().uuidString, tool: state.tool == .arrow ? .arrow : .pen, points: points, color: state.tool == .arrow ? "#0d99ff" : "#ffffff", strokeWidth: state.tool == .arrow ? 3 : 2)
-                    onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths + [path], boxes: state.annotations.boxes, memos: state.annotations.memos))
-                case .box:
-                    let box = BoundingBox(id: UUID().uuidString, x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y), color: "#0d99ff", status: .pending)
-                    onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes + [box], memos: state.annotations.memos))
-                case .memo:
-                    let memo = TextMemo(id: UUID().uuidString, x: end.x, y: end.y, text: "Memo", color: "#ffe066")
-                    onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes, memos: state.annotations.memos + [memo]))
-                case .select:
+                case .annotation:
+                    switch state.tool {
+                    case .pen, .arrow:
+                        let points = draftPoints.count > 1 ? draftPoints : [start, end]
+                        let path = DrawingPath(id: UUID().uuidString, tool: state.tool == .arrow ? .arrow : .pen, points: points, color: state.tool == .arrow ? "#0d99ff" : "#ffffff", strokeWidth: state.tool == .arrow ? 3 : 2)
+                        onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths + [path], boxes: state.annotations.boxes, memos: state.annotations.memos))
+                    case .box:
+                        let box = BoundingBox(id: UUID().uuidString, x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y), color: "#0d99ff", status: .pending)
+                        onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes + [box], memos: state.annotations.memos))
+                    case .memo:
+                        let memo = TextMemo(id: UUID().uuidString, x: end.x, y: end.y, text: "Memo", color: "#ffe066")
+                        onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes, memos: state.annotations.memos + [memo]))
+                    case .pan, .select:
+                        break
+                    }
+                case .ignored:
                     break
                 }
                 draftPoints = []
@@ -155,6 +170,8 @@ struct NativeCanvasView: View {
         }
         .frame(width: min(state.image.size.width, 286), height: min(state.image.size.height, 286))
         .shadow(color: .black.opacity(0.45), radius: 30, y: 20)
+        .accessibilityIdentifier("focusedImage-\(state.image.id)")
+        .accessibilityLabel("Focused image \(state.image.id)")
     }
 
     private func canvasStatus(_ text: String) -> some View {
@@ -220,7 +237,7 @@ private struct CanvasGrid: View {
 struct HistoryBrowserView: View {
     @Binding var state: NativeHistoryBrowserState
     var onExport: (HistoryEntry) -> Void = { _ in }
-    var onDelete: () -> Void = {}
+    var onDelete: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -286,8 +303,7 @@ struct HistoryBrowserView: View {
                     onExport(row.entry)
                 }
                 iconButton("trash", label: "Delete history item", accessibilityIdentifier: "deleteHistoryEntry-\(row.id)") {
-                    state = state.deleting(entryId: row.id)
-                    onDelete()
+                    onDelete(row.id)
                 }
                 .foregroundStyle(TossStyle.destructive)
             }
@@ -392,6 +408,8 @@ extension CanvasImage {
         position: EditorPoint(x: 0, y: 0),
         parentId: nil,
         generationIndex: 0,
+        generationBatchId: nil,
+        batchIndex: nil,
         prompt: "",
         provider: .mock,
         mode: .generate,
@@ -410,6 +428,8 @@ extension CanvasImage {
         position: EditorPoint(x: 0, y: 0),
         parentId: nil,
         generationIndex: 0,
+        generationBatchId: nil,
+        batchIndex: nil,
         prompt: "Fixture banana image",
         provider: .openAI,
         mode: .generate,

@@ -86,6 +86,8 @@ struct CanvasImage: Equatable {
     let position: EditorPoint
     let parentId: String?
     let generationIndex: Int
+    let generationBatchId: String?
+    let batchIndex: Int?
     let prompt: String
     let provider: EditorProvider
     let mode: EditorMode
@@ -94,6 +96,26 @@ struct CanvasImage: Equatable {
     let hasMagicLayerFields: Bool
     let status: ImageGenerationStatus
     let userErrorMessage: String?
+
+    init(id: String, url: String, assetId: String?, size: EditorSize, position: EditorPoint, parentId: String?, generationIndex: Int, generationBatchId: String? = nil, batchIndex: Int? = nil, prompt: String, provider: EditorProvider, mode: EditorMode, createdAt: Double, annotations: CanvasAnnotations, hasMagicLayerFields: Bool, status: ImageGenerationStatus, userErrorMessage: String?) {
+        self.id = id
+        self.url = url
+        self.assetId = assetId
+        self.size = size
+        self.position = position
+        self.parentId = parentId
+        self.generationIndex = generationIndex
+        self.generationBatchId = generationBatchId
+        self.batchIndex = batchIndex
+        self.prompt = prompt
+        self.provider = provider
+        self.mode = mode
+        self.createdAt = createdAt
+        self.annotations = annotations
+        self.hasMagicLayerFields = hasMagicLayerFields
+        self.status = status
+        self.userErrorMessage = userErrorMessage
+    }
 
     var canEditMagicLayers: Bool { false }
     static let magicLayerEditingMessage = "Magic Layer editing is desktop-only"

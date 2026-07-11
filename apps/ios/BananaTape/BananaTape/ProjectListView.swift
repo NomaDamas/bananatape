@@ -109,6 +109,8 @@ struct ProjectListView: View {
                     onExport: { Task { await exportImage(displayedImage, projectID: projectID) } },
                     onAnnotationsChange: { annotations in
                         annotationHistory.apply(annotations)
+                        pipelineState = pipelineState.replacingFocusedAnnotations(annotations)
+                        composerState.mode = .edit
                         persistProjectContext(projectID: projectID)
                     },
                     onViewportChange: { canvasViewport = $0 },
@@ -116,12 +118,19 @@ struct ProjectListView: View {
                     canRedo: annotationHistory.canRedo,
                     onUndo: {
                         annotationHistory.undo()
+                        pipelineState = pipelineState.replacingFocusedAnnotations(annotationHistory.current)
+                        composerState.mode = .edit
                         persistProjectContext(projectID: projectID)
                     },
                     onRedo: {
                         annotationHistory.redo()
+                        pipelineState = pipelineState.replacingFocusedAnnotations(annotationHistory.current)
+                        composerState.mode = .edit
                         persistProjectContext(projectID: projectID)
-                    }
+                    },
+                    lineageAvailability: pipelineState.lineageAvailability,
+                    onMoveFocus: { moveFocus($0, projectID: projectID) },
+                    onDeleteHistory: { deleteHistoryEntry($0, projectID: projectID) }
                 )
                 .navigationBarBackButtonHidden(true)
                 .toolbar(.hidden, for: .navigationBar)
@@ -148,14 +157,7 @@ struct ProjectListView: View {
                                 onExport: { entry in
                                     Task { await exportHistoryEntry(entry, projectID: projectID) }
                                 },
-                                onDelete: {
-                                    pipelineState = ProviderPipelineState(
-                                        images: pipelineState.images.filter { image in historyState.entries.contains { $0.id == image.id } },
-                                        history: historyState.entries,
-                                        focusedImageId: historyState.selectedEntryId
-                                    )
-                                    persistProjectContext(projectID: projectID)
-                                }
+                                onDelete: { deleteHistoryEntry($0, projectID: projectID) }
                             )
                         }
                     case .references:
@@ -224,10 +226,14 @@ struct ProjectListView: View {
             guard let item else { return }
             Task { await importProjectImage(item) }
         }
+        .onChange(of: historyState.selectedEntryId) { _, entryId in
+            guard let projectID = selectedProjectID, entryId != pipelineState.focusedHistoryEntryId else { return }
+            focusImage(entryId, projectID: projectID)
+        }
     }
 
     private var displayedImage: CanvasImage {
-        pipelineState.images.last ?? .emptyCanvasImage
+        pipelineState.focusedImage ?? .emptyCanvasImage
     }
 
     private var displayProjects: [ProjectListDisplayItem] {
@@ -269,6 +275,46 @@ struct ProjectListView: View {
         activeEditorSheet = .actions
     }
 
+    private func moveFocus(_ direction: LineageNavigationDirection, projectID: String) {
+        let nextState = pipelineState.replacingFocusedAnnotations(annotationHistory.current).movingFocus(direction)
+        guard nextState.focusedImageId != pipelineState.focusedImageId else { return }
+        pipelineState = nextState
+        bindFocusedImage(projectID: projectID)
+    }
+
+    private func focusImage(_ imageID: String?, projectID: String) {
+        guard let historyEntry = historyState.entries.first(where: { $0.id == imageID }),
+              let image = pipelineState.images.first(where: { $0.id == historyEntry.id || $0.assetId == historyEntry.assetId })
+        else { return }
+        pipelineState = pipelineState.replacingFocusedAnnotations(annotationHistory.current).focusing(imageId: image.id)
+        bindFocusedImage(projectID: projectID)
+    }
+
+    private func deleteHistoryEntry(_ entryID: String, projectID: String) {
+        let currentState = pipelineState.replacingFocusedAnnotations(annotationHistory.current)
+        pipelineState = HistoryDeletionCoordinator.deleting(entryID: entryID, from: currentState)
+        historyState = pipelineState.historyBrowserState
+        bindFocusedImage(projectID: projectID)
+    }
+
+    private func bindFocusedImage(projectID: String) {
+        guard let image = pipelineState.focusedImage else {
+            historyState = pipelineState.historyBrowserState
+            annotationHistory = AnnotationHistoryStack()
+            composerState.hasSelectedImage = false
+            composerState.mode = .generate
+            persistProjectContext(projectID: projectID)
+            return
+        }
+        if let historyEntryId = pipelineState.focusedHistoryEntryId {
+            historyState = historyState.selecting(entryId: historyEntryId)
+        }
+        annotationHistory = AnnotationHistoryStack(current: image.annotations)
+        composerState.hasSelectedImage = true
+        composerState.mode = .edit
+        persistProjectContext(projectID: projectID)
+    }
+
     private func createProject() {
         let name = projectName.isEmpty ? "Untitled Project" : projectName
         model.createProject(name: name)
@@ -293,6 +339,8 @@ struct ProjectListView: View {
                     position: EditorPoint(x: 0, y: 0),
                     parentId: entry.parentId,
                     generationIndex: history.firstIndex(of: entry) ?? 0,
+                    generationBatchId: entry.generationBatchId,
+                    batchIndex: entry.batchIndex,
                     prompt: entry.prompt,
                     provider: entry.provider,
                     mode: entry.mode,
@@ -314,8 +362,9 @@ struct ProjectListView: View {
             mode: .generate
         )
         pipelineState = ProviderPipelineState(images: images, history: history, focusedImageId: focusedImageID ?? images.last?.id)
-        historyState = NativeHistoryBrowserState(entries: history, selectedEntryId: focusedImageID)
-        annotationHistory = AnnotationHistoryStack(current: images.last?.annotations ?? .empty)
+        historyState = pipelineState.historyBrowserState
+        annotationHistory = AnnotationHistoryStack(current: pipelineState.focusedImage?.annotations ?? .empty)
+        composerState.mode = pipelineState.focusedImage == nil ? .generate : .edit
         canvasViewport = .neutral
         statusMessage = nil
     }
@@ -327,7 +376,7 @@ struct ProjectListView: View {
         } else {
             imageURL = storage.fileURL(projectID: projectID, relativePath: image.url).absoluteString
         }
-        return CanvasImage(id: image.id, url: imageURL, assetId: image.assetId, size: image.size, position: image.position, parentId: image.parentId, generationIndex: image.generationIndex, prompt: image.prompt, provider: image.provider, mode: image.mode, createdAt: image.createdAt, annotations: image.annotations, hasMagicLayerFields: image.hasMagicLayerFields, status: image.status, userErrorMessage: image.userErrorMessage)
+        return CanvasImage(id: image.id, url: imageURL, assetId: image.assetId, size: image.size, position: image.position, parentId: image.parentId, generationIndex: image.generationIndex, generationBatchId: image.generationBatchId, batchIndex: image.batchIndex, prompt: image.prompt, provider: image.provider, mode: image.mode, createdAt: image.createdAt, annotations: image.annotations, hasMagicLayerFields: image.hasMagicLayerFields, status: image.status, userErrorMessage: image.userErrorMessage)
     }
 
     private func manifestSettings(_ json: String) -> (systemPrompt: String, references: [ComposerReferenceSummary]) {
@@ -482,65 +531,16 @@ struct ProjectListView: View {
             "referenceImages": composerState.references.map { ["id": $0.id, "label": $0.label, "assetPath": $0.assetPath] }
         ]
         guard let nextManifest = jsonString(manifest),
-              let nextHistory = historyJSONString(historyState.entries),
-              let nextCanvas = canvasJSONString(pipelineState.images, focusedImageID: pipelineState.focusedImageId)
+              let documents = try? EditorProjectDocumentSerializer.serialize(
+                  history: historyState.entries,
+                  images: pipelineState.images,
+                  focusedImageID: pipelineState.focusedImageId,
+                  focusedAnnotations: annotationHistory.current
+              )
         else { return }
-        if case .failure(let error) = storage.updateDocuments(projectID: projectID, manifestJSON: nextManifest, historyJSON: nextHistory, canvasJSON: nextCanvas) {
+        if case .failure(let error) = storage.updateDocuments(projectID: projectID, manifestJSON: nextManifest, historyJSON: documents.historyJSON, canvasJSON: documents.canvasJSON) {
             statusMessage = error.userMessage
         }
-    }
-
-    private func historyJSONString(_ entries: [HistoryEntry]) -> String? {
-        jsonString([
-            "schemaVersion": 1,
-            "revision": entries.count,
-            "entries": entries.map { entry in
-                [
-                    "id": entry.id,
-                    "type": entry.mode.rawValue,
-                    "provider": entry.provider.rawValue,
-                    "prompt": entry.prompt,
-                    "assetId": entry.assetId,
-                    "assetPath": entry.assetPath,
-                    "parentId": entry.parentId ?? NSNull(),
-                    "createdAt": entry.createdAt,
-                    "timestamp": entry.timestamp
-                ] as [String: Any]
-            }
-        ])
-    }
-
-    private func canvasJSONString(_ images: [CanvasImage], focusedImageID: String?) -> String? {
-        let readyImages = images.filter { $0.status == .ready && $0.assetId != nil }
-        let records = Dictionary(uniqueKeysWithValues: readyImages.map { image in
-            let annotations = image.id == readyImages.last?.id ? annotationHistory.current : image.annotations
-            let assetPath = historyState.entries.first(where: { $0.assetId == image.assetId })?.assetPath ?? image.url
-            return (image.id, [
-                "id": image.id,
-                "url": assetPath,
-                "assetId": image.assetId ?? NSNull(),
-                "size": ["width": image.size.width, "height": image.size.height],
-                "position": ["x": image.position.x, "y": image.position.y],
-                "parentId": image.parentId ?? NSNull(),
-                "generationIndex": image.generationIndex,
-                "prompt": image.prompt,
-                "provider": image.provider.rawValue,
-                "type": image.mode.rawValue,
-                "createdAt": image.createdAt,
-                "paths": annotations.paths.map { ["id": $0.id, "tool": $0.tool.rawValue, "points": $0.points.map { ["x": $0.x, "y": $0.y] }, "color": $0.color, "strokeWidth": $0.strokeWidth] },
-                "boxes": annotations.boxes.map { ["id": $0.id, "x": $0.x, "y": $0.y, "width": $0.width, "height": $0.height, "color": $0.color, "status": $0.status.rawValue] },
-                "memos": annotations.memos.map { ["id": $0.id, "x": $0.x, "y": $0.y, "text": $0.text, "color": $0.color] }
-            ] as [String: Any])
-        })
-        return jsonString([
-            "schemaVersion": 1,
-            "settings": [:],
-            "canvas": [
-                "images": records,
-                "imageOrder": readyImages.map(\.id),
-                "focusedImageIds": focusedImageID.map { [$0] } ?? []
-            ]
-        ])
     }
 
     private func jsonString(_ object: Any) -> String? {
@@ -555,10 +555,8 @@ struct ProjectListView: View {
         guard let projectID = selectedProjectID else { return }
         let provider: EditorProvider = composerState.selectedProvider == .openAI ? .openAI : .mock
         let requestId = "generate-\(Int(Date().timeIntervalSince1970 * 1000))"
-        let isEdit = annotationHistory.current != .empty && !pipelineState.readyImages.isEmpty
-        let pending = isEdit
-            ? pipelineState.startingEdit(prompt: composerState.trimmedPrompt, annotations: annotationHistory.current, requestId: requestId, network: .online, provider: provider)
-            : pipelineState.startingGenerate(prompt: composerState.trimmedPrompt, requestId: requestId, network: .online, provider: provider)
+        let isEdit = composerState.mode == .edit
+        let pending = pipelineState.startingSubmission(mode: composerState.mode, prompt: composerState.trimmedPrompt, annotations: annotationHistory.current, requestId: requestId, network: .online, provider: provider)
         pipelineState = pending
         statusMessage = "Submitting image request..."
         var inputImageURL: URL?
@@ -615,8 +613,8 @@ struct ProjectListView: View {
         pipelineState = pending.applying(persisted)
         historyState = pipelineState.historyBrowserState
         composerState.hasSelectedImage = true
-        composerState.mode = .generate
-        annotationHistory = AnnotationHistoryStack()
+        composerState.mode = .edit
+        annotationHistory = AnnotationHistoryStack(current: pipelineState.focusedImage?.annotations ?? .empty)
         persistProjectContext(projectID: projectID)
     }
 
@@ -822,6 +820,9 @@ private struct EditorScreen: View {
     let canRedo: Bool
     let onUndo: () -> Void
     let onRedo: () -> Void
+    let lineageAvailability: LineageNavigationAvailability
+    let onMoveFocus: (LineageNavigationDirection) -> Void
+    let onDeleteHistory: (String) -> Void
 
     var body: some View {
         ZStack {
@@ -830,12 +831,14 @@ private struct EditorScreen: View {
             VStack(spacing: 0) {
                 topBar
                 ZStack(alignment: .bottom) {
-                    NativeCanvasView(state: canvasState, onAnnotationsChange: onAnnotationsChange, onViewportChange: onViewportChange)
+                    NativeCanvasView(state: canvasState, onAnnotationsChange: onAnnotationsChange, onViewportChange: onViewportChange, onMoveFocus: onMoveFocus)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(maxWidth: isRegularWidth ? 600 : .infinity)
                         .padding(.horizontal, isRegularWidth ? 88 : 22)
                         .padding(.top, isRegularWidth ? 36 : 28)
                         .padding(.bottom, 138)
+
+                    LineageNavigationControls(availability: lineageAvailability, onMoveFocus: onMoveFocus)
 
                     HStack {
                         toolRail
@@ -847,7 +850,7 @@ private struct EditorScreen: View {
                     if isRegularWidth {
                         HStack {
                             Spacer()
-                            HistoryBrowserView(state: $historyState, onExport: { _ in onExport() })
+                            HistoryBrowserView(state: $historyState, onExport: { _ in onExport() }, onDelete: onDeleteHistory)
                                 .frame(width: 300)
                                 .frame(maxHeight: 430)
                                 .clipShape(RoundedRectangle(cornerRadius: 24))
@@ -939,7 +942,7 @@ private struct EditorScreen: View {
                 .background(canvasTool == tool ? TossStyle.blue : TossStyle.panelAlt, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(tool.rawValue.capitalized)
+        .accessibilityLabel(tool == .select ? "Navigate lineage" : tool.rawValue.capitalized)
     }
 
     private func toolbarUtilityButton(_ systemName: String, label: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
@@ -1002,7 +1005,7 @@ private struct EditorScreen: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Expand composer")
 
-            Button(isSubmitting ? "Generating" : "Generate") { onGenerate() }
+            Button(isSubmitting ? "Submitting" : composerState.primaryActionLabel) { onGenerate() }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TossStyle.primaryButtonText)
                 .frame(width: 97, height: 40)
@@ -1390,6 +1393,8 @@ extension NativeHistoryBrowserState {
             assetId: "asset-root",
             assetPath: "assets/root-banana.png",
             parentId: nil,
+            generationBatchId: nil,
+            batchIndex: nil,
             createdAt: "1970-01-01T00:00:00.000Z",
             timestamp: 1
         ),
@@ -1401,6 +1406,8 @@ extension NativeHistoryBrowserState {
             assetId: "asset-child",
             assetPath: "assets/edit-child.png",
             parentId: "hist-root-generation",
+            generationBatchId: nil,
+            batchIndex: nil,
             createdAt: "1970-01-01T00:01:00.000Z",
             timestamp: 2
         )

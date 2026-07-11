@@ -32,6 +32,11 @@
 		0A00000100000000000000A8 /* InboundShareAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AA /* InboundShareAdapters.swift */; };
 		0A00000100000000000000A9 /* InboundShareAdaptersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AB /* InboundShareAdaptersTests.swift */; };
 		0A00000100000000000000AC /* OpenAIURLSessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000100000000000000AD /* OpenAIURLSessionTransport.swift */; };
+		0B0000010000000000000001 /* LineageNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0000010000000000000011 /* LineageNavigation.swift */; };
+		0B0000010000000000000002 /* ProviderPipelineState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0000010000000000000012 /* ProviderPipelineState.swift */; };
+		0B0000010000000000000003 /* EditorProjectDocumentSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0000010000000000000013 /* EditorProjectDocumentSerializer.swift */; };
+		0B0000010000000000000004 /* CanvasGestureResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0000010000000000000014 /* CanvasGestureResolution.swift */; };
+		0B0000010000000000000005 /* LineageNavigationControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0000010000000000000015 /* LineageNavigationControls.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +85,11 @@
 		0A00000100000000000000AA /* InboundShareAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboundShareAdapters.swift; sourceTree = "<group>"; };
 		0A00000100000000000000AD /* OpenAIURLSessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIURLSessionTransport.swift; sourceTree = "<group>"; };
 		0A00000100000000000000AB /* InboundShareAdaptersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboundShareAdaptersTests.swift; sourceTree = "<group>"; };
+		0B0000010000000000000011 /* LineageNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineageNavigation.swift; sourceTree = "<group>"; };
+		0B0000010000000000000012 /* ProviderPipelineState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderPipelineState.swift; sourceTree = "<group>"; };
+		0B0000010000000000000013 /* EditorProjectDocumentSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorProjectDocumentSerializer.swift; sourceTree = "<group>"; };
+		0B0000010000000000000014 /* CanvasGestureResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasGestureResolution.swift; sourceTree = "<group>"; };
+		0B0000010000000000000015 /* LineageNavigationControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineageNavigationControls.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,10 +121,15 @@
 				0A000001000000000000001C /* ProjectPickerModel.swift */,
 				0A0000010000000000000094 /* EditorModels.swift */,
 				0A0000010000000000000095 /* EditorJSON.swift */,
+				0B0000010000000000000013 /* EditorProjectDocumentSerializer.swift */,
 				0A0000010000000000000096 /* EditorHistory.swift */,
+				0B0000010000000000000011 /* LineageNavigation.swift */,
+				0B0000010000000000000012 /* ProviderPipelineState.swift */,
 				0A000001000000000000009B /* ComposerModels.swift */,
 				0A000001000000000000009C /* ComposerView.swift */,
+				0B0000010000000000000014 /* CanvasGestureResolution.swift */,
 				0A00000100000000000000A2 /* NativeCanvasView.swift */,
+				0B0000010000000000000015 /* LineageNavigationControls.swift */,
 				0A00000100000000000000A5 /* NativeImageComposer.swift */,
 				0A00000100000000000000A7 /* GalleryShareAdapters.swift */,
 				0A00000100000000000000AA /* InboundShareAdapters.swift */,
@@ -237,7 +252,7 @@
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		0A0000010000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000001 /* BananaTapeApp.swift in Sources */, 0A0000010000000000000002 /* ProjectListView.swift in Sources */, 0A0000010000000000000009 /* AdapterContracts.swift in Sources */, 0A000001000000000000000A /* FakeAdapters.swift in Sources */, 0A000001000000000000000C /* ProjectJSONValidation.swift in Sources */, 0A000001000000000000000D /* LocalProjectStorage.swift in Sources */, 0A000001000000000000000E /* ProjectPickerModel.swift in Sources */, 0A0000010000000000000090 /* EditorModels.swift in Sources */, 0A0000010000000000000091 /* EditorJSON.swift in Sources */, 0A0000010000000000000092 /* EditorHistory.swift in Sources */, 0A0000010000000000000098 /* ComposerModels.swift in Sources */, 0A0000010000000000000099 /* ComposerView.swift in Sources */, 0A00000100000000000000A0 /* NativeCanvasView.swift in Sources */, 0A00000100000000000000A4 /* NativeImageComposer.swift in Sources */, 0A00000100000000000000A6 /* GalleryShareAdapters.swift in Sources */, 0A00000100000000000000A8 /* InboundShareAdapters.swift in Sources */, 0A00000100000000000000AC /* OpenAIURLSessionTransport.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		0A0000010000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000001 /* BananaTapeApp.swift in Sources */, 0A0000010000000000000002 /* ProjectListView.swift in Sources */, 0A0000010000000000000009 /* AdapterContracts.swift in Sources */, 0A000001000000000000000A /* FakeAdapters.swift in Sources */, 0A000001000000000000000C /* ProjectJSONValidation.swift in Sources */, 0A000001000000000000000D /* LocalProjectStorage.swift in Sources */, 0A000001000000000000000E /* ProjectPickerModel.swift in Sources */, 0A0000010000000000000090 /* EditorModels.swift in Sources */, 0A0000010000000000000091 /* EditorJSON.swift in Sources */, 0B0000010000000000000003 /* EditorProjectDocumentSerializer.swift in Sources */, 0A0000010000000000000092 /* EditorHistory.swift in Sources */, 0B0000010000000000000001 /* LineageNavigation.swift in Sources */, 0B0000010000000000000002 /* ProviderPipelineState.swift in Sources */, 0A0000010000000000000098 /* ComposerModels.swift in Sources */, 0A0000010000000000000099 /* ComposerView.swift in Sources */, 0B0000010000000000000004 /* CanvasGestureResolution.swift in Sources */, 0A00000100000000000000A0 /* NativeCanvasView.swift in Sources */, 0B0000010000000000000005 /* LineageNavigationControls.swift in Sources */, 0A00000100000000000000A4 /* NativeImageComposer.swift in Sources */, 0A00000100000000000000A6 /* GalleryShareAdapters.swift in Sources */, 0A00000100000000000000A8 /* InboundShareAdapters.swift in Sources */, 0A00000100000000000000AC /* OpenAIURLSessionTransport.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 		0A0000010000000000000071 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000003 /* BananaTapeTests.swift in Sources */, 0A000001000000000000000B /* AdapterContractsTests.swift in Sources */, 0A000001000000000000000F /* LocalProjectStorageTests.swift in Sources */, 0A0000010000000000000093 /* EditorModelTests.swift in Sources */, 0A000001000000000000009A /* ComposerModelTests.swift in Sources */, 0A00000100000000000000A1 /* NativeCanvasTests.swift in Sources */, 0A00000100000000000000A9 /* InboundShareAdaptersTests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 		0A0000010000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 0A0000010000000000000004 /* BananaTapeUITests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
