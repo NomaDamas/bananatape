@@ -142,11 +142,11 @@ final class AdapterContractsTests: XCTestCase {
         XCTAssertEqual(result.failure, .permissionDenied(.imageExport))
     }
 
-    func testGalleryExport_whenAuthorized_recordsBananaTapeAlbumAndImageMetadata() throws {
+    func testGalleryExport_whenAuthorized_recordsBananaTapeAlbumAndImageMetadata() async throws {
         let exporter = FakeGalleryImageExport(authorization: .authorized, albumName: "BananaTape")
         let image = exportableImage()
 
-        let receipt = try exporter.saveToGallery(image).get()
+        let receipt = try await exporter.saveToGallery(image).get()
 
         XCTAssertEqual(receipt.id, "history-1")
         XCTAssertEqual(receipt.albumName, "BananaTape")
@@ -159,19 +159,19 @@ final class AdapterContractsTests: XCTestCase {
         XCTAssertNil(receipt.guidance)
     }
 
-    func testGalleryExport_whenLimited_savesWithoutAlbumAndReturnsRecoverableGuidance() throws {
+    func testGalleryExport_whenLimited_savesWithoutAlbumAndReturnsRecoverableGuidance() async throws {
         let exporter = FakeGalleryImageExport(authorization: .limited, albumName: "BananaTape")
 
-        let receipt = try exporter.saveToGallery(exportableImage()).get()
+        let receipt = try await exporter.saveToGallery(exportableImage()).get()
 
         XCTAssertFalse(receipt.savedToAlbum)
         XCTAssertEqual(receipt.guidance, "Saved to Photos. Allow full Photos access to place exports in the BananaTape album.")
     }
 
-    func testGalleryExport_whenPermissionDenied_returnsRecoverableError() {
+    func testGalleryExport_whenPermissionDenied_returnsRecoverableError() async {
         let exporter = FakeGalleryImageExport(authorization: .denied, albumName: "BananaTape")
 
-        let result = exporter.saveToGallery(exportableImage())
+        let result = await exporter.saveToGallery(exportableImage())
 
         XCTAssertEqual(result.failure, .permissionDenied(.imageExport))
         XCTAssertTrue(FileManager.default.fileExists(atPath: exportableImage().fileURL.path()))
@@ -194,18 +194,54 @@ final class AdapterContractsTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: image.fileURL.path()))
     }
 
-    func testPhotoKitExport_whenOnlyExplicitlySaved_touchesPhotosWriterOnce() throws {
+    func testPhotoKitExport_whenOnlyExplicitlySaved_touchesPhotosWriterOnce() async throws {
         let writer = CountingPhotosWriter(authorization: .authorized)
         let exporter = PhotoKitGalleryImageExport(library: writer)
         let image = exportableImage()
 
         XCTAssertEqual(writer.saveCount, 0)
-        let receipt = try exporter.saveToGallery(image).get()
+        let receipt = try await exporter.saveToGallery(image).get()
 
         XCTAssertEqual(writer.saveCount, 1)
         XCTAssertEqual(writer.lastAlbumName, "BananaTape")
         XCTAssertTrue(receipt.savedToAlbum)
         XCTAssertTrue(FileManager.default.fileExists(atPath: image.fileURL.path()))
+    }
+
+    @MainActor
+    func testPhotoKitWriter_whenPhotoLibraryIsPending_keepsMainActorResponsiveAndCompletesAsync() async throws {
+        let saveStarted = expectation(description: "Photos save started")
+        let mainActorProgressed = expectation(description: "Main actor progressed while Photos save was pending")
+        let completionBox = PhotoChangesCompletionBox()
+        let writer = PhotoKitLibraryWriter { _, completion in
+            completionBox.completion = completion
+            saveStarted.fulfill()
+        }
+        let image = exportableImage()
+
+        let exportTask = Task { @MainActor in
+            await writer.save(image, albumName: "BananaTape")
+        }
+
+        await fulfillment(of: [saveStarted], timeout: 1)
+        Task { @MainActor in
+            mainActorProgressed.fulfill()
+        }
+        await fulfillment(of: [mainActorProgressed], timeout: 1)
+
+        completionBox.completion?(true, nil)
+        let savedToAlbum = try await exportTask.value.get()
+        XCTAssertFalse(savedToAlbum)
+    }
+
+    func testPhotoKitWriter_whenPhotoLibraryChangeFails_preservesPermissionError() async {
+        let writer = PhotoKitLibraryWriter { _, completion in
+            completion(false, NSError(domain: "PhotoKit", code: 1))
+        }
+
+        let result = await writer.save(exportableImage(), albumName: "BananaTape")
+
+        XCTAssertEqual(result.failure, .permissionDenied(.imageExport))
     }
 
     private func exportableImage() -> ExportableImage {
@@ -228,11 +264,15 @@ private final class CountingPhotosWriter: PhotosLibraryWriting {
         authorization
     }
 
-    func save(_ image: ExportableImage, albumName: String) -> Result<Bool, AdapterError> {
+    func save(_ image: ExportableImage, albumName: String) async -> Result<Bool, AdapterError> {
         saveCount += 1
         lastAlbumName = albumName
         return .success(true)
     }
+}
+
+private final class PhotoChangesCompletionBox {
+    var completion: ((Bool, Error?) -> Void)?
 }
 
 private extension Result where Failure == AdapterError {

@@ -506,7 +506,7 @@ struct ProjectListView: View {
         _ = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         let data = (try? Data(contentsOf: fileURL)) ?? Data()
         let exportable = ExportableImage(id: image.assetId ?? image.id, fileURL: fileURL, mimeType: fileURL.pathExtension.lowercased() == "jpg" ? .jpeg : .png, width: Int(image.size.width), height: Int(image.size.height), byteCount: data.count, createdAt: Date())
-        switch PhotoKitGalleryImageExport().saveToGallery(exportable) {
+        switch await PhotoKitGalleryImageExport().saveToGallery(exportable) {
         case .success(let receipt): statusMessage = receipt.guidance ?? "Saved to Photos."
         case .failure(let error): statusMessage = error.userMessage
         }

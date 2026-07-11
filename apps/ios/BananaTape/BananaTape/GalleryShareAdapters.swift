@@ -41,7 +41,7 @@ enum GalleryAuthorization: Equatable {
 }
 
 protocol GalleryImageExport {
-    func saveToGallery(_ image: ExportableImage) -> Result<GalleryExportReceipt, AdapterError>
+    func saveToGallery(_ image: ExportableImage) async -> Result<GalleryExportReceipt, AdapterError>
 }
 
 protocol OutboundImageShare {
@@ -50,8 +50,10 @@ protocol OutboundImageShare {
 
 protocol PhotosLibraryWriting {
     func currentAuthorization() -> GalleryAuthorization
-    func save(_ image: ExportableImage, albumName: String) -> Result<Bool, AdapterError>
+    func save(_ image: ExportableImage, albumName: String) async -> Result<Bool, AdapterError>
 }
+
+typealias PhotoLibraryChanges = (_ changes: @escaping () -> Void, _ completion: @escaping (Bool, Error?) -> Void) -> Void
 
 struct PhotoKitGalleryImageExport: GalleryImageExport {
     let albumName: String
@@ -62,12 +64,12 @@ struct PhotoKitGalleryImageExport: GalleryImageExport {
         self.library = library
     }
 
-    func saveToGallery(_ image: ExportableImage) -> Result<GalleryExportReceipt, AdapterError> {
+    func saveToGallery(_ image: ExportableImage) async -> Result<GalleryExportReceipt, AdapterError> {
         switch library.currentAuthorization() {
         case .authorized:
-            return library.save(image, albumName: albumName).map { receipt(for: image, savedToAlbum: $0, guidance: nil) }
+            return await library.save(image, albumName: albumName).map { receipt(for: image, savedToAlbum: $0, guidance: nil) }
         case .limited, .addOnly:
-            return library.save(image, albumName: albumName).map { _ in receipt(for: image, savedToAlbum: false, guidance: "Saved to Photos. Allow full Photos access to place exports in the BananaTape album.") }
+            return await library.save(image, albumName: albumName).map { _ in receipt(for: image, savedToAlbum: false, guidance: "Saved to Photos. Allow full Photos access to place exports in the BananaTape album.") }
         case .denied, .restricted, .unavailable:
             return .failure(.permissionDenied(.imageExport))
         }
@@ -79,6 +81,14 @@ struct PhotoKitGalleryImageExport: GalleryImageExport {
 }
 
 struct PhotoKitLibraryWriter: PhotosLibraryWriting {
+    private let performChanges: PhotoLibraryChanges
+
+    init(performChanges: @escaping PhotoLibraryChanges = { changes, completion in
+        PHPhotoLibrary.shared().performChanges(changes, completionHandler: completion)
+    }) {
+        self.performChanges = performChanges
+    }
+
     func currentAuthorization() -> GalleryAuthorization {
         let readWrite = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if PHPhotoLibrary.authorizationStatus(for: .addOnly) == .authorized {
@@ -100,19 +110,18 @@ struct PhotoKitLibraryWriter: PhotosLibraryWriting {
         }
     }
 
-    func save(_ image: ExportableImage, albumName: String) -> Result<Bool, AdapterError> {
-        do {
+    func save(_ image: ExportableImage, albumName: String) async -> Result<Bool, AdapterError> {
+        await withCheckedContinuation { continuation in
             var savedToAlbum = false
-            try PHPhotoLibrary.shared().performChangesAndWait {
+            performChanges({
                 let asset = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: image.fileURL)
                 if let album = albumRequest(named: albumName), let placeholder = asset?.placeholderForCreatedAsset {
                     album.addAssets([placeholder] as NSArray)
                     savedToAlbum = true
                 }
-            }
-            return .success(savedToAlbum)
-        } catch {
-            return .failure(.permissionDenied(.imageExport))
+            }, { success, _ in
+                continuation.resume(returning: success ? .success(savedToAlbum) : .failure(.permissionDenied(.imageExport)))
+            })
         }
     }
 
@@ -171,7 +180,7 @@ struct FakeGalleryImageExport: GalleryImageExport {
     let authorization: GalleryAuthorization
     let albumName: String
 
-    func saveToGallery(_ image: ExportableImage) -> Result<GalleryExportReceipt, AdapterError> {
+    func saveToGallery(_ image: ExportableImage) async -> Result<GalleryExportReceipt, AdapterError> {
         switch authorization {
         case .authorized:
             return .success(receipt(for: image, savedToAlbum: true, guidance: nil))
