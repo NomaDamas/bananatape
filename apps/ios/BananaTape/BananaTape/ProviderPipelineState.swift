@@ -6,6 +6,35 @@ enum HistoryDeletionCoordinator {
     }
 }
 
+enum ProviderPipelineCompletionCoordinator {
+    enum Resolution: Equatable {
+        case ignored
+        case applied(ProviderPipelineState)
+        case failed(ProviderPipelineState)
+    }
+
+    static func resolvingSuccess(
+        _ result: ProviderImageResult,
+        in state: inout ProviderPipelineState,
+        persistenceFailureMessage: String,
+        persist: () -> ProviderImageResult?
+    ) -> Resolution {
+        guard state.acceptsCompletion(requestID: result.requestId) else { return .ignored }
+        guard let persisted = persist() else {
+            state = state.failing(requestId: result.requestId, message: persistenceFailureMessage)
+            return .failed(state)
+        }
+        state = state.applying(persisted)
+        return .applied(state)
+    }
+
+    static func resolvingFailure(requestID: String, message: String, in state: inout ProviderPipelineState) -> Resolution {
+        guard state.acceptsCompletion(requestID: requestID) else { return .ignored }
+        state = state.failing(requestId: requestID, message: message)
+        return .failed(state)
+    }
+}
+
 struct ProviderPipelineState: Equatable {
     enum LifecyclePhase: Equatable {
         case foreground
@@ -94,10 +123,14 @@ struct ProviderPipelineState: Equatable {
     }
 
     func applying(_ result: ProviderImageResult) -> ProviderPipelineState {
-        guard activeRequestId == result.requestId, let pending = images.first(where: { $0.id == pendingImageId(for: result.requestId) && $0.status == .pending }) else { return self }
+        guard acceptsCompletion(requestID: result.requestId), let pending = images.first(where: { $0.id == pendingImageId(for: result.requestId) && $0.status == .pending }) else { return self }
         let ready = pending.ready(result)
         let entry = HistoryEntry(id: ready.id, mode: ready.mode, provider: ready.provider, prompt: ready.prompt, assetId: result.assetId, assetPath: result.assetPath, parentId: ready.mode == .edit ? activeParentHistoryId : nil, generationBatchId: ready.generationBatchId, batchIndex: ready.batchIndex, createdAt: result.createdAt, timestamp: result.timestamp)
         return ProviderPipelineState(images: images.map { $0.id == pending.id ? ready : $0 }, history: history + [entry], focusedImageId: ready.id, lifecyclePhase: lifecyclePhase)
+    }
+
+    func acceptsCompletion(requestID: String) -> Bool {
+        activeRequestId == requestID && images.contains { $0.id == pendingImageId(for: requestID) && $0.status == .pending }
     }
 
     func failing(requestId: String, message: String) -> ProviderPipelineState {

@@ -349,6 +349,48 @@ final class EditorModelTests: XCTestCase {
         XCTAssertEqual(staleApplied.history.count, 0)
     }
 
+    func testProviderCallback_whenCascadeDeletionPrecedesLateSuccess_usesLatestPipelineState() throws {
+        let fixture = pendingEditWithCascadeChildren()
+        let deleted = HistoryDeletionCoordinator.deleting(entryID: fixture.parentID, from: fixture.pendingState)
+        let result = try MockImageProvider().edit(fixture.request).successValue()
+        var persistenceCallCount = 0
+        var latestState = deleted
+
+        let resolution = ProviderPipelineCompletionCoordinator.resolvingSuccess(
+            result,
+            in: &latestState,
+            persistenceFailureMessage: "Persistence failed"
+        ) {
+            persistenceCallCount += 1
+            return result
+        }
+
+        XCTAssertEqual(resolution, .ignored)
+        XCTAssertEqual(persistenceCallCount, 0)
+        XCTAssertEqual(latestState, deleted)
+        XCTAssertEqual(latestState.images.map(\.id), ["a-1", "a-3"])
+        XCTAssertEqual(latestState.history.map(\.id), ["a-1", "a-3"])
+        XCTAssertNil(latestState.activeRequestId)
+    }
+
+    func testProviderCallback_whenCascadeDeletionPrecedesLateFailure_usesLatestPipelineState() throws {
+        let fixture = pendingEditWithCascadeChildren()
+        let deleted = HistoryDeletionCoordinator.deleting(entryID: fixture.parentID, from: fixture.pendingState)
+        var latestState = deleted
+
+        let resolution = ProviderPipelineCompletionCoordinator.resolvingFailure(
+            requestID: fixture.request.id,
+            message: MockImageProvider.errorMessage,
+            in: &latestState
+        )
+
+        XCTAssertEqual(resolution, .ignored)
+        XCTAssertEqual(latestState, deleted)
+        XCTAssertEqual(latestState.images.map(\.id), ["a-1", "a-3"])
+        XCTAssertEqual(latestState.history.map(\.id), ["a-1", "a-3"])
+        XCTAssertNil(latestState.userErrorMessage)
+    }
+
     func testMockProvider_whenProviderErrorFails_removesPendingAndKeepsHistoryClean() throws {
         let provider = MockImageProvider(scenario: .providerError)
         let pending = ProviderPipelineState().startingGenerate(prompt: "banana sticker on transparent background", requestId: "generate-1", network: .online)
@@ -421,6 +463,21 @@ final class EditorModelTests: XCTestCase {
 
     private func lineageHistory(id: String, assetId: String, parentId: String?, batchId: String?, batchIndex: Int?, timestamp: Double) -> HistoryEntry {
         HistoryEntry(id: id, mode: parentId == nil ? .generate : .edit, provider: .mock, prompt: id, assetId: assetId, assetPath: "assets/\(id).png", parentId: parentId, generationBatchId: batchId, batchIndex: batchIndex, createdAt: "1970-01-01T00:00:00.000Z", timestamp: timestamp)
+    }
+
+    private func pendingEditWithCascadeChildren() -> (pendingState: ProviderPipelineState, request: ProviderRequest, parentID: String) {
+        let a1 = lineageImage(id: "a-1", batchId: "batch-a", batchIndex: 0, timestamp: 1)
+        let a2 = lineageImage(id: "a-2", batchId: "batch-a", batchIndex: 1, timestamp: 2)
+        let a3 = lineageImage(id: "a-3", batchId: "batch-a", batchIndex: 2, timestamp: 3)
+        let b1 = lineageImage(id: "b-1", parentId: a2.id, batchId: "batch-b", batchIndex: 0, timestamp: 4)
+        let b2 = lineageImage(id: "b-2", parentId: a2.id, batchId: "batch-b", batchIndex: 1, timestamp: 5)
+        let images = [a1, a2, a3, b1, b2]
+        let history = images.map {
+            lineageHistory(id: $0.id, assetId: $0.assetId!, parentId: $0.parentId, batchId: $0.generationBatchId, batchIndex: $0.batchIndex, timestamp: $0.createdAt)
+        }
+        let pending = ProviderPipelineState(images: images, history: history, focusedImageId: a2.id)
+            .startingEdit(prompt: "late edit", annotations: .empty, requestId: "late-edit", network: .online)
+        return (pending, pending.requestForActivePrompt()!, a2.id)
     }
 
 }

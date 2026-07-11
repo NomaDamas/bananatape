@@ -292,8 +292,13 @@ struct ProjectListView: View {
 
     private func deleteHistoryEntry(_ entryID: String, projectID: String) {
         let currentState = pipelineState.replacingFocusedAnnotations(annotationHistory.current)
+        let hadActiveRequest = currentState.activeRequestId != nil
         pipelineState = HistoryDeletionCoordinator.deleting(entryID: entryID, from: currentState)
         historyState = pipelineState.historyBrowserState
+        isSubmitting = pipelineState.activeRequestId != nil
+        if hadActiveRequest, pipelineState.activeRequestId == nil, statusMessage == "Submitting image request..." {
+            statusMessage = nil
+        }
         bindFocusedImage(projectID: projectID)
     }
 
@@ -567,8 +572,7 @@ struct ProjectListView: View {
                 inputImageURL = sourceURL
                 maskImageURL = composition.mask.fileURL
             } else {
-                pipelineState = pending.failing(requestId: requestId, message: NativeImageCompositionError.renderFailed.userMessage)
-                statusMessage = NativeImageCompositionError.renderFailed.userMessage
+                applyProviderFailure(requestID: requestId, message: NativeImageCompositionError.renderFailed.userMessage)
                 return
             }
         }
@@ -580,42 +584,66 @@ struct ProjectListView: View {
             let result = isEdit ? MockImageProvider().edit(request) : MockImageProvider().generate(request)
             switch result {
             case .success(let image):
-                applyGeneratedResult(image, pending: pending, projectID: projectID)
-                historyState = pipelineState.historyBrowserState
-                statusMessage = "Mock image generated."
+                if applyGeneratedResult(image, projectID: projectID) {
+                    statusMessage = "Mock image generated."
+                }
             case .failure(let message):
-                pipelineState = pending.failing(requestId: requestId, message: message)
-                statusMessage = message
+                applyProviderFailure(requestID: requestId, message: message)
             }
-            isSubmitting = false
+            isSubmitting = pipelineState.activeRequestId != nil
         case .openAI:
             let imageProvider = OpenAIImageProvider(keyStore: keyStore, transport: OpenAIURLSessionTransport())
             let result = isEdit ? imageProvider.edit(request) : imageProvider.generate(request)
             switch result {
             case .success(let image):
-                applyGeneratedResult(image, pending: pending, projectID: projectID)
-                historyState = pipelineState.historyBrowserState
-                statusMessage = "Image generated."
+                if applyGeneratedResult(image, projectID: projectID) {
+                    statusMessage = "Image generated."
+                }
             case .failure(let message):
-                pipelineState = pending.failing(requestId: requestId, message: message)
-                statusMessage = message
+                applyProviderFailure(requestID: requestId, message: message)
             }
-            isSubmitting = false
+            isSubmitting = pipelineState.activeRequestId != nil
         }
     }
 
-    private func applyGeneratedResult(_ result: ProviderImageResult, pending: ProviderPipelineState, projectID: String) {
-        guard let persisted = persistImageResult(result, projectID: projectID) else {
-            pipelineState = pending.failing(requestId: result.requestId, message: AdapterError.corruptProject(projectID).userMessage)
-            statusMessage = AdapterError.corruptProject(projectID).userMessage
-            return
+    @discardableResult
+    private func applyGeneratedResult(_ result: ProviderImageResult, projectID: String) -> Bool {
+        let persistenceFailureMessage = AdapterError.corruptProject(projectID).userMessage
+        switch ProviderPipelineCompletionCoordinator.resolvingSuccess(
+            result,
+            in: &pipelineState,
+            persistenceFailureMessage: persistenceFailureMessage,
+            persist: { persistImageResult(result, projectID: projectID) }
+        ) {
+        case .ignored:
+            return false
+        case .failed(let nextState):
+            pipelineState = nextState
+            historyState = pipelineState.historyBrowserState
+            statusMessage = persistenceFailureMessage
+            isSubmitting = pipelineState.activeRequestId != nil
+            return false
+        case .applied(let nextState):
+            pipelineState = nextState
         }
-        pipelineState = pending.applying(persisted)
         historyState = pipelineState.historyBrowserState
         composerState.hasSelectedImage = true
         composerState.mode = .edit
         annotationHistory = AnnotationHistoryStack(current: pipelineState.focusedImage?.annotations ?? .empty)
         persistProjectContext(projectID: projectID)
+        return true
+    }
+
+    private func applyProviderFailure(requestID: String, message: String) {
+        guard case .failed(let nextState) = ProviderPipelineCompletionCoordinator.resolvingFailure(
+            requestID: requestID,
+            message: message,
+            in: &pipelineState
+        ) else { return }
+        pipelineState = nextState
+        historyState = pipelineState.historyBrowserState
+        statusMessage = message
+        isSubmitting = pipelineState.activeRequestId != nil
     }
 
     private func persistImageResult(_ result: ProviderImageResult, projectID: String) -> ProviderImageResult? {

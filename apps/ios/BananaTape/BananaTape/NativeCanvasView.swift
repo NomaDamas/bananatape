@@ -94,6 +94,7 @@ struct NativeCanvasView: View {
         .background(TossStyle.imageShell)
         .clipShape(RoundedRectangle(cornerRadius: 28))
         .overlay(RoundedRectangle(cornerRadius: 28).stroke(TossStyle.border))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("nativeCanvasSurface")
         .accessibilityLabel("Native canvas")
     }
