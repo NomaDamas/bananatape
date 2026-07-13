@@ -744,7 +744,7 @@ private fun LineageNavigator(
     Box(modifier = modifier) {
         LineageButton(LineageDirection.LEFT, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Lineage left: previous batch sibling", lineage.canMoveLeft, Modifier.align(Alignment.CenterStart), onNavigate)
         LineageButton(LineageDirection.RIGHT, Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Lineage right: next batch sibling", lineage.canMoveRight, Modifier.align(Alignment.CenterEnd), onNavigate)
-        LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 72.dp), onNavigate)
+        LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 128.dp), onNavigate)
         LineageButton(LineageDirection.DOWN, Icons.Outlined.KeyboardArrowDown, "Lineage down: first direct child batch", lineage.canMoveDown, Modifier.align(Alignment.BottomCenter).padding(bottom = 168.dp), onNavigate)
     }
 }
