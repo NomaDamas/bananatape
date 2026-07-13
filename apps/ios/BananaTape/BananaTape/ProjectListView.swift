@@ -866,7 +866,11 @@ private struct NewProjectSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            TextField("Project name", text: $projectName)
+            TextField(
+                "Project name",
+                text: $projectName,
+                prompt: Text("Project name").foregroundStyle(TossStyle.secondaryText)
+            )
                 .textFieldStyle(.plain)
                 .font(.body.weight(.medium))
                 .foregroundStyle(TossStyle.primaryText)
