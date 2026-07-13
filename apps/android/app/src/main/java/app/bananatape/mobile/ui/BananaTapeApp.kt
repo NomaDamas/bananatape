@@ -2,6 +2,7 @@ package app.bananatape.mobile.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +11,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -87,6 +89,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,11 +101,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -162,6 +167,9 @@ import app.bananatape.mobile.storage.defaultAndroidProjectStorageRoot
 import java.nio.file.Files
 import java.time.Instant
 import java.nio.file.Path
+import java.nio.file.Paths
+
+internal const val AnnotationControlMinSizeDp = 48
 
 data class ProjectListState(
     val title: String = "BananaTape",
@@ -701,7 +709,7 @@ private fun EditorScreen(
                     .fillMaxSize(),
             )
             EditorTopBar(project = project, providerStatus = providerStatus(composerState, apiKey), onBack = onBack, onExport = onExport, onMenu = onOpenMenu)
-            FloatingToolBar(activeTool = canvasState.tool, canUndo = annotationHistory.canUndo, canRedo = annotationHistory.canRedo, onToolSelected = onToolSelected, onUndo = onUndo, onRedo = onRedo, modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp))
+            FloatingToolBar(activeTool = canvasState.tool, canUndo = annotationHistory.canUndo, canRedo = annotationHistory.canRedo, onToolSelected = onToolSelected, onUndo = onUndo, onRedo = onRedo, modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp))
             VersionPill(historyState = historyState, onClick = onOpenHistory, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp))
             ComposerView(
                 state = composerState,
@@ -744,7 +752,7 @@ private fun LineageNavigator(
     Box(modifier = modifier) {
         LineageButton(LineageDirection.LEFT, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Lineage left: previous batch sibling", lineage.canMoveLeft, Modifier.align(Alignment.CenterStart), onNavigate)
         LineageButton(LineageDirection.RIGHT, Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Lineage right: next batch sibling", lineage.canMoveRight, Modifier.align(Alignment.CenterEnd), onNavigate)
-        LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 128.dp), onNavigate)
+        LineageButton(LineageDirection.UP, Icons.Outlined.KeyboardArrowUp, "Lineage up: parent image", lineage.canMoveUp, Modifier.align(Alignment.TopCenter).padding(top = 160.dp), onNavigate)
         LineageButton(LineageDirection.DOWN, Icons.Outlined.KeyboardArrowDown, "Lineage down: first direct child batch", lineage.canMoveDown, Modifier.align(Alignment.BottomCenter).padding(bottom = 168.dp), onNavigate)
     }
 }
@@ -760,7 +768,7 @@ private fun LineageButton(
 ) {
     Box(
         modifier = modifier
-            .size(36.dp)
+            .size(AnnotationControlMinSizeDp.dp)
             .clip(CircleShape)
             .background(PrototypeColor.Panel.copy(alpha = if (enabled) 0.94f else 0.45f))
             .border(BorderStroke(1.dp, PrototypeColor.Border), CircleShape)
@@ -805,19 +813,25 @@ private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: B
         ToolItem("Arrow", CanvasTool.ARROW, Icons.AutoMirrored.Outlined.CallMade),
         ToolItem("Memo", CanvasTool.MEMO, Icons.AutoMirrored.Outlined.StickyNote2),
     )
-    Row(
+    Column(
         modifier = modifier
             .testTag("editor.tool-rail")
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(PrototypeColor.Panel)
-            .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(999.dp))
+            .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(24.dp))
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        tools.forEach { item -> ToolButton(item = item, active = item.tool == activeTool, onClick = { item.tool?.let(onToolSelected) }) }
-        ToolButton(item = ToolItem("Undo", null, Icons.AutoMirrored.Outlined.Undo), active = false, enabled = canUndo, onClick = onUndo)
-        ToolButton(item = ToolItem("Redo", null, Icons.AutoMirrored.Outlined.Redo), active = false, enabled = canRedo, onClick = onRedo)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            tools.forEach { item ->
+                ToolButton(item = item, active = item.tool == activeTool, onClick = { item.tool?.let(onToolSelected) })
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ToolButton(item = ToolItem("Undo", null, Icons.AutoMirrored.Outlined.Undo), active = false, enabled = canUndo, onClick = onUndo)
+            ToolButton(item = ToolItem("Redo", null, Icons.AutoMirrored.Outlined.Redo), active = false, enabled = canRedo, onClick = onRedo)
+        }
     }
 }
 
@@ -825,7 +839,7 @@ private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: B
 private fun ToolButton(item: ToolItem, active: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(AnnotationControlMinSizeDp.dp)
             .clip(CircleShape)
             .background(if (active) PrototypeColor.Accent else PrototypeColor.PanelAlt)
             .clickable(enabled = enabled, onClick = onClick)
@@ -1000,6 +1014,7 @@ private fun EditorSheetHost(
             )
             EditorSheet.References -> ReferenceImagesSheet(
                 references = composerState.references,
+                projectPath = projectPath,
                 onReferencesChange = onReferencesChange,
                 onAddReference = onAddReference,
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1107,6 +1122,7 @@ private fun SettingsField(label: String, value: String, onValueChange: (String) 
 @Composable
 private fun ReferenceImagesSheet(
     references: List<ComposerReferenceSummary>,
+    projectPath: String,
     onReferencesChange: (List<ComposerReferenceSummary>) -> Unit,
     onAddReference: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1135,6 +1151,7 @@ private fun ReferenceImagesSheet(
             gridItems(references, key = { it.id }) { reference ->
                 ReferenceImageTile(
                     reference = reference,
+                    projectPath = projectPath,
                     onRemove = {
                         errorMessage = null
                         onReferencesChange(references.filterNot { it.id == reference.id })
@@ -1166,7 +1183,14 @@ private fun AddReferenceTile(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ReferenceImageTile(reference: ComposerReferenceSummary, onRemove: () -> Unit) {
+private fun ReferenceImageTile(reference: ComposerReferenceSummary, projectPath: String, onRemove: () -> Unit) {
+    val assetPath = remember(projectPath, reference.assetPath) {
+        resolveReferenceAssetPath(projectPath, reference.assetPath)
+    }
+    val bitmap = remember(assetPath) { assetPath?.let { BitmapFactory.decodeFile(it.toString()) } }
+    DisposableEffect(bitmap) {
+        onDispose { bitmap?.recycle() }
+    }
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -1174,7 +1198,22 @@ private fun ReferenceImageTile(reference: ComposerReferenceSummary, onRemove: ()
             .background(PrototypeColor.PanelAlt)
             .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(14.dp)),
     ) {
-        PrototypeThumbnail(reference.id, modifier = Modifier.fillMaxSize().padding(10.dp))
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Reference image ${reference.label}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(10.dp)),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp)
+                    .background(PrototypeColor.ImageShell, RoundedCornerShape(10.dp))
+                    .semantics { contentDescription = "Reference image unavailable ${reference.label}" },
+            )
+        }
         Text(
             text = reference.label,
             color = PrototypeColor.TextPrimary,
@@ -1419,6 +1458,14 @@ internal fun prepareProviderRequest(
     val rolledBack = if (pending.activeRequestId == requestId) pending.failing(requestId, message) else pending
     return ProviderRequestPreparation.Failure(rolledBack, message)
 }
+
+internal fun resolveReferenceAssetPath(projectPath: String, assetPath: String): Path? = runCatching {
+    if (assetPath.isBlank()) return@runCatching null
+    val projectRoot = Paths.get(projectPath).toAbsolutePath().normalize()
+    val relativePath = Paths.get(assetPath)
+    if (relativePath.isAbsolute) return@runCatching null
+    projectRoot.resolve(relativePath).normalize().takeIf { it.startsWith(projectRoot) }
+}.getOrNull()
 
 internal fun importReferenceImage(
     context: Context,

@@ -80,9 +80,24 @@ internal class EditorOverlayTestFixture(
     }
 
     fun captureScreenshot(name: String) {
+        composeRule.waitForIdle()
+        val transitionFrame = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        transitionFrame.recycle()
         val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         artifactFile(name).outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
         screenshot.recycle()
+    }
+
+    fun sampleScreenshotPixel(description: String): Int {
+        val bounds = boundsForDescription(description)
+        val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        return try {
+            val x = ((bounds.left + bounds.right) / 2f).toInt().coerceIn(0, screenshot.width - 1)
+            val y = (bounds.top + bounds.height * 0.32f).toInt().coerceIn(0, screenshot.height - 1)
+            screenshot.getPixel(x, y)
+        } finally {
+            screenshot.recycle()
+        }
     }
 
     private fun seedProject(

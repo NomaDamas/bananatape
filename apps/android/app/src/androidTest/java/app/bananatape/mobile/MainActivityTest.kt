@@ -38,6 +38,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.json.JSONObject
+import kotlin.math.abs
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
@@ -118,6 +119,7 @@ class MainActivityTest {
         waitForExternalPicker()
         assertTrue(dispatchPickerResult(selectedUri))
         returnFromExternalPicker()
+        waitForAppWindow()
 
         composeRule.onNodeWithText("1 references").assertIsDisplayed()
 
@@ -132,7 +134,43 @@ class MainActivityTest {
         val assetPath = persistedReference.getString("assetPath")
         assertEquals(assetPath.substringAfterLast('/'), label)
         assertTrue(assetPath.startsWith("references/"))
-        assertTrue(storage.filePath("photo-picker-reference", assetPath).toFile().exists())
+        val persistedAsset = storage.filePath("photo-picker-reference", assetPath).toFile()
+        assertTrue(persistedAsset.exists())
+
+        val referenceDescription = "Reference image $label"
+        composeRule.onNodeWithContentDescription(referenceDescription).assertIsDisplayed()
+        val attachedBounds = fixture.boundsForDescription(referenceDescription)
+        fixture.captureScreenshot("reference-sheet-attached.png")
+        val attachedPixel = fixture.sampleScreenshotPixel(referenceDescription)
+        fixture.writeArtifact("reference-attached-observation.txt", "bounds=$attachedBounds\npixel=${pixelDescription(attachedPixel)}\n")
+        assertMatchesPickerFixtureColor("attached", attachedPixel)
+
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Open Photo Picker Reference").performClick()
+        composeRule.onNodeWithContentDescription("Project menu").performClick()
+        composeRule.onNodeWithContentDescription("Reference images").performClick()
+        composeRule.onNodeWithContentDescription(referenceDescription).assertIsDisplayed()
+        waitForAppWindow()
+        val reopenedBounds = fixture.boundsForDescription(referenceDescription)
+        fixture.captureScreenshot("reference-sheet-reopened.png")
+        val reopenedPixel = fixture.sampleScreenshotPixel(referenceDescription)
+        assertMatchesPickerFixtureColor("reopened", reopenedPixel)
+        fixture.writeArtifact(
+            "reference-asset-state.txt",
+            buildString {
+                appendLine("projectId=photo-picker-reference")
+                appendLine("projectRoot=${storage.filePath("photo-picker-reference", "").toAbsolutePath().normalize()}")
+                appendLine("assetPath=$assetPath")
+                appendLine("resolvedPath=${persistedAsset.toPath().toAbsolutePath().normalize()}")
+                appendLine("exists=${persistedAsset.exists()}")
+                appendLine("byteCount=${persistedAsset.length()}")
+                appendLine("attachedBounds=$attachedBounds")
+                appendLine("attachedPixel=${pixelDescription(attachedPixel)}")
+                appendLine("reopenedBounds=$reopenedBounds")
+                appendLine("reopenedPixel=${pixelDescription(reopenedPixel)}")
+            },
+        )
     }
 
     @Test
@@ -142,8 +180,22 @@ class MainActivityTest {
 
         val canvas = fixture.boundsForDescription("Native annotation canvas")
         val toolbar = fixture.boundsForTag("editor.tool-rail")
+        val density = composeRule.activity.resources.displayMetrics.density
+        val minTargetPx = 48f * density
+        val rootWidth = composeRule.activity.resources.displayMetrics.widthPixels.toFloat()
+        val rootHeight = composeRule.activity.resources.displayMetrics.heightPixels.toFloat()
         assertTrue("Annotation toolbar must be wider than tall: $toolbar", toolbar.width > toolbar.height)
         assertTrue("Annotation toolbar must sit above canvas: $toolbar vs $canvas", toolbar.bottom <= canvas.top)
+        val toolControls = (listOf("Pan", "Select", "Pen", "Box", "Arrow", "Memo") + listOf("Undo", "Redo"))
+            .associateWith { label -> fixture.boundsForDescription(label) }
+        toolControls.forEach { (label, bounds) ->
+            assertTrue("$label width must be at least 48dp: $bounds", bounds.width >= minTargetPx)
+            assertTrue("$label height must be at least 48dp: $bounds", bounds.height >= minTargetPx)
+            assertTrue("$label must be fully inside the root: $bounds", bounds.left >= 0f && bounds.top >= 0f && bounds.right <= rootWidth && bounds.bottom <= rootHeight)
+        }
+        toolControls.values.toList().forEachIndexed { index, first ->
+            toolControls.values.toList().drop(index + 1).forEach { second -> fixture.assertDisjoint("tool targets", first, second) }
+        }
         listOf("Pan", "Select", "Pen", "Box", "Arrow", "Memo").forEach { label ->
             composeRule.onNodeWithContentDescription(label).assertHasClickAction().assertIsDisplayed()
         }
@@ -226,6 +278,14 @@ class MainActivityTest {
             "up" to fixture.boundsForDescription("Lineage up: parent image"),
             "down" to fixture.boundsForDescription("Lineage down: first direct child batch"),
         )
+        val minTargetPx = 48f * density
+        val rootWidth = composeRule.activity.resources.displayMetrics.widthPixels.toFloat()
+        val rootHeight = composeRule.activity.resources.displayMetrics.heightPixels.toFloat()
+        lineage.forEach { (direction, bounds) ->
+            assertTrue("lineage $direction width must be at least 48dp: $bounds", bounds.width >= minTargetPx)
+            assertTrue("lineage $direction height must be at least 48dp: $bounds", bounds.height >= minTargetPx)
+            assertTrue("lineage $direction must be fully inside the root: $bounds", bounds.left >= 0f && bounds.top >= 0f && bounds.right <= rootWidth && bounds.bottom <= rootHeight)
+        }
         val editorBounds = buildString {
             appendLine("device=${android.os.Build.MODEL} sdk=${android.os.Build.VERSION.SDK_INT} density=$density viewportDp=${widthDp}x$heightDp")
             appendLine("canvas=$canvas")
@@ -359,9 +419,19 @@ class MainActivityTest {
 
     private fun returnFromExternalPicker() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
+        if (instrumentation.uiAutomation.rootInActiveWindow?.packageName != composeRule.activity.packageName) {
+            assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
+        }
         instrumentation.waitForIdleSync()
         composeRule.waitUntil(timeoutMillis = 5_000) {
+            instrumentation.uiAutomation.rootInActiveWindow?.packageName == composeRule.activity.packageName
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun waitForAppWindow() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
             instrumentation.uiAutomation.rootInActiveWindow?.packageName == composeRule.activity.packageName
         }
         composeRule.waitForIdle()
@@ -382,5 +452,18 @@ class MainActivityTest {
         composeRule.onNodeWithText("Create").performClick()
         composeRule.onNodeWithContentDescription("Open $name").assertIsDisplayed()
     }
+
+    private fun assertMatchesPickerFixtureColor(stage: String, pixel: Int) {
+        val expected = Color.rgb(36, 108, 166)
+        assertTrue(
+            "$stage reference thumbnail pixel must match the persisted picker fixture: ${pixelDescription(pixel)}",
+            abs(Color.red(pixel) - Color.red(expected)) <= 12 &&
+                abs(Color.green(pixel) - Color.green(expected)) <= 12 &&
+                abs(Color.blue(pixel) - Color.blue(expected)) <= 12,
+        )
+    }
+
+    private fun pixelDescription(pixel: Int): String =
+        "#%02x%02x%02x".format(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
 
 }
