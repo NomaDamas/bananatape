@@ -4,6 +4,7 @@ import androidx.compose.ui.input.pointer.PointerType
 import app.bananatape.mobile.editor.CanvasAnnotations
 import app.bananatape.mobile.editor.CanvasTool
 import app.bananatape.mobile.editor.EditorPoint
+import app.bananatape.mobile.editor.TextMemo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -111,6 +112,20 @@ class NativeCanvasSupportTest {
 
         val updated = updateMemoText(creation.annotations, creation.memo.id, "Move label higher")
         assertEquals("Move label higher", updated.memos.single().text)
+    }
+
+    @Test
+    fun memoEditing_whenAuthoritativeAnnotationsRemoveMemo_clearsStateAndRejectsFurtherInput() {
+        val memo = TextMemo("memo-undo", 0.5, 0.5, "Draft memo", "#ffe066")
+        val edited = annotationsAfterMemoTextChange(
+            annotations = CanvasAnnotations.Empty.copy(memos = listOf(memo)),
+            memo = memo,
+            text = "Edited memo",
+        )
+        val undone = requireNotNull(edited).copy(memos = emptyList())
+
+        assertNull(reconcileEditingMemo(memo.copy(text = "Edited memo"), undone))
+        assertNull(annotationsAfterMemoTextChange(undone, memo, "Resurrected memo"))
     }
 
     @Test

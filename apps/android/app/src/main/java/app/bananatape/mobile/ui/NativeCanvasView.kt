@@ -108,6 +108,10 @@ fun NativeCanvasView(
         }
     }
 
+    LaunchedEffect(state.annotations) {
+        editingMemo = reconcileEditingMemo(editingMemo, state.annotations)
+    }
+
     Box(
         modifier = modifier
             .shadow(28.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.55f))
@@ -304,14 +308,17 @@ fun NativeCanvasView(
                 BasicTextField(
                     value = memo.text,
                     onValueChange = { text ->
-                        val updatedMemo = memo.copy(text = text)
-                        editingMemo = updatedMemo
-                        val annotationsWithMemo = if (state.annotations.memos.any { it.id == memo.id }) {
-                            state.annotations
+                        val updatedAnnotations = annotationsAfterMemoTextChange(
+                            annotations = state.annotations,
+                            memo = memo,
+                            text = text,
+                        )
+                        if (updatedAnnotations == null) {
+                            editingMemo = null
                         } else {
-                            state.annotations.copy(memos = state.annotations.memos + memo)
+                            editingMemo = memo.copy(text = text)
+                            onAnnotationsChange(updatedAnnotations)
                         }
-                        onAnnotationsChange(updateMemoText(annotationsWithMemo, memo.id, text))
                     },
                     textStyle = TextStyle(color = Color(0xFF332900), fontSize = 14.sp),
                     modifier = memoModifier.focusRequester(memoFocusRequester),
@@ -335,6 +342,16 @@ fun NativeCanvasView(
         }
     }
 }
+
+internal fun reconcileEditingMemo(editingMemo: TextMemo?, annotations: CanvasAnnotations): TextMemo? =
+    editingMemo?.let { current -> annotations.memos.firstOrNull { it.id == current.id } }
+
+internal fun annotationsAfterMemoTextChange(
+    annotations: CanvasAnnotations,
+    memo: TextMemo,
+    text: String,
+): CanvasAnnotations? =
+    if (annotations.memos.any { it.id == memo.id }) updateMemoText(annotations, memo.id, text) else null
 
 private fun DrawScope.drawCanvasPath(
     points: List<EditorPoint>,
