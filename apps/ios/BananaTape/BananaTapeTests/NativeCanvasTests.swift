@@ -3,6 +3,68 @@ import UIKit
 @testable import BananaTape
 
 final class NativeCanvasTests: XCTestCase {
+    func testCanvasGeometry_whenContainerChanges_aspectFitsAndNormalizesAgainstRenderedSize() {
+        let landscape = NativeCanvasGeometry.aspectFit(
+            imageSize: EditorSize(width: 1600, height: 900),
+            in: CGSize(width: 320, height: 480)
+        )
+        let portrait = NativeCanvasGeometry.aspectFit(
+            imageSize: EditorSize(width: 900, height: 1600),
+            in: CGSize(width: 320, height: 480)
+        )
+
+        XCTAssertEqual(landscape.width, 320, accuracy: 0.001)
+        XCTAssertEqual(landscape.height, 180, accuracy: 0.001)
+        XCTAssertEqual(portrait.width, 270, accuracy: 0.001)
+        XCTAssertEqual(portrait.height, 480, accuracy: 0.001)
+        XCTAssertEqual(
+            NativeCanvasGeometry.normalized(CGPoint(x: 160, y: 90), in: landscape),
+            EditorPoint(x: 0.5, y: 0.5)
+        )
+    }
+
+    func testArrowGeometry_whenPathHasDirection_addsArrowheadAtEndpoint() {
+        let points = [EditorPoint(x: 0.1, y: 0.2), EditorPoint(x: 0.8, y: 0.7)]
+
+        let arrowhead = NativeCanvasGeometry.arrowhead(for: points, in: CGSize(width: 300, height: 200))
+
+        XCTAssertEqual(arrowhead.count, 3)
+        XCTAssertEqual(arrowhead[1].x, 240, accuracy: 0.001)
+        XCTAssertEqual(arrowhead[1].y, 140, accuracy: 0.001)
+        XCTAssertNotEqual(arrowhead[0], arrowhead[2])
+    }
+
+    func testDraft_whenTouchOrPencilMovesBeforeLift_isIncludedInVisiblePenPaths() {
+        let draft = [EditorPoint(x: 0.1, y: 0.1), EditorPoint(x: 0.2, y: 0.25)]
+
+        let visiblePaths = NativeCanvasGeometry.visiblePaths(
+            committed: [],
+            draftPoints: draft,
+            draftTool: .pen
+        )
+
+        XCTAssertEqual(visiblePaths.count, 1)
+        XCTAssertEqual(visiblePaths[0].tool, .pen)
+        XCTAssertEqual(visiblePaths[0].points, draft)
+    }
+
+    func testMemo_whenPlacedNearEdgeAndEdited_staysBoundedFocusedAndPersistsText() {
+        let memo = TextMemo(id: "memo-1", x: 0.95, y: 0.92, text: "Memo", color: "#ffe066")
+        let annotations = NativeCanvasState(image: .fixtureCanvasImage).adding(memo: memo).annotations
+
+        let origin = NativeCanvasGeometry.memoOrigin(for: memo, in: CGSize(width: 300, height: 200))
+        let compactSize = NativeCanvasGeometry.memoSize(in: CGSize(width: 80, height: 40))
+        let updated = NativeCanvasGeometry.updatingMemo(id: memo.id, text: "Keep this note", in: annotations)
+
+        XCTAssertEqual(origin.x, 180, accuracy: 0.001)
+        XCTAssertEqual(origin.y, 128, accuracy: 0.001)
+        XCTAssertEqual(compactSize, CGSize(width: 80, height: 40))
+        XCTAssertEqual(updated.memos.first?.text, "Keep this note")
+        XCTAssertEqual(updated.memos.first?.x, memo.x)
+        XCTAssertEqual(updated.memos.first?.y, memo.y)
+        XCTAssertEqual(NativeCanvasState(image: .fixtureCanvasImage, focusedAnnotationId: memo.id, annotations: updated).focusedAnnotationId, memo.id)
+    }
+
     func testAnnotations_whenAddingPathBoxMemo_countsAndFocusAreSerialized() {
         let pen = DrawingPath(id: "pen-1", tool: .pen, points: [EditorPoint(x: 0.1, y: 0.1), EditorPoint(x: 0.2, y: 0.3)], color: "#ffffff", strokeWidth: 2)
         let arrow = DrawingPath(id: "arrow-1", tool: .arrow, points: [EditorPoint(x: 0.2, y: 0.2), EditorPoint(x: 0.8, y: 0.7)], color: "#0d99ff", strokeWidth: 3)

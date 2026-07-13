@@ -21,6 +21,84 @@ struct CanvasViewport: Equatable {
     static let neutral = CanvasViewport(pan: EditorPoint(x: 0, y: 0), zoom: 1)
 }
 
+struct NativeCanvasGeometry {
+    private static let defaultMemoSize = CGSize(width: 120, height: 72)
+
+    static func aspectFit(imageSize: EditorSize, in availableSize: CGSize) -> CGSize {
+        let imageWidth = max(imageSize.width, 1)
+        let imageHeight = max(imageSize.height, 1)
+        let availableWidth = max(Double(availableSize.width), 1)
+        let availableHeight = max(Double(availableSize.height), 1)
+        let scale = min(availableWidth / imageWidth, availableHeight / imageHeight)
+        return CGSize(width: imageWidth * scale, height: imageHeight * scale)
+    }
+
+    static func normalized(_ location: CGPoint, in canvasSize: CGSize) -> EditorPoint {
+        let width = max(canvasSize.width, 1)
+        let height = max(canvasSize.height, 1)
+        return EditorPoint(
+            x: min(max(Double(location.x / width), 0), 1),
+            y: min(max(Double(location.y / height), 0), 1)
+        )
+    }
+
+    static func arrowhead(for points: [EditorPoint], in canvasSize: CGSize) -> [CGPoint] {
+        guard points.count >= 2 else { return [] }
+        let start = CGPoint(x: points[points.count - 2].x * canvasSize.width, y: points[points.count - 2].y * canvasSize.height)
+        let end = CGPoint(x: points[points.count - 1].x * canvasSize.width, y: points[points.count - 1].y * canvasSize.height)
+        let direction = atan2(end.y - start.y, end.x - start.x)
+        let length: CGFloat = 14
+        let spread: CGFloat = .pi / 6
+        let left = CGPoint(x: end.x + cos(direction + .pi - spread) * length, y: end.y + sin(direction + .pi - spread) * length)
+        let right = CGPoint(x: end.x + cos(direction + .pi + spread) * length, y: end.y + sin(direction + .pi + spread) * length)
+        return [left, end, right]
+    }
+
+    static func visiblePaths(committed: [DrawingPath], draftPoints: [EditorPoint], draftTool: CanvasTool) -> [DrawingPath] {
+        guard draftPoints.count >= 2, draftTool == .pen || draftTool == .arrow else { return committed }
+        let draft = DrawingPath(
+            id: "native-canvas-draft",
+            tool: draftTool == .arrow ? .arrow : .pen,
+            points: draftPoints,
+            color: draftTool == .arrow ? "#0d99ff" : "#ffffff",
+            strokeWidth: draftTool == .arrow ? 3 : 2
+        )
+        return committed + [draft]
+    }
+
+    static func memoOrigin(for memo: TextMemo, in canvasSize: CGSize) -> CGPoint {
+        let size = memoSize(in: canvasSize)
+        return CGPoint(
+            x: min(max(CGFloat(memo.x) * canvasSize.width, 0), max(canvasSize.width - size.width, 0)),
+            y: min(max(CGFloat(memo.y) * canvasSize.height, 0), max(canvasSize.height - size.height, 0))
+        )
+    }
+
+    static func memoSize(in canvasSize: CGSize) -> CGSize {
+        CGSize(
+            width: min(defaultMemoSize.width, max(canvasSize.width, 1)),
+            height: min(defaultMemoSize.height, max(canvasSize.height, 1))
+        )
+    }
+
+    static func boundedMemoPosition(at point: EditorPoint, in canvasSize: CGSize) -> EditorPoint {
+        let memo = TextMemo(id: "", x: point.x, y: point.y, text: "", color: "")
+        let origin = memoOrigin(for: memo, in: canvasSize)
+        return EditorPoint(
+            x: Double(origin.x / max(canvasSize.width, 1)),
+            y: Double(origin.y / max(canvasSize.height, 1))
+        )
+    }
+
+    static func updatingMemo(id: String, text: String, in annotations: CanvasAnnotations) -> CanvasAnnotations {
+        let memos = annotations.memos.map { memo in
+            guard memo.id == id else { return memo }
+            return TextMemo(id: memo.id, x: memo.x, y: memo.y, text: text, color: memo.color)
+        }
+        return CanvasAnnotations(paths: annotations.paths, boxes: annotations.boxes, memos: memos)
+    }
+}
+
 struct NativeCanvasState: Equatable {
     let image: CanvasImage
     let tool: CanvasTool
@@ -73,23 +151,29 @@ struct NativeCanvasView: View {
     var onMoveFocus: (LineageNavigationDirection) -> Void = { _ in }
     @State private var draftPoints: [EditorPoint] = []
     @State private var gestureArbitration = CanvasGestureArbitrationState()
+    @State private var focusedMemoID: String?
 
     var body: some View {
-        ZStack {
-            CanvasGrid()
-            imageShell
-                .scaleEffect(state.viewport.zoom)
-                .offset(x: state.viewport.pan.x, y: state.viewport.pan.y)
-                .gesture(canvasDragGesture)
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { _ in gestureArbitration.pinchChanged() }
-                        .onEnded { value in
-                            let zoom = min(max(state.viewport.zoom * value.magnification, 0.5), 4)
-                            onViewportChange(CanvasViewport(pan: state.viewport.pan, zoom: zoom))
-                            gestureArbitration.pinchEnded()
-                        }
-                )
+        GeometryReader { proxy in
+            let availableSize = CGSize(width: max(proxy.size.width - 24, 1), height: max(proxy.size.height - 24, 1))
+            let canvasSize = NativeCanvasGeometry.aspectFit(imageSize: state.image.size, in: availableSize)
+
+            ZStack {
+                CanvasGrid()
+                imageShell(canvasSize: canvasSize)
+                    .scaleEffect(state.viewport.zoom)
+                    .offset(x: state.viewport.pan.x, y: state.viewport.pan.y)
+                    .gesture(canvasDragGesture(canvasSize: canvasSize))
+                    .simultaneousGesture(
+                        MagnifyGesture()
+                            .onChanged { _ in gestureArbitration.pinchChanged() }
+                            .onEnded { value in
+                                let zoom = min(max(state.viewport.zoom * value.magnification, 0.5), 4)
+                                onViewportChange(CanvasViewport(pan: state.viewport.pan, zoom: zoom))
+                                gestureArbitration.pinchEnded()
+                            }
+                    )
+            }
         }
         .background(TossStyle.imageShell)
         .clipShape(RoundedRectangle(cornerRadius: 28))
@@ -99,20 +183,20 @@ struct NativeCanvasView: View {
         .accessibilityLabel("Native canvas")
     }
 
-    private var canvasDragGesture: some Gesture {
+    private func canvasDragGesture(canvasSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: state.tool == .memo ? 0 : 2)
             .onChanged { value in
                 gestureArbitration.dragChanged()
                 guard state.tool == .pen || state.tool == .arrow else { return }
-                let point = normalized(value.location)
+                let point = NativeCanvasGeometry.normalized(value.location, in: canvasSize)
                 if draftPoints.isEmpty {
-                    draftPoints = [normalized(value.startLocation)]
+                    draftPoints = [NativeCanvasGeometry.normalized(value.startLocation, in: canvasSize)]
                 }
                 draftPoints.append(point)
             }
             .onEnded { value in
-                let start = normalized(value.startLocation)
-                let end = normalized(value.location)
+                let start = NativeCanvasGeometry.normalized(value.startLocation, in: canvasSize)
+                let end = NativeCanvasGeometry.normalized(value.location, in: canvasSize)
                 switch gestureArbitration.dragEnded(translation: value.translation, tool: state.tool) {
                 case .lineage(let direction):
                     onMoveFocus(direction)
@@ -131,8 +215,11 @@ struct NativeCanvasView: View {
                         let box = BoundingBox(id: UUID().uuidString, x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y), color: "#0d99ff", status: .pending)
                         onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes + [box], memos: state.annotations.memos))
                     case .memo:
-                        let memo = TextMemo(id: UUID().uuidString, x: end.x, y: end.y, text: "Memo", color: "#ffe066")
+                        let id = UUID().uuidString
+                        let position = NativeCanvasGeometry.boundedMemoPosition(at: end, in: canvasSize)
+                        let memo = TextMemo(id: id, x: position.x, y: position.y, text: "Memo", color: "#ffe066")
                         onAnnotationsChange(CanvasAnnotations(paths: state.annotations.paths, boxes: state.annotations.boxes, memos: state.annotations.memos + [memo]))
+                        focusedMemoID = id
                     case .pan, .select:
                         break
                     }
@@ -143,13 +230,7 @@ struct NativeCanvasView: View {
             }
     }
 
-    private func normalized(_ location: CGPoint) -> EditorPoint {
-        let width = max(min(state.image.size.width, 286), 1)
-        let height = max(min(state.image.size.height, 286), 1)
-        return EditorPoint(x: min(max(Double(location.x) / width, 0), 1), y: min(max(Double(location.y) / height, 0), 1))
-    }
-
-    private var imageShell: some View {
+    private func imageShell(canvasSize: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 28)
                 .fill(TossStyle.imageShell)
@@ -163,13 +244,23 @@ struct NativeCanvasView: View {
             }
             .accessibilityIdentifier("nativeAnnotationCanvas")
 
+            ForEach(state.annotations.memos, id: \.id) { memo in
+                CanvasMemoEditor(
+                    memo: memo,
+                    annotations: state.annotations,
+                    canvasSize: canvasSize,
+                    shouldFocus: focusedMemoID == memo.id || state.focusedAnnotationId == memo.id,
+                    onAnnotationsChange: onAnnotationsChange
+                )
+            }
+
             if state.image.status == .pending {
                 canvasStatus("Generating image...")
             } else if state.image.url.hasPrefix("mock://") || state.image.url.hasPrefix("fixture://") {
                 canvasStatus("Ready for your prompt")
             }
         }
-        .frame(width: min(state.image.size.width, 286), height: min(state.image.size.height, 286))
+        .frame(width: canvasSize.width, height: canvasSize.height)
         .shadow(color: .black.opacity(0.45), radius: 30, y: 20)
         .accessibilityIdentifier("focusedImage-\(state.image.id)")
         .accessibilityLabel("Focused image \(state.image.id)")
@@ -188,28 +279,72 @@ struct NativeCanvasView: View {
         if let uiImage = state.image.url.dataImage {
             Image(uiImage: uiImage)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
         }
         #endif
     }
 
     private func drawAnnotations(context: GraphicsContext, size: CGSize) {
-        for path in state.annotations.paths {
+        for path in NativeCanvasGeometry.visiblePaths(committed: state.annotations.paths, draftPoints: draftPoints, draftTool: state.tool) {
             var swiftPath = Path()
             for (index, point) in path.points.enumerated() {
                 let cgPoint = CGPoint(x: point.x * size.width, y: point.y * size.height)
                 index == 0 ? swiftPath.move(to: cgPoint) : swiftPath.addLine(to: cgPoint)
             }
             context.stroke(swiftPath, with: .color(path.tool == .arrow ? TossStyle.blue : TossStyle.primaryText), lineWidth: path.strokeWidth)
+            if path.tool == .arrow {
+                let arrowhead = NativeCanvasGeometry.arrowhead(for: path.points, in: size)
+                guard let first = arrowhead.first else { continue }
+                var arrowheadPath = Path()
+                arrowheadPath.move(to: first)
+                for point in arrowhead.dropFirst() {
+                    arrowheadPath.addLine(to: point)
+                }
+                context.stroke(arrowheadPath, with: .color(TossStyle.blue), lineWidth: path.strokeWidth)
+            }
         }
         for box in state.annotations.boxes {
             let rect = CGRect(x: box.x * size.width, y: box.y * size.height, width: box.width * size.width, height: box.height * size.height)
             context.stroke(Path(rect), with: .color(TossStyle.blue), lineWidth: 2)
         }
-        for memo in state.annotations.memos {
-            let rect = CGRect(x: memo.x * size.width, y: memo.y * size.height, width: 88, height: 44)
-            context.fill(Path(roundedRect: rect, cornerRadius: 12), with: .color(Color(red: 1.0, green: 0.88, blue: 0.40)))
-        }
+    }
+}
+
+private struct CanvasMemoEditor: View {
+    let memo: TextMemo
+    let annotations: CanvasAnnotations
+    let canvasSize: CGSize
+    let shouldFocus: Bool
+    let onAnnotationsChange: (CanvasAnnotations) -> Void
+    @FocusState private var isEditing: Bool
+
+    var body: some View {
+        let origin = NativeCanvasGeometry.memoOrigin(for: memo, in: canvasSize)
+        let memoSize = NativeCanvasGeometry.memoSize(in: canvasSize)
+        let text = Binding<String>(
+            get: { annotations.memos.first(where: { $0.id == memo.id })?.text ?? memo.text },
+            set: { onAnnotationsChange(NativeCanvasGeometry.updatingMemo(id: memo.id, text: $0, in: annotations)) }
+        )
+
+        TextField("Memo", text: text, axis: .vertical)
+            .lineLimit(3)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.black.opacity(0.78))
+            .padding(10)
+            .frame(width: memoSize.width, height: memoSize.height, alignment: .topLeading)
+            .background(Color(red: 1.0, green: 0.88, blue: 0.40))
+            .overlay(memoBorder)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .position(x: origin.x + memoSize.width / 2, y: origin.y + memoSize.height / 2)
+            .focused($isEditing)
+            .onAppear { isEditing = shouldFocus }
+            .onChange(of: shouldFocus) { _, focused in isEditing = focused }
+            .accessibilityIdentifier("nativeMemo-\(memo.id)")
+    }
+
+    private var memoBorder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(isEditing || shouldFocus ? TossStyle.blue : Color.black.opacity(0.12), lineWidth: isEditing || shouldFocus ? 2 : 1)
     }
 }
 
