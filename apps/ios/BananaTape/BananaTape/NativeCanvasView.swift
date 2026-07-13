@@ -235,6 +235,9 @@ struct NativeCanvasView: View {
             RoundedRectangle(cornerRadius: 28)
                 .fill(TossStyle.imageShell)
                 .overlay(RoundedRectangle(cornerRadius: 28).stroke(TossStyle.blue.opacity(0.75), lineWidth: 2))
+                .accessibilityElement()
+                .accessibilityIdentifier("focusedImage-\(state.image.id)")
+                .accessibilityLabel("Focused image \(state.image.id)")
 
             decodedImage
                 .clipShape(RoundedRectangle(cornerRadius: 28))
@@ -262,8 +265,6 @@ struct NativeCanvasView: View {
         }
         .frame(width: canvasSize.width, height: canvasSize.height)
         .shadow(color: .black.opacity(0.45), radius: 30, y: 20)
-        .accessibilityIdentifier("focusedImage-\(state.image.id)")
-        .accessibilityLabel("Focused image \(state.image.id)")
     }
 
     private func canvasStatus(_ text: String) -> some View {

@@ -252,6 +252,61 @@ final class BananaTapeUITests: XCTestCase {
         XCTAssertFalse(toolbar.frame.intersects(lineageRight.frame))
     }
 
+    func testMobileCanvasSurface_supportsArrowPenMemoAndKeepsEditorActionsHittable() throws {
+        let app = makeApp(seedLineageProject: true)
+        app.launch()
+
+        let project = app.buttons["openProjectButton-ui-lineage-project"]
+        XCTAssertTrue(project.waitForExistence(timeout: 5))
+        project.tap()
+
+        let toolbar = element(identifier: "annotationToolbar", in: app)
+        let canvas = app.otherElements["nativeCanvasSurface"]
+        let focusedCanvas = app.otherElements["focusedImage-A-1"]
+        XCTAssertTrue(toolbar.waitForExistence(timeout: 5))
+        XCTAssertTrue(canvas.waitForExistence(timeout: 5))
+        XCTAssertTrue(focusedCanvas.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(toolbar.frame.maxY, canvas.frame.minY + 1)
+
+        app.buttons["Arrow"].tap()
+        focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: 0.30)).press(
+            forDuration: 0.1,
+            thenDragTo: focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.78, dy: 0.68))
+        )
+        XCTAssertTrue(canvas.exists)
+        XCTAssertTrue(focusedCanvas.exists)
+        attachScreenshot("01-arrow-canvas-remains", app: app)
+
+        app.buttons["Pen"].tap()
+        focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.28, dy: 0.70)).press(
+            forDuration: 0.1,
+            thenDragTo: focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: 0.34)),
+            withVelocity: .slow,
+            thenHoldForDuration: 5
+        )
+        XCTAssertTrue(canvas.exists)
+        attachScreenshot("02-pen-post-commit", app: app)
+
+        XCTAssertTrue(app.buttons["historyVersionPill"].isHittable)
+        XCTAssertTrue(app.buttons["Expand composer"].isHittable)
+        XCTAssertTrue(app.buttons["Export"].isHittable)
+
+        app.buttons["Memo"].tap()
+        focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.86, dy: 0.18)).tap()
+        let memoField = app.textFields.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "nativeMemo-")
+        ).firstMatch
+        XCTAssertTrue(memoField.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(focusedCanvas.exists)
+        memoField.typeText(" edge note")
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "04-memo-accessibility-hierarchy.txt"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        attachScreenshot("03-memo-near-edge-with-keyboard", app: app)
+    }
+
     private func makeApp(seedLineageProject: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments.append("--reset-projects-for-ui-tests")
