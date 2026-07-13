@@ -1,5 +1,6 @@
 package app.bananatape.mobile
 
+import android.accessibilityservice.AccessibilityService
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -26,6 +27,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.bananatape.mobile.adapters.AdapterResult
 import app.bananatape.mobile.storage.LocalProjectStorage
 import org.junit.Assert.assertEquals
@@ -71,6 +73,7 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Project name input").assertIsDisplayed()
         composeRule.onNodeWithTag("new-project-name")
             .assertIsDisplayed()
+            .performClick()
             .assertIsFocused()
             .performTextInput("Readable Project")
         composeRule.onNodeWithTag("new-project-name").assertTextContains("Readable Project")
@@ -86,7 +89,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithText("Import").performClick()
         assertTrue(dispatchPickerResult(selectedUri))
-        composeRule.waitForIdle()
+        returnFromExternalPicker()
 
         composeRule.onNodeWithContentDescription("Back to projects").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Native annotation canvas").assertIsDisplayed()
@@ -112,7 +115,7 @@ class MainActivityTest {
         val selectedUri = createPickerImage("selected-reference.png")
         composeRule.onNodeWithContentDescription("Add reference").performClick()
         assertTrue(dispatchPickerResult(selectedUri))
-        composeRule.waitForIdle()
+        returnFromExternalPicker()
 
         composeRule.onNodeWithText("1 references").assertIsDisplayed()
         composeRule.onNodeWithText("selected-reference.png").assertIsDisplayed()
@@ -338,6 +341,17 @@ class MainActivityTest {
         val keyToRc = keyToRcField.get(registry) as Map<String, Int>
         val requestCode = keyToRc[launchedKeys.lastOrNull()] ?: return false
         return registry.dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
+    }
+
+    private fun returnFromExternalPicker() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
+        instrumentation.waitForIdleSync()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            instrumentation.uiAutomation.rootInActiveWindow?.packageName == composeRule.activity.packageName &&
+                composeRule.activity.hasWindowFocus()
+        }
+        composeRule.waitForIdle()
     }
 
     private fun createPickerImage(name: String): Uri {
