@@ -25,6 +25,37 @@ final class BananaTapeUITests: XCTestCase {
         XCTAssertFalse(app.secureTextFields["OpenAI API key"].exists)
     }
 
+    func testNewProjectSurface_focusesNameFieldAndPreservesCancelAndCreate() throws {
+        let app = makeApp()
+        app.launch()
+
+        XCTAssertTrue(app.buttons["New Project"].waitForExistence(timeout: 5))
+        app.buttons["New Project"].tap()
+
+        let surface = element(identifier: "newProjectSurface", in: app)
+        let projectName = app.textFields["Project name"]
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Create a project"].exists)
+        XCTAssertTrue(projectName.exists)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["cancelCreateProjectButton"].isHittable)
+        XCTAssertTrue(app.buttons["confirmCreateProjectButton"].isHittable)
+
+        projectName.typeText("Cancelled Project")
+        app.buttons["cancelCreateProjectButton"].tap()
+        XCTAssertTrue(surface.waitForNonExistence(timeout: 5))
+
+        app.buttons["New Project"].tap()
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        projectName.typeText("Mobile Surface")
+        app.buttons["confirmCreateProjectButton"].tap()
+
+        let createdProject = app.buttons["openProjectButton-mobile-surface"]
+        XCTAssertTrue(createdProject.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Import"].exists)
+    }
+
     func testReferenceImagesSheet_whenOpenedFromProjectActions_exposesManageControls() throws {
         let app = makeApp()
         app.launch()
@@ -189,6 +220,36 @@ final class BananaTapeUITests: XCTestCase {
         record("Opened references from the composer while B-2 remained the focused derived image.")
         attachScreenshot("12-B-2-references", app: app)
         attachActionLog()
+    }
+
+    func testEditorAnnotationToolbar_staysAboveCanvasWithoutBlockingLineageOrActions() throws {
+        let app = makeApp(seedLineageProject: true)
+        app.launch()
+
+        let project = app.buttons["openProjectButton-ui-lineage-project"]
+        XCTAssertTrue(project.waitForExistence(timeout: 5))
+        project.tap()
+
+        let toolbar = element(identifier: "annotationToolbar", in: app)
+        let canvas = app.otherElements["nativeCanvasSurface"]
+        XCTAssertTrue(toolbar.waitForExistence(timeout: 5))
+        XCTAssertTrue(canvas.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(toolbar.frame.maxY, canvas.frame.minY + 1)
+
+        for label in ["Pan", "Navigate lineage", "Pen", "Box", "Arrow", "Memo"] {
+            XCTAssertTrue(app.buttons[label].exists, "Expected \(label) in the annotation toolbar")
+            XCTAssertTrue(app.buttons[label].isHittable, "Expected \(label) to be hittable")
+        }
+        XCTAssertTrue(app.buttons["Undo"].exists)
+        XCTAssertTrue(app.buttons["Redo"].exists)
+        XCTAssertTrue(app.buttons["historyVersionPill"].isHittable)
+        XCTAssertTrue(app.buttons["Export"].isHittable)
+        XCTAssertTrue(app.buttons["Expand composer"].isHittable)
+
+        app.buttons["Navigate lineage"].tap()
+        let lineageRight = app.buttons["lineageRightButton"]
+        XCTAssertTrue(lineageRight.waitForExistence(timeout: 5))
+        XCTAssertFalse(toolbar.frame.intersects(lineageRight.frame))
     }
 
     private func makeApp(seedLineageProject: Bool = false) -> XCUIApplication {

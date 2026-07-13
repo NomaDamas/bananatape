@@ -223,10 +223,15 @@ struct ProjectListView: View {
             }
         }
         .tint(TossStyle.primaryText)
-        .alert("New Project", isPresented: $isCreatingProject) {
-            TextField("Project name", text: $projectName)
-            Button("Cancel", role: .cancel) { projectName = "" }
-            Button("Create", action: createProject)
+        .sheet(isPresented: $isCreatingProject, onDismiss: { projectName = "" }) {
+            NewProjectSheet(
+                projectName: $projectName,
+                onCancel: cancelProjectCreation,
+                onCreate: confirmProjectCreation
+            )
+            .presentationDetents([.height(292)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(TossStyle.panel)
         }
         .photosPicker(isPresented: $isImportingProjectImage, selection: $importedProjectPhoto, matching: .images)
         .onChange(of: importedProjectPhoto) { _, item in
@@ -331,6 +336,16 @@ struct ProjectListView: View {
         let name = projectName.isEmpty ? "Untitled Project" : projectName
         model.createProject(name: name)
         projectName = ""
+    }
+
+    private func cancelProjectCreation() {
+        projectName = ""
+        isCreatingProject = false
+    }
+
+    private func confirmProjectCreation() {
+        createProject()
+        isCreatingProject = false
     }
 
     private func loadProject(_ project: MobileProjectRecord) {
@@ -833,6 +848,73 @@ private struct ProjectListScreen: View {
     }
 }
 
+private struct NewProjectSheet: View {
+    @Binding var projectName: String
+    let onCancel: () -> Void
+    let onCreate: () -> Void
+    @FocusState private var isNameFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Create a project")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(TossStyle.primaryText)
+                Text("Your project stays in BananaTape's local folder on this device.")
+                    .font(.footnote)
+                    .foregroundStyle(TossStyle.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            TextField("Project name", text: $projectName)
+                .textFieldStyle(.plain)
+                .font(.body.weight(.medium))
+                .foregroundStyle(TossStyle.primaryText)
+                .tint(TossStyle.blue)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .focused($isNameFocused)
+                .onSubmit(onCreate)
+                .padding(.horizontal, 14)
+                .frame(height: 50)
+                .background(TossStyle.workspace, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(isNameFocused ? TossStyle.blue : TossStyle.border, lineWidth: isNameFocused ? 2 : 1))
+
+            HStack(spacing: 10) {
+                Button("Cancel", role: .cancel, action: onCancel)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(TossStyle.primaryText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(TossStyle.panelAlt, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(TossStyle.border))
+                    .accessibilityIdentifier("cancelCreateProjectButton")
+
+                Button("Create", action: onCreate)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(TossStyle.primaryButtonText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(TossStyle.blue, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("confirmCreateProjectButton")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(TossStyle.panel)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("newProjectSurface")
+        .onAppear {
+            DispatchQueue.main.async {
+                isNameFocused = true
+            }
+        }
+    }
+}
+
 private struct EditorScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -865,22 +947,16 @@ private struct EditorScreen: View {
 
             VStack(spacing: 0) {
                 topBar
+                annotationToolbar
                 ZStack(alignment: .bottom) {
                     NativeCanvasView(state: canvasState, onAnnotationsChange: onAnnotationsChange, onViewportChange: onViewportChange, onMoveFocus: onMoveFocus)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .frame(maxWidth: isRegularWidth ? 600 : .infinity)
                         .padding(.horizontal, isRegularWidth ? 88 : 22)
-                        .padding(.top, isRegularWidth ? 36 : 28)
+                        .padding(.top, isRegularWidth ? 28 : 12)
                         .padding(.bottom, 138)
 
                     LineageNavigationControls(availability: lineageAvailability, onMoveFocus: onMoveFocus)
-
-                    HStack {
-                        toolRail
-                            .padding(.leading, isRegularWidth ? 28 : 16)
-                            .padding(.bottom, 190)
-                        Spacer()
-                    }
 
                     if isRegularWidth {
                         HStack {
@@ -948,22 +1024,26 @@ private struct EditorScreen: View {
         return "\(composerState.providerDisplayName.uppercased()) · READY"
     }
 
-    private var toolRail: some View {
-        VStack(spacing: 8) {
+    private var annotationToolbar: some View {
+        HStack(spacing: 4) {
             toolButton(.pan, systemName: "hand.draw")
             toolButton(.select, systemName: "cursorarrow")
             toolButton(.pen, systemName: "pencil.tip")
             toolButton(.box, systemName: "square")
             toolButton(.arrow, systemName: "arrow.up.right")
             toolButton(.memo, systemName: "note.text")
-            divider
+            toolbarDivider
             toolbarUtilityButton("arrow.uturn.backward", label: "Undo", isEnabled: canUndo, action: onUndo)
             toolbarUtilityButton("arrow.uturn.forward", label: "Redo", isEnabled: canRedo, action: onRedo)
         }
         .padding(8)
-        .background(TossStyle.panel, in: RoundedRectangle(cornerRadius: 24))
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(TossStyle.border))
-        .shadow(color: .black.opacity(0.24), radius: 20, y: 10)
+        .frame(maxWidth: isRegularWidth ? 420 : .infinity)
+        .background(TossStyle.panel, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(TossStyle.border))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("annotationToolbar")
     }
 
     private func toolButton(_ tool: CanvasTool, systemName: String) -> some View {
@@ -973,11 +1053,12 @@ private struct EditorScreen: View {
             Image(systemName: systemName)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(canvasTool == tool ? TossStyle.primaryButtonText : TossStyle.secondaryText)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(canvasTool == tool ? TossStyle.blue : TossStyle.panelAlt, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tool == .select ? "Navigate lineage" : tool.rawValue.capitalized)
+        .accessibilityAddTraits(canvasTool == tool ? .isSelected : [])
     }
 
     private func toolbarUtilityButton(_ systemName: String, label: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
@@ -985,7 +1066,7 @@ private struct EditorScreen: View {
             Image(systemName: systemName)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isEnabled ? TossStyle.secondaryText : TossStyle.mutedText.opacity(0.45))
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(TossStyle.panelAlt, in: Circle())
         }
         .buttonStyle(.plain)
@@ -993,11 +1074,11 @@ private struct EditorScreen: View {
         .accessibilityLabel(label)
     }
 
-    private var divider: some View {
+    private var toolbarDivider: some View {
         Rectangle()
             .fill(TossStyle.separator)
-            .frame(width: 26, height: 1)
-            .padding(.vertical, 1)
+            .frame(width: 1, height: 26)
+            .padding(.horizontal, 1)
     }
 
     private var versionPill: some View {
