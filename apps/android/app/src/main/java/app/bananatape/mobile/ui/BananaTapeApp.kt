@@ -49,10 +49,10 @@ import androidx.compose.material.icons.automirrored.outlined.CallMade
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.StickyNote2
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowOutward
-import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CropFree
 import androidx.compose.material.icons.outlined.Delete
@@ -803,7 +803,7 @@ private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: B
         ToolItem("Pen", CanvasTool.PEN, Icons.Outlined.Edit),
         ToolItem("Box", CanvasTool.BOX, Icons.Outlined.Slideshow),
         ToolItem("Arrow", CanvasTool.ARROW, Icons.AutoMirrored.Outlined.CallMade),
-        ToolItem("Memo", CanvasTool.MEMO, Icons.Outlined.Brush),
+        ToolItem("Memo", CanvasTool.MEMO, Icons.AutoMirrored.Outlined.StickyNote2),
     )
     Row(
         modifier = modifier
