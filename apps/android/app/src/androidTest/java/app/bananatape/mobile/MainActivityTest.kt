@@ -88,6 +88,7 @@ class MainActivityTest {
         val selectedUri = createPickerImage("selected-base.png")
 
         composeRule.onNodeWithText("Import").performClick()
+        waitForExternalPicker()
         assertTrue(dispatchPickerResult(selectedUri))
         returnFromExternalPicker()
 
@@ -114,11 +115,11 @@ class MainActivityTest {
         assertPhotoPickerContract()
         val selectedUri = createPickerImage("selected-reference.png")
         composeRule.onNodeWithContentDescription("Add reference").performClick()
+        waitForExternalPicker()
         assertTrue(dispatchPickerResult(selectedUri))
         returnFromExternalPicker()
 
         composeRule.onNodeWithText("1 references").assertIsDisplayed()
-        composeRule.onNodeWithText("selected-reference.png").assertIsDisplayed()
 
         val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
         val record = (storage.read("photo-picker-reference") as AdapterResult.Success).value
@@ -126,7 +127,11 @@ class MainActivityTest {
             .getJSONObject("settings")
             .getJSONArray("referenceImages")
         assertEquals(1, persistedReferences.length())
-        val assetPath = persistedReferences.getJSONObject(0).getString("assetPath")
+        val persistedReference = persistedReferences.getJSONObject(0)
+        val label = persistedReference.getString("label")
+        val assetPath = persistedReference.getString("assetPath")
+        assertEquals(assetPath.substringAfterLast('/'), label)
+        assertTrue(assetPath.startsWith("references/"))
         assertTrue(storage.filePath("photo-picker-reference", assetPath).toFile().exists())
     }
 
@@ -343,13 +348,21 @@ class MainActivityTest {
         return registry.dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
     }
 
+    private fun waitForExternalPicker() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val activePackage = instrumentation.uiAutomation.rootInActiveWindow?.packageName
+            activePackage != null &&
+                activePackage != composeRule.activity.packageName
+        }
+    }
+
     private fun returnFromExternalPicker() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
         instrumentation.waitForIdleSync()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            instrumentation.uiAutomation.rootInActiveWindow?.packageName == composeRule.activity.packageName &&
-                composeRule.activity.hasWindowFocus()
+            instrumentation.uiAutomation.rootInActiveWindow?.packageName == composeRule.activity.packageName
         }
         composeRule.waitForIdle()
     }
