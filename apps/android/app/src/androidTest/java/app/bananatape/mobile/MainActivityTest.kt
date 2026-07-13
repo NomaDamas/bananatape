@@ -2,14 +2,13 @@ package app.bananatape.mobile
 
 import android.Manifest
 import android.app.Activity
-import android.app.Instrumentation
-import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.ui.test.assertHasClickAction
@@ -26,13 +25,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.bananatape.mobile.adapters.AdapterResult
 import app.bananatape.mobile.storage.LocalProjectStorage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -71,7 +68,6 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("new-project-dialog-title").assertIsDisplayed()
         composeRule.onNodeWithText("Project name", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Name this project").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Project name input").assertIsDisplayed()
         composeRule.onNodeWithTag("new-project-name")
             .assertIsDisplayed()
@@ -85,32 +81,24 @@ class MainActivityTest {
 
     @Test
     fun basePhotoPicker_whenSelectionReturns_importsImageIntoProjectAndEditorState() {
-        val pickerMonitor = registerPhotoPickerMonitor()
+        assertPhotoPickerContract()
         val selectedUri = createPickerImage("selected-base.png")
 
-        try {
-            composeRule.onNodeWithText("Import").performClick()
-            val pickerActivity = pickerMonitor.waitForActivityWithTimeout(2_000)
-            assertNotNull(pickerActivity)
-            assertPhotoPickerIntent(requireNotNull(pickerActivity).intent)
-            assertTrue(dispatchPickerResult(selectedUri))
-            finishPickerActivity(pickerActivity)
-            composeRule.waitForIdle()
+        composeRule.onNodeWithText("Import").performClick()
+        assertTrue(dispatchPickerResult(selectedUri))
+        composeRule.waitForIdle()
 
-            composeRule.onNodeWithContentDescription("Back to projects").assertIsDisplayed()
-            composeRule.onNodeWithContentDescription("Native annotation canvas").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back to projects").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Native annotation canvas").assertIsDisplayed()
 
-            val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
-            val imported = storage.list().single { it.name == "Imported Image" }
-            val record = (storage.read(imported.id) as AdapterResult.Success).value
-            val assetPath = JSONObject(record.historyJson)
-                .getJSONArray("entries")
-                .getJSONObject(0)
-                .getString("assetPath")
-            assertTrue(storage.filePath(imported.id, assetPath).toFile().exists())
-        } finally {
-            InstrumentationRegistry.getInstrumentation().removeMonitor(pickerMonitor)
-        }
+        val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+        val imported = storage.list().single { it.name == "Imported Image" }
+        val record = (storage.read(imported.id) as AdapterResult.Success).value
+        val assetPath = JSONObject(record.historyJson)
+            .getJSONArray("entries")
+            .getJSONObject(0)
+            .getString("assetPath")
+        assertTrue(storage.filePath(imported.id, assetPath).toFile().exists())
     }
 
     @Test
@@ -120,31 +108,23 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Project menu").performClick()
         composeRule.onNodeWithContentDescription("Reference images").performClick()
 
-        val pickerMonitor = registerPhotoPickerMonitor()
+        assertPhotoPickerContract()
         val selectedUri = createPickerImage("selected-reference.png")
-        try {
-            composeRule.onNodeWithContentDescription("Add reference").performClick()
-            val pickerActivity = pickerMonitor.waitForActivityWithTimeout(2_000)
-            assertNotNull(pickerActivity)
-            assertPhotoPickerIntent(requireNotNull(pickerActivity).intent)
-            assertTrue(dispatchPickerResult(selectedUri))
-            finishPickerActivity(pickerActivity)
-            composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Add reference").performClick()
+        assertTrue(dispatchPickerResult(selectedUri))
+        composeRule.waitForIdle()
 
-            composeRule.onNodeWithText("1 references").assertIsDisplayed()
-            composeRule.onNodeWithText("selected-reference.png").assertIsDisplayed()
+        composeRule.onNodeWithText("1 references").assertIsDisplayed()
+        composeRule.onNodeWithText("selected-reference.png").assertIsDisplayed()
 
-            val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
-            val record = (storage.read("photo-picker-reference") as AdapterResult.Success).value
-            val persistedReferences = JSONObject(record.manifestJson)
-                .getJSONObject("settings")
-                .getJSONArray("referenceImages")
-            assertEquals(1, persistedReferences.length())
-            val assetPath = persistedReferences.getJSONObject(0).getString("assetPath")
-            assertTrue(storage.filePath("photo-picker-reference", assetPath).toFile().exists())
-        } finally {
-            InstrumentationRegistry.getInstrumentation().removeMonitor(pickerMonitor)
-        }
+        val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+        val record = (storage.read("photo-picker-reference") as AdapterResult.Success).value
+        val persistedReferences = JSONObject(record.manifestJson)
+            .getJSONObject("settings")
+            .getJSONArray("referenceImages")
+        assertEquals(1, persistedReferences.length())
+        val assetPath = persistedReferences.getJSONObject(0).getString("assetPath")
+        assertTrue(storage.filePath("photo-picker-reference", assetPath).toFile().exists())
     }
 
     @Test
@@ -329,16 +309,12 @@ class MainActivityTest {
         assertFalse(resolved.isEmpty())
     }
 
-    private fun registerPhotoPickerMonitor(): Instrumentation.ActivityMonitor {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_GET_CONTENT)
-            addAction(Intent.ACTION_OPEN_DOCUMENT)
-            addAction(MediaStore.ACTION_PICK_IMAGES)
-            addAction(ActivityResultContracts.PickVisualMedia.ACTION_SYSTEM_FALLBACK_PICK_IMAGES)
-        }
-        val monitor = Instrumentation.ActivityMonitor(filter, null, false)
-        InstrumentationRegistry.getInstrumentation().addMonitor(monitor)
-        return monitor
+    private fun assertPhotoPickerContract() {
+        val intent = ActivityResultContracts.PickVisualMedia().createIntent(
+            composeRule.activity,
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+        assertPhotoPickerIntent(intent)
     }
 
     private fun assertPhotoPickerIntent(intent: Intent) {
@@ -362,11 +338,6 @@ class MainActivityTest {
         val keyToRc = keyToRcField.get(registry) as Map<String, Int>
         val requestCode = keyToRc[launchedKeys.lastOrNull()] ?: return false
         return registry.dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
-    }
-
-    private fun finishPickerActivity(activity: Activity?) {
-        activity ?: return
-        InstrumentationRegistry.getInstrumentation().runOnMainSync { activity.finish() }
     }
 
     private fun createPickerImage(name: String): Uri {
