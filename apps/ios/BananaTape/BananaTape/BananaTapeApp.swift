@@ -64,6 +64,8 @@ private enum UITestLineageProjectSeeder {
         )
         _ = storage.delete(id: projectID)
         guard case .success = storage.create(project) else { return }
+        try? renderedPNG(label: "REF", color: .systemGreen)
+            .write(to: storage.fileURL(projectID: projectID, relativePath: "references/qa-reference.png"), options: .atomic)
         for fixture in fixtures {
             guard case .success = storage.saveGeneratedImage(
                 projectID: projectID,
@@ -141,7 +143,13 @@ private enum UITestLineageProjectSeeder {
           "updatedAt": "1970-01-01T00:00:00.000Z",
           "settings": {
             "systemPrompt": "",
-            "referenceImages": []
+            "referenceImages": [
+              {
+                "id": "qa-reference",
+                "label": "Lineage reference",
+                "assetPath": "references/qa-reference.png"
+              }
+            ]
           }
         }
         """

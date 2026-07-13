@@ -444,6 +444,7 @@ struct HistoryBrowserView: View {
                 }
                 .foregroundStyle(TossStyle.destructive)
             }
+            .layoutPriority(1)
         }
         .padding(12)
         .padding(.leading, CGFloat(row.depth) * 12)
@@ -493,7 +494,7 @@ struct HistoryBrowserView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.caption.weight(.semibold))
-                .frame(width: 30, height: 30)
+                .frame(width: 48, height: 48)
                 .background(TossStyle.workspace, in: Circle())
                 .overlay(Circle().stroke(TossStyle.border))
         }

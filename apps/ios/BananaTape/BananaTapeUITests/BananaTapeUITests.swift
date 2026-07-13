@@ -25,6 +25,50 @@ final class BananaTapeUITests: XCTestCase {
         XCTAssertFalse(app.secureTextFields["OpenAI API key"].exists)
     }
 
+    func testProjectCardMore_hasMinimumHitFrame() throws {
+        let app = makeApp(seedLineageProject: true)
+        app.launch()
+
+        let more = app.buttons["projectActionButton-ui-lineage-project"]
+        assertMinimumHitFrame(more, named: "Project card More", in: app)
+        attachAccessibilityHierarchy("01-project-card-more-accessibility", app: app)
+        attachScreenshot("01-project-card-more-frame", app: app)
+    }
+
+    func testHistoryRowActions_haveMinimumHitFrames() throws {
+        let app = makeApp(seedLineageProject: true)
+        app.launch()
+
+        app.buttons["openProjectButton-ui-lineage-project"].tap()
+        XCTAssertTrue(app.buttons["historyVersionPill"].waitForExistence(timeout: 5))
+        app.buttons["historyVersionPill"].tap()
+        XCTAssertTrue(element(identifier: "historyBrowserPanel", in: app).waitForExistence(timeout: 5))
+
+        let export = app.buttons["exportHistoryEntry-B-2"]
+        let delete = app.buttons["deleteHistoryEntry-B-2"]
+        assertMinimumHitFrame(export, named: "History export", in: app)
+        assertMinimumHitFrame(delete, named: "History delete", in: app)
+        attachAccessibilityHierarchy("02-history-actions-accessibility", app: app)
+        attachScreenshot("02-history-actions-frames", app: app)
+    }
+
+    func testReferenceRemove_hasMinimumHitFrame() throws {
+        let app = makeApp(seedLineageProject: true)
+        app.launch()
+
+        app.buttons["openProjectButton-ui-lineage-project"].tap()
+        XCTAssertTrue(app.buttons["Project actions"].waitForExistence(timeout: 5))
+        app.buttons["Project actions"].tap()
+        app.buttons["Reference images"].tap()
+        XCTAssertTrue(element(identifier: "referenceImagesSheet", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 reference"].exists)
+
+        let remove = app.buttons["removeReference-qa-reference"]
+        assertMinimumHitFrame(remove, named: "Reference remove", in: app)
+        attachAccessibilityHierarchy("03-reference-remove-accessibility", app: app)
+        attachScreenshot("03-reference-remove-frame", app: app)
+    }
+
     func testNewProjectSurface_focusesNameFieldAndPreservesCancelAndCreate() throws {
         let app = makeApp()
         app.launch()
@@ -294,11 +338,10 @@ final class BananaTapeUITests: XCTestCase {
         attachScreenshot("01-arrow-canvas-remains", app: app)
 
         app.buttons["Pen"].tap()
-        focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.28, dy: 0.70)).press(
-            forDuration: 0.1,
-            thenDragTo: focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: 0.34)),
-            withVelocity: .slow,
-            thenHoldForDuration: 5
+        captureScreenshotDuringPenHold(
+            app: app,
+            source: focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.28, dy: 0.70)),
+            destination: focusedCanvas.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: 0.34))
         )
         XCTAssertTrue(canvas.exists)
         attachScreenshot("02-pen-post-commit", app: app)
@@ -365,6 +408,61 @@ final class BananaTapeUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func attachAccessibilityHierarchy(_ name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(string: app.debugDescription)
+        attachment.name = "\(name).txt"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func captureScreenshotDuringPenHold(app: XCUIApplication, source: XCUICoordinate, destination: XCUICoordinate) {
+        let screenshotExpectation = expectation(description: "Capture Pen screenshot while contact is held")
+        let lock = NSLock()
+        var capturedScreenshot: XCUIScreenshot?
+        var capturedAt: Date?
+        let gestureStartedAt = Date()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            Thread.sleep(forTimeInterval: 2.5)
+            let screenshot = app.screenshot()
+            lock.lock()
+            capturedScreenshot = screenshot
+            capturedAt = Date()
+            lock.unlock()
+            screenshotExpectation.fulfill()
+        }
+
+        source.press(forDuration: 0.1, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 5)
+        let gestureReturnedAt = Date()
+        wait(for: [screenshotExpectation], timeout: 10)
+
+        lock.lock()
+        let screenshot = capturedScreenshot
+        let captureDate = capturedAt
+        lock.unlock()
+
+        XCTAssertNotNil(screenshot)
+        if let screenshot {
+            let attachment = XCTAttachment(screenshot: screenshot)
+            attachment.name = "02-pen-in-contact-before-pointer-up"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+
+        let timing = """
+        Pen gesture started: \(gestureStartedAt)
+        In-contact screenshot captured: \(captureDate.map(String.init(describing:)) ?? "missing")
+        Gesture method returned: \(gestureReturnedAt)
+        Capture offset from gesture start: \(captureDate.map { $0.timeIntervalSince(gestureStartedAt) } ?? -1) seconds
+        Capture occurred before pointer-up: \(captureDate.map { $0 < gestureReturnedAt } ?? false)
+        Gesture used thenHoldForDuration: 5 seconds
+        """
+        let timingAttachment = XCTAttachment(string: timing)
+        timingAttachment.name = "02-pen-in-contact-timing.txt"
+        timingAttachment.lifetime = .keepAlways
+        add(timingAttachment)
     }
 
     private func attachActionLog() {

@@ -820,7 +820,7 @@ private struct ProjectListScreen: View {
                 Image(systemName: "ellipsis")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(TossStyle.secondaryText)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
                     .background(TossStyle.panelAlt, in: Circle())
             }
             .buttonStyle(.plain)
@@ -1450,13 +1450,12 @@ private struct ReferenceImagesSheet: View {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(TossStyle.secondaryText)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 48, height: 48)
                     .background(TossStyle.workspace, in: Circle())
                     .overlay(Circle().stroke(TossStyle.border))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("removeReference-\(reference.id)")
-            .padding(6)
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 14))
