@@ -952,6 +952,8 @@ test.describe('BananaTape Editor', () => {
     await page.mouse.move(bounds.x + 180, bounds.y + 180, { steps: 10 });
     await page.mouse.up();
 
+    await promptInput.fill('');
+    await expect(promptInput).toHaveValue('');
     const editButton = getEditButton(page);
     await expect(editButton).toBeEnabled();
     await editButton.click();
