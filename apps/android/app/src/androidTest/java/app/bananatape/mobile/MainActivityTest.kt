@@ -1,30 +1,44 @@
 package app.bananatape.mobile
 
 import android.Manifest
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
+import android.provider.MediaStore
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.bananatape.mobile.adapters.AdapterResult
 import app.bananatape.mobile.storage.LocalProjectStorage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
@@ -49,6 +63,105 @@ class MainActivityTest {
         composeRule.onNodeWithText("Stored privately on this device".uppercase()).assertIsDisplayed()
         composeRule.onNodeWithText("New Project").assertHasClickAction().assertIsDisplayed()
         composeRule.onNodeWithText("Magic Layer").assertDoesNotExist()
+    }
+
+    @Test
+    fun newProjectDialog_whenOpened_exposesReadableTitleAndFocusedNameField() {
+        composeRule.onNodeWithText("New Project").performClick()
+
+        composeRule.onNodeWithTag("new-project-dialog-title").assertIsDisplayed()
+        composeRule.onNodeWithText("Project name", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Name this project").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Project name input").assertIsDisplayed()
+        composeRule.onNodeWithTag("new-project-name")
+            .assertIsDisplayed()
+            .assertIsFocused()
+            .performTextInput("Readable Project")
+        composeRule.onNodeWithTag("new-project-name").assertTextContains("Readable Project")
+
+        composeRule.onNodeWithText("Create").performClick()
+        composeRule.onNodeWithContentDescription("Open Readable Project").assertIsDisplayed()
+    }
+
+    @Test
+    fun basePhotoPicker_whenSelectionReturns_importsImageIntoProjectAndEditorState() {
+        val pickerMonitor = registerPhotoPickerMonitor()
+        val selectedUri = createPickerImage("selected-base.png")
+
+        try {
+            composeRule.onNodeWithText("Import").performClick()
+            val pickerActivity = pickerMonitor.waitForActivityWithTimeout(2_000)
+            assertNotNull(pickerActivity)
+            assertPhotoPickerIntent(requireNotNull(pickerActivity).intent)
+            assertTrue(dispatchPickerResult(selectedUri))
+            finishPickerActivity(pickerActivity)
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithContentDescription("Back to projects").assertIsDisplayed()
+            composeRule.onNodeWithContentDescription("Native annotation canvas").assertIsDisplayed()
+
+            val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+            val imported = storage.list().single { it.name == "Imported Image" }
+            val record = (storage.read(imported.id) as AdapterResult.Success).value
+            val assetPath = JSONObject(record.historyJson)
+                .getJSONArray("entries")
+                .getJSONObject(0)
+                .getString("assetPath")
+            assertTrue(storage.filePath(imported.id, assetPath).toFile().exists())
+        } finally {
+            InstrumentationRegistry.getInstrumentation().removeMonitor(pickerMonitor)
+        }
+    }
+
+    @Test
+    fun referencePhotoPicker_whenSelectionReturns_persistsCopiedImageAndReferenceState() {
+        createProject("Photo Picker Reference")
+        composeRule.onNodeWithContentDescription("Open Photo Picker Reference").performClick()
+        composeRule.onNodeWithContentDescription("Project menu").performClick()
+        composeRule.onNodeWithContentDescription("Reference images").performClick()
+
+        val pickerMonitor = registerPhotoPickerMonitor()
+        val selectedUri = createPickerImage("selected-reference.png")
+        try {
+            composeRule.onNodeWithContentDescription("Add reference").performClick()
+            val pickerActivity = pickerMonitor.waitForActivityWithTimeout(2_000)
+            assertNotNull(pickerActivity)
+            assertPhotoPickerIntent(requireNotNull(pickerActivity).intent)
+            assertTrue(dispatchPickerResult(selectedUri))
+            finishPickerActivity(pickerActivity)
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithText("1 references").assertIsDisplayed()
+            composeRule.onNodeWithText("selected-reference.png").assertIsDisplayed()
+
+            val storage = LocalProjectStorage(composeRule.activity.filesDir.toPath().resolve("projects"))
+            val record = (storage.read("photo-picker-reference") as AdapterResult.Success).value
+            val persistedReferences = JSONObject(record.manifestJson)
+                .getJSONObject("settings")
+                .getJSONArray("referenceImages")
+            assertEquals(1, persistedReferences.length())
+            val assetPath = persistedReferences.getJSONObject(0).getString("assetPath")
+            assertTrue(storage.filePath("photo-picker-reference", assetPath).toFile().exists())
+        } finally {
+            InstrumentationRegistry.getInstrumentation().removeMonitor(pickerMonitor)
+        }
+    }
+
+    @Test
+    fun annotationToolbar_whenEditorLaunches_isHorizontalAboveCanvasAndKeepsEveryToolReachable() {
+        fixture.seedFocusedProject("Toolbar Layout")
+        composeRule.onNodeWithContentDescription("Open Toolbar Layout").performClick()
+
+        val canvas = fixture.boundsForDescription("Native annotation canvas")
+        val toolbar = fixture.boundsForTag("editor.tool-rail")
+        assertTrue("Annotation toolbar must be wider than tall: $toolbar", toolbar.width > toolbar.height)
+        assertTrue("Annotation toolbar must sit above canvas: $toolbar vs $canvas", toolbar.bottom <= canvas.top)
+        listOf("Pan", "Select", "Pen", "Box", "Arrow", "Memo").forEach { label ->
+            composeRule.onNodeWithContentDescription(label).assertHasClickAction().assertIsDisplayed()
+        }
+        listOf("Undo", "Redo").forEach { label ->
+            composeRule.onNodeWithContentDescription(label).assertIsDisplayed()
+        }
     }
 
     @Test
@@ -214,6 +327,55 @@ class MainActivityTest {
     private fun assertActivityResolves(packageManager: PackageManager, intent: Intent) {
         val resolved = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
         assertFalse(resolved.isEmpty())
+    }
+
+    private fun registerPhotoPickerMonitor(): Instrumentation.ActivityMonitor {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_GET_CONTENT)
+            addAction(Intent.ACTION_OPEN_DOCUMENT)
+            addAction(MediaStore.ACTION_PICK_IMAGES)
+            addAction(ActivityResultContracts.PickVisualMedia.ACTION_SYSTEM_FALLBACK_PICK_IMAGES)
+        }
+        val monitor = Instrumentation.ActivityMonitor(filter, null, false)
+        InstrumentationRegistry.getInstrumentation().addMonitor(monitor)
+        return monitor
+    }
+
+    private fun assertPhotoPickerIntent(intent: Intent) {
+        assertTrue(
+            "Expected selected-access photo picker intent, got ${intent.action}",
+            intent.action == MediaStore.ACTION_PICK_IMAGES ||
+                intent.action == ActivityResultContracts.PickVisualMedia.ACTION_SYSTEM_FALLBACK_PICK_IMAGES ||
+                intent.action == Intent.ACTION_OPEN_DOCUMENT,
+        )
+        assertFalse("Legacy GET_CONTENT must not be used", intent.action == Intent.ACTION_GET_CONTENT)
+        assertEquals("image/*", intent.type)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun dispatchPickerResult(uri: Uri): Boolean {
+        val registry = composeRule.activity.activityResultRegistry
+        val registryType = androidx.activity.result.ActivityResultRegistry::class.java
+        val launchedKeysField = registryType.getDeclaredField("launchedKeys").apply { isAccessible = true }
+        val keyToRcField = registryType.getDeclaredField("keyToRc").apply { isAccessible = true }
+        val launchedKeys = launchedKeysField.get(registry) as List<String>
+        val keyToRc = keyToRcField.get(registry) as Map<String, Int>
+        val requestCode = keyToRc[launchedKeys.lastOrNull()] ?: return false
+        return registry.dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
+    }
+
+    private fun finishPickerActivity(activity: Activity?) {
+        activity ?: return
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { activity.finish() }
+    }
+
+    private fun createPickerImage(name: String): Uri {
+        val shareDirectory = composeRule.activity.cacheDir.resolve("BananaTapeShare").apply { mkdirs() }
+        val imageFile = shareDirectory.resolve(name)
+        val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(36, 108, 166)) }
+        imageFile.outputStream().use { output -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, output) }
+        bitmap.recycle()
+        return FileProvider.getUriForFile(composeRule.activity, "app.bananatape.mobile.share", imageFile)
     }
 
     private fun createProject(name: String) {

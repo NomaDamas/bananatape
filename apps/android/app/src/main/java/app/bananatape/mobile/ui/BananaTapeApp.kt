@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -75,6 +76,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
@@ -84,6 +87,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +99,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -218,19 +224,21 @@ fun ProjectListScreen(
     val isExpandedWidth = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingReferenceProjectId by remember { mutableStateOf<String?>(null) }
-    val referencePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val referencePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val projectId = pendingReferenceProjectId
         pendingReferenceProjectId = null
         if (projectId == null || uri == null) return@rememberLauncherForActivityResult
         when (val imported = importReferenceImage(context, projectId, uri, projectStorage)) {
             is AdapterResult.Success -> {
-                composerState = composerState.copy(references = composerState.references + imported.value)
+                val nextComposerState = composerState.copy(references = composerState.references + imported.value)
+                composerState = nextComposerState
+                persistProjectSession(projectStorage, projectId, nextComposerState, pipelineState, historyState, annotationHistory.current)
                 statusMessage = "Reference image imported."
             }
             is AdapterResult.Failure -> statusMessage = imported.error.userMessage
         }
     }
-    val projectImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val projectImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         when (val imported = importBaseProjectImage(context, uri, projectStorage)) {
             is AdapterResult.Success -> {
@@ -391,7 +399,10 @@ fun ProjectListScreen(
                 composerState = nextComposer
                 persistProjectSession(projectStorage, project.id, nextComposer, pipelineState, historyState, annotationHistory.current)
             },
-            onAddReference = { pendingReferenceProjectId = project.id; referencePicker.launch("image/*") },
+            onAddReference = {
+                pendingReferenceProjectId = project.id
+                referencePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
             onProjectSettings = { activeSheet = EditorSheet.ProjectSettings },
             onProviderSettings = { activeSheet = EditorSheet.ProviderSettings },
             onRenameProject = {
@@ -422,18 +433,79 @@ fun ProjectListScreen(
         onOpen = { openSession(it); onOpen(it.id) },
         onMore = { openSession(it); activeSheet = EditorSheet.Actions },
         onCreate = { showCreateDialog = true },
-        onImport = { projectImagePicker.launch("image/*") },
+        onImport = { projectImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
     )
     if (showCreateDialog) {
-        AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
-            title = { Text("New Project") },
-            text = { BasicTextField(newProjectName, { newProjectName = it }, textStyle = TextStyle(color = PrototypeColor.TextPrimary, fontSize = 16.sp), modifier = Modifier.fillMaxWidth().background(PrototypeColor.Workspace, RoundedCornerShape(12.dp)).padding(12.dp)) },
-            confirmButton = { TextButton(onClick = { onCreate(newProjectName); newProjectName = ""; showCreateDialog = false }) { Text("Create") } },
-            dismissButton = { TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") } },
-            containerColor = PrototypeColor.Panel,
+        NewProjectDialog(
+            name = newProjectName,
+            onNameChange = { newProjectName = it },
+            onCreate = {
+                onCreate(newProjectName)
+                newProjectName = ""
+                showCreateDialog = false
+            },
+            onDismiss = { showCreateDialog = false },
         )
     }
+}
+
+@Composable
+private fun NewProjectDialog(
+    name: String,
+    onNameChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "New Project",
+                color = PrototypeColor.TextStrong,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.testTag("new-project-dialog-title"),
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = onNameChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("new-project-name")
+                    .focusRequester(focusRequester)
+                    .semantics { contentDescription = "Project name input" },
+                label = { Text("Project name") },
+                placeholder = { Text("Name this project") },
+                singleLine = true,
+                textStyle = TextStyle(color = PrototypeColor.TextPrimary, fontSize = 16.sp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = PrototypeColor.TextPrimary,
+                    unfocusedTextColor = PrototypeColor.TextPrimary,
+                    focusedContainerColor = PrototypeColor.Workspace,
+                    unfocusedContainerColor = PrototypeColor.Workspace,
+                    focusedBorderColor = PrototypeColor.Accent,
+                    unfocusedBorderColor = PrototypeColor.Border,
+                    focusedLabelColor = PrototypeColor.Accent,
+                    unfocusedLabelColor = PrototypeColor.TextSecondary,
+                    focusedPlaceholderColor = PrototypeColor.TextSecondary,
+                    unfocusedPlaceholderColor = PrototypeColor.TextSecondary,
+                    cursorColor = PrototypeColor.Accent,
+                ),
+            )
+        },
+        confirmButton = { TextButton(onClick = onCreate) { Text("Create", color = PrototypeColor.Accent) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = PrototypeColor.TextSecondary) } },
+        containerColor = PrototypeColor.Panel,
+        titleContentColor = PrototypeColor.TextStrong,
+        textContentColor = PrototypeColor.TextPrimary,
+    )
 }
 
 @Composable
@@ -629,7 +701,7 @@ private fun EditorScreen(
                     .fillMaxSize(),
             )
             EditorTopBar(project = project, providerStatus = providerStatus(composerState, apiKey), onBack = onBack, onExport = onExport, onMenu = onOpenMenu)
-            FloatingToolBar(activeTool = canvasState.tool, canUndo = annotationHistory.canUndo, canRedo = annotationHistory.canRedo, onToolSelected = onToolSelected, onUndo = onUndo, onRedo = onRedo, modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
+            FloatingToolBar(activeTool = canvasState.tool, canUndo = annotationHistory.canUndo, canRedo = annotationHistory.canRedo, onToolSelected = onToolSelected, onUndo = onUndo, onRedo = onRedo, modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp))
             VersionPill(historyState = historyState, onClick = onOpenHistory, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp))
             ComposerView(
                 state = composerState,
@@ -733,14 +805,15 @@ private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: B
         ToolItem("Arrow", CanvasTool.ARROW, Icons.AutoMirrored.Outlined.CallMade),
         ToolItem("Memo", CanvasTool.MEMO, Icons.Outlined.Brush),
     )
-    Column(
+    Row(
         modifier = modifier
             .testTag("editor.tool-rail")
             .clip(RoundedCornerShape(999.dp))
             .background(PrototypeColor.Panel)
             .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(999.dp))
             .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         tools.forEach { item -> ToolButton(item = item, active = item.tool == activeTool, onClick = { item.tool?.let(onToolSelected) }) }
         ToolButton(item = ToolItem("Undo", null, Icons.AutoMirrored.Outlined.Undo), active = false, enabled = canUndo, onClick = onUndo)

@@ -1,0 +1,23 @@
+Pre-change contract probe: HEAD BananaTapeApp.kt
+221:    val referencePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+233:    val projectImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+RED dialog/picker contract: legacy GetContent is present
+RED picker contract: PickVisualMedia is absent
+727:private fun FloatingToolBar(activeTool: CanvasTool, canUndo: Boolean, canRedo: Boolean, onToolSelected: (CanvasTool) -> Unit, onUndo: () -> Unit, onRedo: () -> Unit, modifier: Modifier = Modifier) {
+728-    val tools = listOf(
+729-        ToolItem("Pan", CanvasTool.PAN, Icons.Outlined.PanTool),
+730-        ToolItem("Select", CanvasTool.SELECT, Icons.Outlined.CropFree),
+731-        ToolItem("Pen", CanvasTool.PEN, Icons.Outlined.Edit),
+732-        ToolItem("Box", CanvasTool.BOX, Icons.Outlined.Slideshow),
+733-        ToolItem("Arrow", CanvasTool.ARROW, Icons.AutoMirrored.Outlined.CallMade),
+734-        ToolItem("Memo", CanvasTool.MEMO, Icons.Outlined.Brush),
+735-    )
+736-    Column(
+737-        modifier = modifier
+738-            .testTag("editor.tool-rail")
+739-            .clip(RoundedCornerShape(999.dp))
+740-            .background(PrototypeColor.Panel)
+741-            .border(BorderStroke(1.dp, PrototypeColor.Border), RoundedCornerShape(999.dp))
+RED toolbar contract: pre-change implementation is vertical Column
+RED dialog contract: readable title/input/placeholder/focus semantics are absent
+contract_failures=4

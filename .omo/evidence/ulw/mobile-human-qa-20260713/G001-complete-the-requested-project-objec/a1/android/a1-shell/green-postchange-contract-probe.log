@@ -1,0 +1,18 @@
+Post-change contract probe: working tree BananaTapeApp.kt
+9:import androidx.activity.result.PickVisualMediaRequest
+227:    val referencePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+241:    val projectImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+404:                referencePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+436:        onImport = { projectImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+102:import androidx.compose.ui.focus.FocusRequester
+459:    val focusRequester = remember { FocusRequester() }
+472:                modifier = Modifier.testTag("new-project-dialog-title"),
+481:                    .testTag("new-project-name")
+485:                placeholder = { Text("Name this project") },
+493:                    focusedBorderColor = PrototypeColor.Accent,
+494:                    unfocusedBorderColor = PrototypeColor.Border,
+499:                    cursorColor = PrototypeColor.Accent,
+808-    Row(
+815-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+816-        verticalAlignment = Alignment.CenterVertically,
+post_change_contract=GREEN
