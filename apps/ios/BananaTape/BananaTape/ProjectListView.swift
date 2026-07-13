@@ -25,6 +25,24 @@ struct MobileProjectSummary: Identifiable, Equatable {
     let name: String
 }
 
+enum ProjectActionRouting {
+    static func project(for id: String, model: ProjectPickerModel) -> MobileProjectRecord? {
+        model.openProject(id: id)
+        guard let project = model.state.openedProject, project.id == id else { return nil }
+        return project
+    }
+}
+
+enum ProjectReferenceAssetResolver {
+    static func fileURL(for reference: ComposerReferenceSummary, projectFolderURL: URL) -> URL? {
+        guard !reference.assetPath.isEmpty else { return nil }
+        if reference.assetPath.hasPrefix("/") {
+            return URL(fileURLWithPath: reference.assetPath)
+        }
+        return projectFolderURL.appendingPathComponent(reference.assetPath)
+    }
+}
+
 private struct ProjectListDisplayItem: Identifiable, Equatable {
     let id: String
     let name: String
@@ -171,6 +189,7 @@ struct ProjectListView: View {
                         SheetScaffold(detents: [.medium, .large]) {
                             ReferenceImagesSheet(
                                 references: $composerState.references,
+                                projectFolderURL: storage.fileURL(projectID: projectID, relativePath: ""),
                                 onImportReferenceData: { data, suggestedName in
                                     importReferenceData(data, suggestedName: suggestedName, projectID: projectID)
                                 }
@@ -287,6 +306,11 @@ struct ProjectListView: View {
     }
 
     private func openProjectMenu(_ id: String) {
+        guard let project = ProjectActionRouting.project(for: id, model: model) else {
+            statusMessage = model.state.lastError?.userMessage
+            return
+        }
+        loadProject(project)
         selectedProjectID = id
         activeEditorSheet = .actions
     }
@@ -1033,18 +1057,21 @@ private struct EditorScreen: View {
     }
 
     private var annotationToolbar: some View {
-        HStack(spacing: 4) {
-            toolButton(.pan, systemName: "hand.draw")
-            toolButton(.select, systemName: "cursorarrow")
-            toolButton(.pen, systemName: "pencil.tip")
-            toolButton(.box, systemName: "square")
-            toolButton(.arrow, systemName: "arrow.up.right")
-            toolButton(.memo, systemName: "note.text")
-            toolbarDivider
-            toolbarUtilityButton("arrow.uturn.backward", label: "Undo", isEnabled: canUndo, action: onUndo)
-            toolbarUtilityButton("arrow.uturn.forward", label: "Redo", isEnabled: canRedo, action: onRedo)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                toolButton(.pan, systemName: "hand.draw")
+                toolButton(.select, systemName: "cursorarrow")
+                toolButton(.pen, systemName: "pencil.tip")
+                toolButton(.box, systemName: "square")
+                toolButton(.arrow, systemName: "arrow.up.right")
+                toolButton(.memo, systemName: "note.text")
+                toolbarDivider
+                toolbarUtilityButton("arrow.uturn.backward", label: "Undo", isEnabled: canUndo, action: onUndo)
+                toolbarUtilityButton("arrow.uturn.forward", label: "Redo", isEnabled: canRedo, action: onRedo)
+            }
+            .padding(.horizontal, 4)
         }
-        .padding(8)
+        .frame(height: 60)
         .frame(maxWidth: isRegularWidth ? 420 : .infinity)
         .background(TossStyle.panel, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(TossStyle.border))
@@ -1061,7 +1088,7 @@ private struct EditorScreen: View {
             Image(systemName: systemName)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(canvasTool == tool ? TossStyle.primaryButtonText : TossStyle.secondaryText)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(canvasTool == tool ? TossStyle.blue : TossStyle.panelAlt, in: Circle())
         }
         .buttonStyle(.plain)
@@ -1074,7 +1101,7 @@ private struct EditorScreen: View {
             Image(systemName: systemName)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isEnabled ? TossStyle.secondaryText : TossStyle.mutedText.opacity(0.45))
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(TossStyle.panelAlt, in: Circle())
         }
         .buttonStyle(.plain)
@@ -1094,6 +1121,7 @@ private struct EditorScreen: View {
             Text(EditorVersionPillLabel.text(historyState: historyState, imageSize: canvasState.image.size))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(TossStyle.secondaryText)
+                .frame(minHeight: 44)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 8)
                 .background(TossStyle.panel.opacity(0.92), in: Capsule())
@@ -1123,7 +1151,7 @@ private struct EditorScreen: View {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(TossStyle.secondaryText)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 44, height: 44)
                     .background(TossStyle.panelAlt, in: Circle())
             }
             .buttonStyle(.plain)
@@ -1132,7 +1160,7 @@ private struct EditorScreen: View {
             Button(isSubmitting ? "Submitting" : composerState.primaryActionLabel) { onGenerate() }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TossStyle.primaryButtonText)
-                .frame(width: 97, height: 40)
+                .frame(width: 97, height: 44)
                 .background(TossStyle.blue, in: RoundedRectangle(cornerRadius: 14))
                 .disabled(!composerState.canSubmitPrimaryAction || isSubmitting)
                 .accessibilityIdentifier("compactGenerateButton")
@@ -1157,7 +1185,7 @@ private struct EditorScreen: View {
             Image(systemName: systemName)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TossStyle.primaryText)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(TossStyle.panel, in: Circle())
                 .overlay(Circle().stroke(TossStyle.border))
         }
@@ -1341,6 +1369,7 @@ private struct ActionMenuSheet: View {
 
 private struct ReferenceImagesSheet: View {
     @Binding var references: [ComposerReferenceSummary]
+    let projectFolderURL: URL
     let onImportReferenceData: (Data, String) -> Result<ComposerReferenceSummary, AdapterError>
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var errorMessage: String?
@@ -1389,10 +1418,20 @@ private struct ReferenceImagesSheet: View {
 
     private func referenceTile(_ reference: ComposerReferenceSummary) -> some View {
         ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(TossStyle.imageShell)
-                .overlay(Image(systemName: "photo").font(.caption.weight(.bold)).foregroundStyle(TossStyle.blue))
-                .aspectRatio(1, contentMode: .fit)
+            if let imageURL = ProjectReferenceAssetResolver.fileURL(for: reference, projectFolderURL: projectFolderURL),
+               let image = UIImage(contentsOfFile: imageURL.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .accessibilityIdentifier("referenceImage-\(reference.id)")
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(TossStyle.imageShell)
+                    .overlay(Image(systemName: "photo").font(.caption.weight(.bold)).foregroundStyle(TossStyle.blue))
+                    .accessibilityIdentifier("referenceImagePlaceholder-\(reference.id)")
+            }
 
             Text(reference.label)
                 .font(.caption2.weight(.bold))
@@ -1420,6 +1459,7 @@ private struct ReferenceImagesSheet: View {
             .padding(6)
         }
         .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .background(TossStyle.panelAlt, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(TossStyle.border))
     }

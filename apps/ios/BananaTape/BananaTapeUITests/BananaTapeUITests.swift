@@ -239,16 +239,32 @@ final class BananaTapeUITests: XCTestCase {
         for label in ["Pan", "Navigate lineage", "Pen", "Box", "Arrow", "Memo"] {
             XCTAssertTrue(app.buttons[label].exists, "Expected \(label) in the annotation toolbar")
             XCTAssertTrue(app.buttons[label].isHittable, "Expected \(label) to be hittable")
+            assertMinimumHitFrame(app.buttons[label], named: label, in: app)
         }
-        XCTAssertTrue(app.buttons["Undo"].exists)
-        XCTAssertTrue(app.buttons["Redo"].exists)
-        XCTAssertTrue(app.buttons["historyVersionPill"].isHittable)
-        XCTAssertTrue(app.buttons["Export"].isHittable)
-        XCTAssertTrue(app.buttons["Expand composer"].isHittable)
+        toolbar.swipeLeft()
+        assertMinimumHitFrame(app.buttons["Undo"], named: "Undo", in: app)
+        assertMinimumHitFrame(app.buttons["Redo"], named: "Redo", in: app)
+        assertMinimumHitFrame(app.buttons["Back"], named: "Back", in: app)
+        assertMinimumHitFrame(app.buttons["Export"], named: "Export", in: app)
+        assertMinimumHitFrame(app.buttons["Project actions"], named: "Project actions", in: app)
+        assertMinimumHitFrame(app.buttons["historyVersionPill"], named: "History version", in: app)
+        assertMinimumHitFrame(app.buttons["Expand composer"], named: "Expand composer", in: app)
+
+        let primaryAction: XCUIElement
+        if app.buttons["Apply edit"].waitForExistence(timeout: 5) {
+            primaryAction = app.buttons["Apply edit"]
+        } else {
+            primaryAction = app.buttons["Generate"]
+        }
+        XCTAssertTrue(primaryAction.waitForExistence(timeout: 5))
+        XCTAssertTrue(["Apply edit", "Generate"].contains(primaryAction.label), "Unexpected primary action label: \(primaryAction.label)")
+        assertMinimumHitFrame(primaryAction, named: "Apply edit/Generate", in: app)
+        XCTAssertFalse(app.buttons["Expand composer"].frame.intersects(primaryAction.frame))
 
         app.buttons["Navigate lineage"].tap()
         let lineageRight = app.buttons["lineageRightButton"]
         XCTAssertTrue(lineageRight.waitForExistence(timeout: 5))
+        assertMinimumHitFrame(lineageRight, named: "lineageRightButton", in: app)
         XCTAssertFalse(toolbar.frame.intersects(lineageRight.frame))
     }
 
@@ -322,10 +338,18 @@ final class BananaTapeUITests: XCTestCase {
             let button = app.buttons[identifier]
             XCTAssertTrue(button.exists, "Expected \(identifier) at \(imageID)", file: file, line: line)
             XCTAssertTrue(button.isHittable, "Expected hittable \(identifier) at \(imageID)", file: file, line: line)
+            assertMinimumHitFrame(button, named: identifier, in: app, file: file, line: line)
         }
         for identifier in absentButtons {
             XCTAssertFalse(app.buttons[identifier].exists, "Expected no \(identifier) at \(imageID)", file: file, line: line)
         }
+    }
+
+    private func assertMinimumHitFrame(_ element: XCUIElement, named name: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5), "Expected \(name) to exist", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(element.frame.width, 44, "Expected \(name) width >= 44pt, got \(element.frame.width)", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(element.frame.height, 44, "Expected \(name) height >= 44pt, got \(element.frame.height)", file: file, line: line)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(element.frame), "Expected \(name) to be fully inside the iPhone window", file: file, line: line)
     }
 
     private func element(identifier: String, in app: XCUIApplication) -> XCUIElement {

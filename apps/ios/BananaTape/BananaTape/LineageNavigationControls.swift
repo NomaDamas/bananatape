@@ -28,9 +28,9 @@ struct LineageNavigationControls: View {
 
     private func button(_ systemName: String, direction: LineageNavigationDirection, identifier: String) -> some View {
         Button { onMoveFocus(direction) } label: {
-            Image(systemName: systemName)
-                .font(.caption.weight(.bold))
-                .frame(width: 36, height: 36)
+                Image(systemName: systemName)
+                    .font(.caption.weight(.bold))
+                .frame(width: 44, height: 44)
                 .background(TossStyle.panel, in: Circle())
                 .overlay(Circle().stroke(TossStyle.border))
         }
