@@ -80,6 +80,24 @@ final class LocalProjectStorageTests: XCTestCase {
         XCTAssertTrue(read.historyJSON.contains("hist_mobile_smoke_1"))
     }
 
+    func testStorage_whenManifestSettingsAreUpdated_preservesReferenceImagesAfterRestart() throws {
+        let rootURL = try makeTemporaryRoot()
+        let storage = LocalProjectStorage(rootURL: rootURL)
+        let project = MobileProjectRecord(id: "mobile-smoke-project", name: "Mobile Smoke Project", manifestJSON: manifestJSON, historyJSON: emptyHistoryJSON, canvasJSON: nil)
+        _ = try storage.create(project).get()
+        let updatedManifest = manifestJSON.replacingOccurrences(of: "\"referenceImages\": []", with: "\"referenceImages\": [{\"id\": \"ref-1\", \"label\": \"reference-banana.png\", \"assetPath\": \"references/ref-1.png\"}]")
+
+        _ = try storage.updateDocuments(projectID: project.id, manifestJSON: updatedManifest, historyJSON: emptyHistoryJSON, canvasJSON: nil).get()
+        let restartedProject = try LocalProjectStorage(rootURL: rootURL).read(id: project.id).get()
+        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(restartedProject.manifestJSON.utf8)) as? [String: Any])
+        let settings = try XCTUnwrap(manifest["settings"] as? [String: Any])
+        let references = try XCTUnwrap(settings["referenceImages"] as? [[String: Any]])
+
+        XCTAssertEqual(references.count, 1)
+        XCTAssertEqual(references.first?["id"] as? String, "ref-1")
+        XCTAssertEqual(references.first?["assetPath"] as? String, "references/ref-1.png")
+    }
+
     func testImport_whenReferenceBananaIsSelected_copiesIntoProjectOwnedReferenceStorage() throws {
         let rootURL = try makeTemporaryRoot()
         let storage = LocalProjectStorage(rootURL: rootURL)
