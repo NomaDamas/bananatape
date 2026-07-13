@@ -242,6 +242,10 @@ struct ProjectListView: View {
             guard let projectID = selectedProjectID, entryId != pipelineState.focusedHistoryEntryId else { return }
             focusImage(entryId, projectID: projectID)
         }
+        .onChange(of: composerState.references) { _, _ in
+            guard let projectID = selectedProjectID else { return }
+            persistProjectContext(projectID: projectID)
+        }
     }
 
     private var displayedImage: CanvasImage {
