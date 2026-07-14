@@ -46,9 +46,11 @@ next-env.d.ts
 
 # local agent/runtime state
 /.omo/
+apps/android/.omo/
 /.omx/
 /.sisyphus/
 /.playwright-mcp/
+/.gjc/
 
 # ad-hoc QA screenshots
 /btape-*.png
@@ -58,3 +60,11 @@ next-env.d.ts
 
 # Electron build output
 /dist-electron/
+
+# mobile native evidence
+apps/android/evidence/
+apps/ios/BananaTape/TestEvidence/
+apps/ios/BananaTape/iOSReviewEvidence/
+
+# QA screenshots and artifacts
+/artifacts/
