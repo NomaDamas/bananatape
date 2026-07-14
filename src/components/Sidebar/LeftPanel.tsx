@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FileText, ImagePlus, Layers3, Lock, Palette, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useCanvasStore } from '@/stores/useCanvasStore';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { cn } from '@/lib/utils';
 import type { ReferenceImagePreview } from '@/components/Composer/types';
@@ -51,6 +52,12 @@ export function LeftPanel({
   const memos = useEditorStore((s) => s.memos);
   const baseImage = useEditorStore((s) => s.baseImage);
   const clearAnnotations = useEditorStore((s) => s.clearAnnotations);
+  const focusedImageIds = useCanvasStore((s) => s.focusedImageIds);
+  const focusedImageAnnotationCount = useCanvasStore((s) => {
+    if (s.focusedImageIds.length !== 1) return 0;
+    const image = s.images[s.focusedImageIds[0]];
+    return image ? image.paths.length + image.boxes.length + image.memos.length : 0;
+  });
 
   const layerRows = useMemo(() => [
     { label: 'Image', count: baseImage ? 1 : 0 },
@@ -59,8 +66,14 @@ export function LeftPanel({
     { label: 'Memos', count: memos.length },
   ], [baseImage, boxes.length, memos.length, paths.length]);
 
-  const annotationCount = paths.length + boxes.length + memos.length;
+  const annotationCount = paths.length + boxes.length + memos.length + focusedImageAnnotationCount;
   const hasDesignContext = designContext.trim().length > 0;
+  const handleClearAnnotations = () => {
+    if (focusedImageIds.length === 1) {
+      useCanvasStore.getState().clearAnnotationsOnImage(focusedImageIds[0]);
+    }
+    clearAnnotations();
+  };
 
   return (
     <aside
@@ -253,7 +266,7 @@ export function LeftPanel({
                 variant="ghost"
                 className="h-6 w-6 text-[#808080] hover:bg-white/10 hover:text-white"
                 disabled={annotationCount === 0}
-                onClick={clearAnnotations}
+                onClick={handleClearAnnotations}
                 title="Clear annotations"
               >
                 <Trash2 className="h-3 w-3" />

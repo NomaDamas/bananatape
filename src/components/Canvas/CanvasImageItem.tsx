@@ -122,22 +122,31 @@ function ScopedMemoOverlay({ image, isFocused }: { image: CanvasImage; isFocused
             <div className="rounded-lg border border-yellow-500/60 shadow-lg transition-[width,height] duration-100" style={{ backgroundColor: memo.color, width: memoSize.width }}>
               <textarea
                 autoFocus={isFocused && isActive}
-                value={memo.text}
-                spellCheck={false}
-                className="w-full resize-none bg-transparent p-3 text-neutral-950 placeholder-yellow-700 outline-none"
+	                value={memo.text}
+	                spellCheck={false}
+	                autoCorrect="off"
+	                autoCapitalize="off"
+	                data-gramm="false"
+	                data-gramm_editor="false"
+	                data-enable-grammarly="false"
+	                className="w-full resize-none bg-transparent p-3 text-neutral-950 placeholder-yellow-700 outline-none"
                 rows={memoSize.rows}
                 style={{ minHeight: memoSize.height, fontSize: STICKY_MEMO_FONT_SIZE, lineHeight: `${STICKY_MEMO_LINE_HEIGHT}px` }}
                 placeholder="Write edit note..."
                 onFocus={() => rememberMemoSnapshot(memo.id)}
                 onChange={(event) => useCanvasStore.getState().updateMemoOnImage(image.id, memo.id, { text: event.target.value }, { track: false })}
                 onBlur={(event) => handleBlur(memo.id, event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    handleBlur(memo.id, (event.target as HTMLTextAreaElement).value);
-                  }
-                  if (event.key === 'Escape') handleBlur(memo.id, (event.target as HTMLTextAreaElement).value);
-                }}
+	                onKeyDown={(event) => {
+	                  if (event.key === 'Enter' && !event.shiftKey) {
+	                    event.preventDefault();
+	                    handleBlur(memo.id, (event.target as HTMLTextAreaElement).value);
+	                    (event.target as HTMLTextAreaElement).blur();
+	                  }
+	                  if (event.key === 'Escape') {
+	                    handleBlur(memo.id, (event.target as HTMLTextAreaElement).value);
+	                    (event.target as HTMLTextAreaElement).blur();
+	                  }
+	                }}
               />
             </div>
           </div>

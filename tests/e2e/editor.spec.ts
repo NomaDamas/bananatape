@@ -624,7 +624,25 @@ test.describe('BananaTape Editor', () => {
         height: 2,
         close: () => {},
       }) as ImageBitmap;
-      (HTMLCanvasElement.prototype as unknown as { getContext: () => CanvasRenderingContext2D }).getContext = () => ({ drawImage: () => {} }) as unknown as CanvasRenderingContext2D;
+      (HTMLCanvasElement.prototype as unknown as { getContext: () => CanvasRenderingContext2D }).getContext = () => ({
+        beginPath: () => {},
+        clearRect: () => {},
+        closePath: () => {},
+        drawImage: () => {},
+        fill: () => {},
+        fillRect: () => {},
+        fillText: () => {},
+        lineTo: () => {},
+        measureText: () => ({ width: 10 }),
+        moveTo: () => {},
+        putImageData: () => {},
+        quadraticCurveTo: () => {},
+        restore: () => {},
+        save: () => {},
+        setLineDash: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+      }) as unknown as CanvasRenderingContext2D;
       HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string | null) {
         callback(new Blob(['converted-png'], { type: type ?? 'image/png' }));
       };
@@ -1018,18 +1036,20 @@ test.describe('BananaTape Editor', () => {
     const initialMemoBox = await memo.boundingBox();
     if (!initialMemoBox) throw new Error('Sticky memo not found');
 
-    await memoTextarea.fill('Make this entire area brighter and add a clear blue call-to-action button here');
+	    await memoTextarea.fill('Make this entire area brighter and add a clear blue call-to-action button here');
+	    await memoTextarea.press('Enter');
 
-    await expect.poll(async () => (await memo.boundingBox())?.width ?? 0).toBeGreaterThan(initialMemoBox.width);
+	    await expect.poll(async () => (await memo.boundingBox())?.width ?? 0).toBeGreaterThan(initialMemoBox.width);
     await expect.poll(async () => (await memo.boundingBox())?.height ?? 0).toBeGreaterThan(initialMemoBox.height);
 
     await page.locator('button[title="Arrow (4)"]').click();
-    await page.mouse.move(bounds.x + 40, bounds.y + 90);
-    await page.mouse.down();
-    await page.mouse.move(bounds.x + 180, bounds.y + 130, { steps: 8 });
-    await page.mouse.up();
+	    await page.mouse.move(bounds.x + 40, bounds.y + 90);
+	    await page.mouse.down();
+	    await page.mouse.move(bounds.x + 180, bounds.y + 130, { steps: 8 });
+	    await page.mouse.up();
+	    await page.mouse.click(bounds.x + bounds.width - 20, bounds.y + bounds.height - 20);
 
-    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
+	    await page.locator('[data-testid="bottom-reference-image-input"]').setInputFiles({
       name: 'edit-reference.png',
       mimeType: 'image/png',
       buffer: Buffer.from(BLUE_IMAGE_DATA_URL.split(',')[1], 'base64'),
