@@ -319,9 +319,36 @@ class MainActivityTest {
         val historyPanel = fixture.boundsForDescription("History browser")
         val historyClose = fixture.boundsForDescription("Close history")
         val selectedRow = fixture.boundsForDescription("v3 Edit history item, focused prompt")
-        fixture.assertContains("history panel contains close control", historyPanel, historyClose)
+        val historyExport = fixture.boundsForDescription("Export history entry focused")
+        val historyDelete = fixture.boundsForDescription("Delete history entry focused")
+        val historyActions = mapOf(
+            "Close history" to historyClose,
+            "Export history entry focused" to historyExport,
+            "Delete history entry focused" to historyDelete,
+        )
+        fixture.captureScreenshot("history-touch-targets.png")
+        fixture.writeArtifact(
+            "history-touch-target-bounds.txt",
+            buildString {
+                appendLine("device=${android.os.Build.MODEL} sdk=${android.os.Build.VERSION.SDK_INT} density=$density")
+                appendLine("historyPanel=$historyPanel")
+                appendLine("selectedRow=$selectedRow")
+                historyActions.forEach { (description, bounds) -> appendLine("$description=$bounds") }
+            },
+        )
+        historyActions.forEach { (description, bounds) ->
+            assertTrue("$description width must be at least 48dp: $bounds", bounds.width >= minTargetPx)
+            assertTrue("$description height must be at least 48dp: $bounds", bounds.height >= minTargetPx)
+            assertTrue("$description must be fully inside the root: $bounds", bounds.left >= 0f && bounds.top >= 0f && bounds.right <= rootWidth && bounds.bottom <= rootHeight)
+            fixture.assertContains("history panel contains $description", historyPanel, bounds)
+        }
         fixture.assertContains("history panel contains selected row", historyPanel, selectedRow)
+        fixture.assertContains("selected history row contains export control", selectedRow, historyExport)
+        fixture.assertContains("selected history row contains delete control", selectedRow, historyDelete)
         fixture.assertDisjoint("history close and selected row", historyClose, selectedRow)
+        fixture.assertDisjoint("history export and delete controls", historyExport, historyDelete)
+        fixture.assertDisjoint("history close and export control", historyClose, historyExport)
+        fixture.assertDisjoint("history close and delete control", historyClose, historyDelete)
         composeRule.onNodeWithContentDescription("v3 Edit history item, focused prompt").assertHasClickAction().performClick()
         fixture.captureScreenshot("real-overlay-history.png")
         fixture.writeArtifact(

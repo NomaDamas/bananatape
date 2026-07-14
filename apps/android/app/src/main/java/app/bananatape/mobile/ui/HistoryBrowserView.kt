@@ -149,15 +149,21 @@ private fun Badge(text: String, background: Color, foreground: Color) {
 private fun RoundAction(icon: ImageVector, contentDescription: String, size: Int = 36, tint: Color = PrototypeColor.TextSecondary, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(size.dp)
-            .clip(CircleShape)
-            .background(PrototypeColor.Panel)
-            .border(BorderStroke(1.dp, PrototypeColor.Border), CircleShape)
+            .size(48.dp)
             .clickable(onClick = onClick)
             .semantics { this.contentDescription = contentDescription; role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size((size * 0.52f).dp))
+        Box(
+            modifier = Modifier
+                .size(size.dp)
+                .clip(CircleShape)
+                .background(PrototypeColor.Panel)
+                .border(BorderStroke(1.dp, PrototypeColor.Border), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size((size * 0.52f).dp))
+        }
     }
 }
 
