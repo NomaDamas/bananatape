@@ -72,6 +72,42 @@ final class BananaTapeTests: XCTestCase {
         XCTAssertTrue(resolved.map { UIImage(contentsOfFile: $0.path) != nil } == true)
     }
 
+    func testProjectReferenceAssetResolver_whenPathEscapesProject_rejectsIt() throws {
+        let projectFolderURL = try makeTemporaryRoot().appendingPathComponent("project-b", isDirectory: true)
+
+        XCTAssertNil(ProjectReferenceAssetResolver.fileURL(
+            for: ComposerReferenceSummary(id: "absolute", label: "absolute.png", assetPath: "/tmp/absolute.png"),
+            projectFolderURL: projectFolderURL
+        ))
+        XCTAssertNil(ProjectReferenceAssetResolver.fileURL(
+            for: ComposerReferenceSummary(id: "traversal", label: "traversal.png", assetPath: "../project-a/reference.png"),
+            projectFolderURL: projectFolderURL
+        ))
+    }
+
+    func testProjectReferenceImportRouting_whenDelayedCompletionBelongsToPreviousProject_discardsItWithoutChangingCurrentManifest() throws {
+        let rootURL = try makeTemporaryRoot()
+        let storage = LocalProjectStorage(rootURL: rootURL)
+        let projectB = try makeProject(id: "project-b", entryID: "b-entry")
+        _ = try storage.create(projectB).get()
+        var importerWasCalled = false
+
+        let routed = ProjectReferenceImportRouting.route(
+            initiatingProjectID: "project-a",
+            selectedProjectID: "project-b"
+        ) {
+            importerWasCalled = true
+            return .success(ComposerReferenceSummary(id: "ref-a", label: "a.png", assetPath: "references/a.png"))
+        }
+
+        XCTAssertNil(routed)
+        XCTAssertFalse(importerWasCalled)
+        let restartedB = try LocalProjectStorage(rootURL: rootURL).read(id: projectB.id).get()
+        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(restartedB.manifestJSON.utf8)) as? [String: Any])
+        let settings = try XCTUnwrap(manifest["settings"] as? [String: Any])
+        XCTAssertEqual((settings["referenceImages"] as? [[String: Any]])?.count, 0)
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)

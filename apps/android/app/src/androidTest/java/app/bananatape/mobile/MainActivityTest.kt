@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
@@ -56,6 +57,9 @@ class MainActivityTest {
 
     @Test
     fun firstLaunch_whenProjectStoreIsEmpty_showsEmptyLocalProjectList() {
+        val insetsController = WindowCompat.getInsetsController(composeRule.activity.window, composeRule.activity.window.decorView)
+        assertFalse(insetsController.isAppearanceLightStatusBars)
+        assertFalse(insetsController.isAppearanceLightNavigationBars)
         composeRule.onNodeWithText("BananaTape").assertIsDisplayed()
         composeRule.onNodeWithText("Local Projects".uppercase()).assertIsDisplayed()
         composeRule.onNodeWithText("Neon Koi Studies").assertDoesNotExist()
@@ -81,6 +85,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithText("Create").performClick()
         composeRule.onNodeWithContentDescription("Open Readable Project").assertIsDisplayed()
+        assertMinimumTouchTarget("Project actions for Readable Project")
     }
 
     @Test
@@ -139,6 +144,7 @@ class MainActivityTest {
 
         val referenceDescription = "Reference image $label"
         composeRule.onNodeWithContentDescription(referenceDescription).assertIsDisplayed()
+        assertMinimumTouchTarget("Remove reference $label")
         val attachedBounds = fixture.boundsForDescription(referenceDescription)
         fixture.captureScreenshot("reference-sheet-attached.png")
         val attachedPixel = fixture.sampleScreenshotPixel(referenceDescription)
@@ -196,6 +202,7 @@ class MainActivityTest {
         toolControls.values.toList().forEachIndexed { index, first ->
             toolControls.values.toList().drop(index + 1).forEach { second -> fixture.assertDisjoint("tool targets", first, second) }
         }
+        listOf("Back to projects", "Export focused image", "Project menu").forEach(::assertMinimumTouchTarget)
         listOf("Pan", "Select", "Pen", "Box", "Arrow", "Memo").forEach { label ->
             composeRule.onNodeWithContentDescription(label).assertHasClickAction().assertIsDisplayed()
         }
@@ -465,5 +472,12 @@ class MainActivityTest {
 
     private fun pixelDescription(pixel: Int): String =
         "#%02x%02x%02x".format(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
+
+    private fun assertMinimumTouchTarget(description: String) {
+        val density = composeRule.activity.resources.displayMetrics.density
+        val bounds = fixture.boundsForDescription(description)
+        assertTrue("$description width must be at least 48dp: $bounds", bounds.width >= 48f * density)
+        assertTrue("$description height must be at least 48dp: $bounds", bounds.height >= 48f * density)
+    }
 
 }

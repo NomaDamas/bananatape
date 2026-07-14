@@ -35,11 +35,22 @@ enum ProjectActionRouting {
 
 enum ProjectReferenceAssetResolver {
     static func fileURL(for reference: ComposerReferenceSummary, projectFolderURL: URL) -> URL? {
-        guard !reference.assetPath.isEmpty else { return nil }
-        if reference.assetPath.hasPrefix("/") {
-            return URL(fileURLWithPath: reference.assetPath)
-        }
-        return projectFolderURL.appendingPathComponent(reference.assetPath)
+        guard !reference.assetPath.isEmpty, !reference.assetPath.hasPrefix("/") else { return nil }
+        let projectRoot = projectFolderURL.standardizedFileURL
+        let candidate = projectRoot.appendingPathComponent(reference.assetPath).standardizedFileURL
+        let rootPrefix = projectRoot.path.hasSuffix("/") ? projectRoot.path : projectRoot.path + "/"
+        return candidate.path.hasPrefix(rootPrefix) ? candidate : nil
+    }
+}
+
+enum ProjectReferenceImportRouting {
+    static func route(
+        initiatingProjectID: String,
+        selectedProjectID: String?,
+        importReference: () -> Result<ComposerReferenceSummary, AdapterError>
+    ) -> Result<ComposerReferenceSummary, AdapterError>? {
+        guard selectedProjectID == initiatingProjectID else { return nil }
+        return importReference()
     }
 }
 
@@ -188,10 +199,27 @@ struct ProjectListView: View {
                     case .references:
                         SheetScaffold(detents: [.medium, .large]) {
                             ReferenceImagesSheet(
-                                references: $composerState.references,
+                                references: composerState.references,
                                 projectFolderURL: storage.fileURL(projectID: projectID, relativePath: ""),
                                 onImportReferenceData: { data, suggestedName in
-                                    importReferenceData(data, suggestedName: suggestedName, projectID: projectID)
+                                    guard let result = ProjectReferenceImportRouting.route(
+                                        initiatingProjectID: projectID,
+                                        selectedProjectID: selectedProjectID,
+                                        importReference: {
+                                            importReferenceData(data, suggestedName: suggestedName, projectID: projectID)
+                                        }
+                                    ) else { return nil }
+                                    switch result {
+                                    case .success(let reference):
+                                        composerState.references.append(reference)
+                                        return nil
+                                    case .failure(let error):
+                                        return error
+                                    }
+                                },
+                                onRemoveReference: { referenceID in
+                                    guard selectedProjectID == projectID else { return }
+                                    composerState.references.removeAll { $0.id == referenceID }
                                 }
                             )
                         }
@@ -1368,11 +1396,13 @@ private struct ActionMenuSheet: View {
 }
 
 private struct ReferenceImagesSheet: View {
-    @Binding var references: [ComposerReferenceSummary]
+    let references: [ComposerReferenceSummary]
     let projectFolderURL: URL
-    let onImportReferenceData: (Data, String) -> Result<ComposerReferenceSummary, AdapterError>
+    let onImportReferenceData: (Data, String) -> AdapterError?
+    let onRemoveReference: (String) -> Void
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var errorMessage: String?
+    @State private var importTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1404,7 +1434,8 @@ private struct ReferenceImagesSheet: View {
             .onChange(of: selectedPhoto) { _, item in
                 guard let item else { return }
                 errorMessage = nil
-                Task { await importSelectedPhoto(item) }
+                importTask?.cancel()
+                importTask = Task { await importSelectedPhoto(item) }
             }
 
             Spacer(minLength: 12)
@@ -1414,6 +1445,10 @@ private struct ReferenceImagesSheet: View {
         .padding(.bottom, 18)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("referenceImagesSheet")
+        .onDisappear {
+            importTask?.cancel()
+            importTask = nil
+        }
     }
 
     private func referenceTile(_ reference: ComposerReferenceSummary) -> some View {
@@ -1445,7 +1480,7 @@ private struct ReferenceImagesSheet: View {
 
             Button {
                 errorMessage = nil
-                references.removeAll { $0.id == reference.id }
+                onRemoveReference(reference.id)
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
@@ -1471,13 +1506,12 @@ private struct ReferenceImagesSheet: View {
                 errorMessage = AdapterError.unsupportedFileType(.webp).userMessage
                 return
             }
-            switch onImportReferenceData(data, item.itemIdentifier ?? "reference.png") {
-            case .success(let reference):
-                references.append(reference)
-            case .failure(let error):
+            guard !Task.isCancelled else { return }
+            if let error = onImportReferenceData(data, item.itemIdentifier ?? "reference.png") {
                 errorMessage = error.userMessage
             }
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = AdapterError.unsupportedFileType(.webp).userMessage
         }
     }

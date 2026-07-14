@@ -612,7 +612,7 @@ private fun ProjectCard(project: ProjectListItem, onOpen: (ProjectListItem) -> U
             Text(text = project.name, color = PrototypeColor.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(text = projectMetadata(project), color = PrototypeColor.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButtonShell(icon = Icons.Outlined.MoreHoriz, contentDescription = "Project actions for ${project.name}", size = 32.dp, onClick = { onMore(project) })
+        IconButtonShell(icon = Icons.Outlined.MoreHoriz, contentDescription = "Project actions for ${project.name}", size = 48.dp, onClick = { onMore(project) })
     }
 }
 
@@ -887,7 +887,7 @@ private fun CanvasGrid(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun IconButtonShell(icon: ImageVector, contentDescription: String, size: Dp = 36.dp, onClick: () -> Unit) {
+private fun IconButtonShell(icon: ImageVector, contentDescription: String, size: Dp = 48.dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(size)
@@ -1231,7 +1231,7 @@ private fun ReferenceImageTile(reference: ComposerReferenceSummary, projectPath:
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(6.dp)
-                .size(28.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(PrototypeColor.Workspace)
                 .border(BorderStroke(1.dp, PrototypeColor.Border), CircleShape)
