@@ -279,6 +279,13 @@ class MainActivityTest {
         val composer = fixture.boundsForDescription("Native bottom composer")
         val toolRail = fixture.boundsForTag("editor.tool-rail")
         val versionPill = fixture.boundsForDescription("Open history")
+        val headerControls = mapOf(
+            "Export focused image" to fixture.boundsForDescription("Export focused image"),
+            "Project menu" to fixture.boundsForDescription("Project menu"),
+            "Back to projects" to fixture.boundsForDescription("Back to projects"),
+        )
+        val toolTargets = listOf("Memo", "Pan", "Select", "Pen", "Box", "Arrow")
+            .associateWith { label -> fixture.boundsForDescription(label) }
         val lineage = mapOf(
             "left" to fixture.boundsForDescription("Lineage left: previous batch sibling"),
             "right" to fixture.boundsForDescription("Lineage right: next batch sibling"),
@@ -300,12 +307,21 @@ class MainActivityTest {
             appendLine("composer=$composer")
             appendLine("toolRail=$toolRail")
             appendLine("versionPill=$versionPill")
+            headerControls.forEach { (description, bounds) -> appendLine("header.$description=$bounds") }
+            toolTargets.forEach { (label, bounds) -> appendLine("tool.$label=$bounds") }
             lineage.forEach { (direction, bounds) -> appendLine("lineage.$direction=$bounds") }
         }
         fixture.writeArtifact("real-overlay-bounds.txt", editorBounds)
         fixture.captureScreenshot("real-overlay-editor.png")
 
         assertTrue("Focused canvas must have nonzero visible bounds: $canvas", canvas.width > 0f && canvas.height > 0f)
+        headerControls.forEach { (description, bounds) ->
+            assertTrue("$description width must be at least 48dp: $bounds", bounds.width >= minTargetPx)
+            assertTrue("$description height must be at least 48dp: $bounds", bounds.height >= minTargetPx)
+            assertTrue("$description must be fully inside the root: $bounds", bounds.left >= 0f && bounds.top >= 0f && bounds.right <= rootWidth && bounds.bottom <= rootHeight)
+            toolTargets.forEach { (label, target) -> fixture.assertDisjoint("$description and $label", bounds, target) }
+            fixture.assertDisjoint("$description and tool rail", bounds, toolRail)
+        }
         lineage.forEach { (direction, bounds) ->
             fixture.assertDisjoint("lineage $direction and compact composer", bounds, composer)
             fixture.assertDisjoint("lineage $direction and tool rail", bounds, toolRail)
