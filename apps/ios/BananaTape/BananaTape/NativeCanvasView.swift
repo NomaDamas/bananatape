@@ -436,13 +436,12 @@ struct HistoryBrowserView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 6) {
-                iconButton("square.and.arrow.up", label: "Export history item", accessibilityIdentifier: "exportHistoryEntry-\(row.id)") {
+                iconButton("square.and.arrow.up", foreground: TossStyle.primaryText, label: "Export history item", accessibilityIdentifier: "exportHistoryEntry-\(row.id)") {
                     onExport(row.entry)
                 }
-                iconButton("trash", label: "Delete history item", accessibilityIdentifier: "deleteHistoryEntry-\(row.id)") {
+                iconButton("trash", foreground: TossStyle.destructive, label: "Delete history item", accessibilityIdentifier: "deleteHistoryEntry-\(row.id)") {
                     onDelete(row.id)
                 }
-                .foregroundStyle(TossStyle.destructive)
             }
             .layoutPriority(1)
         }
@@ -490,10 +489,11 @@ struct HistoryBrowserView: View {
             .background(background, in: Capsule())
     }
 
-    private func iconButton(_ systemName: String, label: String, accessibilityIdentifier: String, action: @escaping () -> Void) -> some View {
+    private func iconButton(_ systemName: String, foreground: Color, label: String, accessibilityIdentifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(foreground)
                 .frame(width: 48, height: 48)
                 .background(TossStyle.workspace, in: Circle())
                 .overlay(Circle().stroke(TossStyle.border))

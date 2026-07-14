@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class BananaTapeUITests: XCTestCase {
     private var actionLog: [String] = []
@@ -49,7 +50,9 @@ final class BananaTapeUITests: XCTestCase {
         assertMinimumHitFrame(export, named: "History export", in: app)
         assertMinimumHitFrame(delete, named: "History delete", in: app)
         attachAccessibilityHierarchy("02-history-actions-accessibility", app: app)
-        attachScreenshot("02-history-actions-frames", app: app)
+        let historyScreenshot = app.screenshot()
+        attachScreenshot("02-history-actions-frames", screenshot: historyScreenshot)
+        assertExportGlyphContrast(export, screenshot: historyScreenshot)
     }
 
     func testReferenceRemove_hasMinimumHitFrame() throws {
@@ -408,6 +411,89 @@ final class BananaTapeUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func attachScreenshot(_ name: String, screenshot: XCUIScreenshot) {
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func assertExportGlyphContrast(_ element: XCUIElement, screenshot: XCUIScreenshot, file: StaticString = #filePath, line: UInt = #line) {
+        let roi = element.frame.insetBy(dx: 10, dy: 10)
+        let pixels = renderedPixels(in: screenshot.image, frame: roi)
+        guard !pixels.isEmpty else {
+            XCTFail("Could not sample Export glyph ROI pixels", file: file, line: line)
+            return
+        }
+
+        let sortedPixels = pixels.sorted { $0.luminance < $1.luminance }
+        let backgroundMedian = sortedPixels[sortedPixels.count / 2]
+        let minimumLuminanceSeparation = 0.20
+        let brightPixels = pixels.filter { pixel in
+            pixel.luminance - backgroundMedian.luminance >= minimumLuminanceSeparation
+        }
+        let minimumBrightPixelCount = max(8, Int(ceil(Double(pixels.count) * 0.01)))
+        let brightPixelFraction = Double(brightPixels.count) / Double(pixels.count)
+        let diagnostics = "ROI=\(roi); background median RGB/luminance=(\(backgroundMedian.red), \(backgroundMedian.green), \(backgroundMedian.blue), L=\(backgroundMedian.luminance)); threshold separation=\(minimumLuminanceSeparation); bright pixels=\(brightPixels.count)/\(pixels.count) (\(brightPixelFraction)); required count=\(minimumBrightPixelCount)"
+        let diagnosticAttachment = XCTAttachment(string: diagnostics)
+        diagnosticAttachment.name = "02-history-export-contrast-diagnostics.txt"
+        diagnosticAttachment.lifetime = .keepAlways
+        add(diagnosticAttachment)
+
+        XCTAssertGreaterThanOrEqual(
+            brightPixels.count,
+            minimumBrightPixelCount,
+            "Expected Export glyph to contain a meaningful region at least 0.20 luminance above its local background. \(diagnostics)",
+            file: file,
+            line: line
+        )
+    }
+
+    private func renderedPixels(in image: UIImage, frame: CGRect) -> [RenderedPixel] {
+        guard frame.width > 0, frame.height > 0 else { return [] }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = true
+        let croppedImage = UIGraphicsImageRenderer(size: frame.size, format: format).image { _ in
+            image.draw(at: CGPoint(x: -frame.minX, y: -frame.minY))
+        }
+
+        guard let cgImage = croppedImage.cgImage else { return [] }
+        let width = cgImage.width
+        let height = cgImage.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &bytes,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return []
+        }
+
+        context.interpolationQuality = .none
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        return stride(from: 0, to: bytes.count, by: 4).map { offset in
+            let red = Int(bytes[offset])
+            let green = Int(bytes[offset + 1])
+            let blue = Int(bytes[offset + 2])
+            let luminance = (0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)) / 255.0
+            return RenderedPixel(red: red, green: green, blue: blue, luminance: luminance)
+        }
+    }
+
+    private struct RenderedPixel {
+        let red: Int
+        let green: Int
+        let blue: Int
+        let luminance: Double
     }
 
     private func attachAccessibilityHierarchy(_ name: String, app: XCUIApplication) {
